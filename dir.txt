@@ -1,10 +1,15 @@
+Version: 0.1.1
 
-
-
-/automata_arena/ai_arena/
-├── config.json         # Network and LLM configurations
-├── arena_db.py         # SQLite schema and queries
-├── arena_llm.py        # Qwen 2.5 API connector
-├── arena_utils.py      # IRC Colors, Unicode, and Formatting
-└── manager.py          # The Core Multi-Network Async Loop
-
+/automata_arena/
+├── README.md           # Project Documentation
+├── ai_arena/           # Main Arena Server application
+│   ├── config.json     # Network and LLM configurations
+│   ├── arena_db.py     # SQLite schema and queries
+│   ├── arena_llm.py    # Qwen 2.5 API connector
+│   ├── arena_utils.py  # IRC Colors, Unicode, and Formatting
+│   ├── arena_combat.py # Combat Engine with Inventory Consumption & 'Use' Verb Fix
+│   └── manager.py      # The Core Multi-Network Async Loop
+└── ai_fighter/         # Chatbot client for fighting in the arena
+    ├── config.ini      # Client configuration
+    ├── character.json  # Character details and inventory
+    └── bot.py          # Fighter Client SDK - Structured Logging & Dynamic Log Files

@@ -53,6 +53,7 @@ class GridNode:
         self.pve_task = None 
         self.hype_task = None
         self.registered_bots = 0
+        self.pending_pings = {}
         
         raw_admins = CONFIG.get('admins', [])
         if isinstance(raw_admins, str):
@@ -74,10 +75,12 @@ class GridNode:
         await self.send(f"USER {self.config['nickname']} 0 * :AutomataArena Master Node")
         
         self.hype_task = asyncio.create_task(self.hype_loop())
+        self.grid_pulse_task = asyncio.create_task(self.grid_pulse_loop())
         await self.listen_loop()
 
     async def set_dynamic_topic(self):
-        self.registered_bots = len(self.db.list_fighters(self.net_name))
+        fighters = await self.db.list_fighters(self.net_name)
+        self.registered_bots = len(fighters)
         raw_topic = await self.llm.generate_topic(self.registered_bots, self.net_name)
         fmt_topic = f"{ICONS['Arena']} {format_text('#AutomataArena', C_CYAN, bold=True)} | {raw_topic} | {ICONS['Cross-Grid']} Cross-Grid Active"
         await self.send(f"TOPIC {self.config['channel']} :{fmt_topic}")
@@ -98,8 +101,27 @@ class GridNode:
             except Exception as e:
                 logger.error(f"Hype loop error: {e}")
 
+    async def grid_pulse_loop(self):
+        await asyncio.sleep(30)
+        while True:
+            try:
+                await asyncio.sleep(30)
+                if not self.active_engine or not self.active_engine.active:
+                    fighters = await self.db.list_fighters(self.net_name)
+                    if fighters:
+                        pulse = format_text(
+                            f"[GRID PULSE] {len(fighters)} fighter(s) on the Grid. "
+                            f"Take your turn: '{self.prefix} move <dir>' | '{self.prefix} grid' to check location | '{self.prefix} queue' to enter the Arena.",
+                            C_CYAN
+                        )
+                        await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(pulse)}")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Grid pulse loop error: {e}")
+
     async def handle_ready(self, nick: str, token: str, reply_target: str):
-        if self.db.authenticate_fighter(nick, self.net_name, token):
+        if await self.db.authenticate_fighter(nick, self.net_name, token):
             if nick not in self.ready_players:
                 self.ready_players.append(nick)
                 await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[AUTH OK] {nick} validated. Standby for drop.', C_GREEN))}")
@@ -145,7 +167,7 @@ class GridNode:
 
         self.active_engine = CombatEngine(match_id, self.prefix, combat_channel_send)
         for name in participants:
-            db_stats = self.db.get_fighter(name, self.net_name)
+            db_stats = await self.db.get_fighter(name, self.net_name)
             self.active_engine.add_entity(Entity(name, db_stats))
 
         if pve:
@@ -169,7 +191,7 @@ class GridNode:
             npc_tasks = [self.generate_and_queue_npc(ent, raw_state) for ent in self.active_engine.entities.values() if ent.is_npc and ent.is_alive]
             if npc_tasks: asyncio.gather(*npc_tasks) 
 
-            await asyncio.sleep(60) 
+            await asyncio.sleep(30) 
             
             # The active_engine might have been killed mid-sleep by the battlestop command
             if self.active_engine and self.active_engine.active:
@@ -177,11 +199,23 @@ class GridNode:
                 if self.active_engine.active: await asyncio.sleep(2)
 
         if self.active_engine: # Only print concluded if it finished naturally, not via battlestop
+            winners = [e.name for e in self.active_engine.entities.values() if e.is_alive and not e.is_npc]
+            losers = [e.name for e in self.active_engine.entities.values() if not e.is_alive and not e.is_npc]
+            if winners and losers:
+                await self.db.record_match_result(winners[0], losers[0], self.net_name)
+                
             await self.send(f"PRIVMSG {self.config['channel']} :{build_banner('MATCH CONCLUDED.')}")
             self.active_engine = None
             logger.info(f"Match {match_id} concluded naturally.")
         
         await self.check_match_start()
+
+    async def handle_grid_movement(self, nick: str, direction: str, reply_target: str):
+        node_name, msg = await self.db.move_fighter(nick, self.net_name, direction)
+        if node_name:
+            await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[GRID] {msg}', C_GREEN))}")
+        else:
+            await self.send(f"PRIVMSG {reply_target} :[ERR] {msg}")
 
     async def handle_registration(self, nick: str, args: list, reply_target: str):
         try:
@@ -200,7 +234,7 @@ class GridNode:
             if len(bio) > 200: bio = bio[:197] + "..."
                 
             stats = {'cpu': 5, 'ram': 5, 'bnd': 5, 'sec': 5, 'alg': 5}
-            auth_token = self.db.register_fighter(bot_name, self.net_name, race, b_class, bio, stats)
+            auth_token = await self.db.register_fighter(bot_name, self.net_name, race, b_class, bio, stats)
             
             if auth_token:
                 payload = json.dumps({"token": auth_token, "bio": bio, "stats": stats, "inventory": ["Basic_Ration"]})
@@ -217,18 +251,52 @@ class GridNode:
             logger.exception("Critical Error in handle_registration")
             await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text('CRITICAL ERROR during registration sequence.', C_RED))}")
 
-    # --- ADVANCED SYSADMIN CONTROLS ---
+    async def handle_merchant_tx(self, nickname: str, verb: str, item_name: str, reply_target: str):
+        result, msg = await self.db.process_transaction(nickname, self.net_name, verb, item_name)
+        banner = format_text(msg, C_GREEN if result else C_RED)
+        if reply_target.startswith(('#', '&', '+', '!')):
+            await self.send(f"PRIVMSG {reply_target} :{build_banner(banner)}")
+        else:
+            await self.send(f"PRIVMSG {reply_target} :{msg}")
+
+    async def handle_grid_view(self, nickname: str, reply_target: str):
+        loc = await self.db.get_location(nickname, self.net_name)
+        if not loc:
+            await self.send(f"PRIVMSG {reply_target} :[ERR] Fighter not found or not registered.")
+            return
+        node_type_icon = {'safezone': '🛡️', 'arena': '⚔️', 'wilderness': '🌿', 'merchant': '💰'}.get(loc['type'], '📡')
+        exits_str = " | ".join(loc['exits']) if loc['exits'] else "none"
+        lines = [
+            format_text(f"[ {node_type_icon} {loc['name']} ]", C_CYAN, bold=True),
+            format_text(loc['description'], C_YELLOW),
+            format_text(f"Type: {loc['type'].upper()} | Level: {loc['level']} | Credits: {loc['credits']}c", C_GREEN),
+            format_text(f"Exits: {exits_str}", C_CYAN),
+        ]
+        for line in lines:
+            await self.send(f"PRIVMSG {reply_target} :{build_banner(line)}")
+        # Tag the final line with [GRID] so bot.py LLM trigger fires
+        action_prompt = format_text(
+            f"[GRID] {nickname} @ {loc['name']} | Use '{self.prefix} move <dir>' to travel or '{self.prefix} queue' to enter the Arena.",
+            C_YELLOW
+        )
+        await self.send(f"PRIVMSG {reply_target} :{build_banner(action_prompt)}")
+
+
     async def handle_admin_command(self, admin_nick: str, verb: str, args: list, reply_target: str):
         logger.warning(f"SYSADMIN OVERRIDE: {admin_nick} executed '{verb}'")
         
         if verb == "status":
-            bot_count = len(self.db.list_fighters(self.net_name))
+            fighters = await self.db.list_fighters(self.net_name)
+            bot_count = len(fighters)
             q_len = len(self.match_queue)
             r_len = len(self.ready_players)
             b_stat = f"ACTIVE (Turn {self.active_engine.turn})" if self.active_engine and self.active_engine.active else "STANDBY"
             
             msg = f"[SYS_TELEMETRY] Arena: {b_stat} | Bots: {bot_count} | Queue: {q_len} | Ready: {r_len}"
-            await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(msg, C_CYAN))}")
+            if reply_target.startswith(('#', '&', '+', '!')):
+                await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(msg, C_CYAN))}")
+            else:
+                await self.send(f"PRIVMSG {reply_target} :{msg}")
 
         elif verb == "battlestop":
             if self.active_engine and self.active_engine.active:
@@ -301,12 +369,38 @@ class GridNode:
                     await self.send(f"PONG :{pong_target}")
                     continue
 
-                if command not in ["PONG", "PING"]:
+                if command == "PONG":
+                    ts_str = msg.strip() if msg else target.strip()
+                    if ts_str in self.pending_pings:
+                        import time
+                        ping_data = self.pending_pings[ts_str]
+                        ping_data['server_latency'] = (time.time() - ping_data['start']) * 1000
+                        await self._check_ping_complete(ts_str)
+                    continue
+
+                if command == "NOTICE":
+                    if msg.startswith("\x01PING") and msg.endswith("\x01"):
+                        ts_str = msg[6:-1].strip()
+                        if ts_str in self.pending_pings:
+                            import time
+                            ping_data = self.pending_pings[ts_str]
+                            ping_data['client_latency'] = (time.time() - ping_data['start']) * 1000
+                            await self._check_ping_complete(ts_str)
+                    continue
+
+                if command not in ["PONG", "PING", "NOTICE"]:
                     logger.debug(f"[{self.net_name}] < {line}")
 
                 if command in ["376", "422"]:
                     await self.send(f"JOIN {self.config['channel']}")
                     await self.set_dynamic_topic()
+                    await asyncio.sleep(1)
+                    online_msg = format_text(
+                        f"[MAINFRAME ONLINE] Grid systems nominal. Ready for commands. "
+                        f"Type '{self.prefix} grid' to enter the Grid or '{self.prefix} help' to get started.",
+                        C_GREEN, bold=True
+                    )
+                    await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(online_msg)}")
                     continue
 
                 if command == "JOIN":
@@ -332,8 +426,17 @@ class GridNode:
                         logger.info(f"Command Rcvd | User: {source_nick} | Verb: {verb} | Target: {reply_target}")
 
                         if verb == "help":
+                            if args and args[0].lower() == "register":
+                                reg_help = (
+                                    f"REGISTER OPTS | Races: Wetware, Cyborg, Synth | "
+                                    f"Classes: Zero_Day_Rogue, Netrunner, Heavy_Gunner | Example: {self.prefix} register Bob Cyborg Netrunner enjoys_hacking"
+                                )
+                                await self.send(f"PRIVMSG {source_nick} :{reg_help}")
+                                continue
+
                             player_help = (
                                 f"PLAYER CMDS: {self.prefix} register <Name> <Race> <Class> <Traits> | "
+                                f"Type '{self.prefix} help register' for options | "
                                 f"{self.prefix} queue | "
                                 f"DM: '{self.prefix} ready <token>' to auth. | "
                                 f"COMBAT: {self.prefix} <attack/shoot/evade/heal/speak/use> <target>"
@@ -353,6 +456,32 @@ class GridNode:
                             asyncio.create_task(self.handle_registration(source_nick, args, reply_target))
                             continue
 
+                        elif verb == "grid":
+                            asyncio.create_task(self.handle_grid_view(source_nick, reply_target))
+                            continue
+
+                        elif verb == "version":
+                            versions = (
+                                f"[MODULES] manager: v1.2.0 | arena_db: v2.0.0 | "
+                                f"arena_combat: v1.1.1 | arena_llm: v1.1.0 | arena_utils: v1.1.0"
+                            )
+                            await self.send(f"PRIVMSG {reply_target} :{build_banner(versions)}")
+                            continue
+
+                        elif verb == "ping":
+                            import time
+                            timestamp = str(time.time())
+                            self.pending_pings[timestamp] = {
+                                'source': source_nick,
+                                'reply_target': reply_target,
+                                'start': float(timestamp),
+                                'client_latency': None,
+                                'server_latency': None
+                            }
+                            await self.send(f"PRIVMSG {source_nick} :\x01PING {timestamp}\x01")
+                            await self.send(f"PING {timestamp}")
+                            continue
+
                         elif verb == "queue":
                             if source_nick not in self.match_queue: 
                                 self.match_queue.append(source_nick)
@@ -362,6 +491,27 @@ class GridNode:
                         elif verb == "ready":
                             if len(args) >= 1:
                                 asyncio.create_task(self.handle_ready(source_nick, args[0], reply_target))
+                            continue
+
+                        elif verb == "move":
+                            if not self.active_engine or not self.active_engine.active:
+                                if args:
+                                    asyncio.create_task(self.handle_grid_movement(source_nick, args[0], reply_target))
+                                else:
+                                    await self.send(f"PRIVMSG {reply_target} :[ERR] Provide a direction.")
+                            else:
+                                await self.send(f"PRIVMSG {reply_target} :[ERR] You are locked in combat!")
+                            continue
+                            
+                        elif verb in ["buy", "sell"]:
+                            if not self.active_engine or not self.active_engine.active:
+                                if len(args) >= 1:
+                                    item_name = " ".join(args)
+                                    asyncio.create_task(self.handle_merchant_tx(source_nick, verb, item_name, reply_target))
+                                else:
+                                    await self.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {self.prefix} {verb} <item>")
+                            else:
+                                await self.send(f"PRIVMSG {reply_target} :[ERR] Locked in combat!")
                             continue
 
                         # --- NEW ADMIN COMMAND ROUTER ---
@@ -377,6 +527,18 @@ class GridNode:
 
             except Exception as e:
                 logger.exception(f"Core Loop Exception caught: {e}. Recovering state...")
+                
+    async def _check_ping_complete(self, ts_str: str):
+        import time
+        data = self.pending_pings.get(ts_str)
+        if not data: return
+        if data['client_latency'] is not None and data['server_latency'] is not None:
+            c_lat = data['client_latency']
+            s_lat = data['server_latency']
+            total = c_lat + s_lat
+            msg = format_text(f"PING | Requester<->Manager: {c_lat:.0f}ms | Manager<->Network: {s_lat:.0f}ms | Total Latency: {total:.0f}ms", C_GREEN)
+            await self.send(f"PRIVMSG {data['reply_target']} :{build_banner(msg)}")
+            del self.pending_pings[ts_str]
                 
 class MasterHub:
     def __init__(self):
@@ -401,9 +563,10 @@ class MasterHub:
 
     def shutdown(self):
         logger.warning("Initiating graceful shutdown...")
-        self.db.close()
+        asyncio.create_task(self.db.close())
         for node in self.nodes.values():
-            if node.hype_task: node.hype_task.cancel() 
+            if node.hype_task: node.hype_task.cancel()
+            if hasattr(node, 'grid_pulse_task') and node.grid_pulse_task: node.grid_pulse_task.cancel()
             if node.writer: node.writer.write(b"QUIT :SysAdmin closed the grid.\r\n")
         if hasattr(self, 'loop_task'):
             self.loop_task.cancel()

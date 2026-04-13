@@ -1,240 +1,355 @@
-# arena_db.py - v1.1.0
-# SQLite Database Manager with Structured Logging
-
-import sqlite3
-import argparse
+import asyncio
 import json
 import uuid
-import os
 import logging
+import argparse
+import os
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+from models import Base, Player, NetworkAlias, Character, InventoryItem, ItemTemplate, GridNode, NodeConnection
 
-# --- Config & Logging Setup ---
-CONFIG_FILE = 'config.json'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
+
 try:
     with open(CONFIG_FILE, 'r') as f:
         CONFIG = json.load(f)
-        DB_FILE = CONFIG.get('database', {}).get('file', 'automata_arena.db')
-except (FileNotFoundError, json.JSONDecodeError) as e:
-    print(f"[!] Config load error ({e}). Defaulting to automata_arena.db and INFO logging.")
+        db_name = CONFIG.get('database', {}).get('file', 'automata_arena.db')
+        DB_FILE = os.path.join(BASE_DIR, db_name)
+except (FileNotFoundError, json.JSONDecodeError):
     CONFIG = {}
-    DB_FILE = 'automata_arena.db'
-
-log_level_str = CONFIG.get('logging', {}).get('level', 'INFO').upper()
-log_level = getattr(logging, log_level_str, logging.INFO)
+    DB_FILE = os.path.join(BASE_DIR, 'automata_arena.db')
 
 logger = logging.getLogger("arena_db")
-logger.setLevel(log_level)
+logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
-# File Handler
-fh = logging.FileHandler('arena_db.log')
+fh = logging.FileHandler(os.path.join(BASE_DIR, 'arena_db.log'))
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
-# Console Handler
 ch = logging.StreamHandler()
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):
-        self.db_path = db_path
-        logger.debug(f"Connecting to database at {self.db_path}")
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.row_factory = sqlite3.Row
-
-    def close(self):
-        logger.debug("Closing database connection.")
-        self.conn.close()
-
-    def init_schema(self):
-        logger.info("Initializing database schema...")
-        cursor = self.conn.cursor()
+        self.db_path = f"sqlite+aiosqlite:///{db_path}"
+        self.engine = create_async_engine(self.db_path, echo=False)
+        self.async_session = async_sessionmaker(self.engine, expire_on_commit=False, class_=AsyncSession)
         
-        # Fighters Table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS fighters (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            network TEXT NOT NULL,
-            race TEXT NOT NULL,
-            class TEXT NOT NULL,
-            bio TEXT,
-            cpu INTEGER DEFAULT 5,
-            ram INTEGER DEFAULT 5,
-            bnd INTEGER DEFAULT 5,
-            sec INTEGER DEFAULT 5,
-            alg INTEGER DEFAULT 5,
-            elo INTEGER DEFAULT 1200,
-            wins INTEGER DEFAULT 0,
-            losses INTEGER DEFAULT 0,
-            alignment INTEGER DEFAULT 0,
-            credits INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'ACTIVE',
-            inventory TEXT DEFAULT '[]', 
-            auth_token TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(name, network)
-        )
-        ''')
+    async def close(self):
+        await self.engine.dispose()
+        
+    async def init_schema(self):
+        logger.info("Initializing database schema via SQLAlchemy...")
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+        
+        async with self.async_session() as session:
+            # 1. Initialize Nodes
+            uplink = GridNode(name="The_Grid_Uplink", description="The central nexus. A safezone where new connections manifest.", node_type="safezone")
+            arena_node = GridNode(name="The_Arena", description="The main fighting grounds. Blood and RAM are spilled here.", node_type="arena")
+            wilderness = GridNode(name="The_CPU_Socket", description="A vast wasteland of processing power. Danger lurks.", node_type="wilderness")
+            black_market = GridNode(name="Black_Market_Port", description="Shadowy merchants peddle encrypted wares here.", node_type="merchant")
+            
+            session.add_all([uplink, arena_node, wilderness, black_market])
+            await session.flush() # Flush to get assigned IDs
+            
+            # 2. Establish Topology (Connections)
+            connections = [
+                NodeConnection(source_node_id=uplink.id, target_node_id=arena_node.id, direction="north"),
+                NodeConnection(source_node_id=arena_node.id, target_node_id=uplink.id, direction="south"),
+                
+                NodeConnection(source_node_id=uplink.id, target_node_id=wilderness.id, direction="east"),
+                NodeConnection(source_node_id=wilderness.id, target_node_id=uplink.id, direction="west"),
+                
+                NodeConnection(source_node_id=uplink.id, target_node_id=black_market.id, direction="down"),
+                NodeConnection(source_node_id=black_market.id, target_node_id=uplink.id, direction="up")
+            ]
+            session.add_all(connections)
+            
+            # 3. Item Templates
+            item_tpl = ItemTemplate(name="Basic_Ration", item_type="consumable", base_value=10, effects_json='{"heal": 15}')
+            rifle_tpl = ItemTemplate(name="Pulse_Rifle", item_type="weapon", base_value=100, effects_json='{"damage": 25, "type": "kinetic"}')
+            session.add_all([item_tpl, rifle_tpl])
+            
+            await session.commit()
+        logger.info("Schema v2 successfully initialized with seeded Grid topology.")
 
-        # Spectators
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS spectators (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nick TEXT NOT NULL,
-            network TEXT NOT NULL,
-            credits INTEGER DEFAULT 1000,
-            sponsored_fighter TEXT,
-            UNIQUE(nick, network)
-        )
-        ''')
-
-        # Match History
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS match_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            network TEXT,
-            winner TEXT,
-            loser TEXT,
-            match_type TEXT,
-            log_summary TEXT
-        )
-        ''')
-        self.conn.commit()
-        logger.info(f"Database schema v1.1.0 successfully initialized at {self.db_path}")
-
-    def register_fighter(self, name, network, race, bot_class, bio, stats: dict):
+    async def register_fighter(self, name, network, race, bot_class, bio, stats: dict):
         logger.info(f"Attempting to register fighter: {name} on {network}")
-        cursor = self.conn.cursor()
-        auth_token = str(uuid.uuid4()) 
-        initial_inventory = json.dumps(["Basic_Ration"]) 
+        auth_token = str(uuid.uuid4())
         
-        try:
-            cursor.execute('''
-            INSERT INTO fighters (name, network, race, class, bio, cpu, ram, bnd, sec, alg, auth_token, inventory)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (name, network, race, bot_class, bio, 
-                  stats.get('cpu', 5), stats.get('ram', 5), stats.get('bnd', 5), 
-                  stats.get('sec', 5), stats.get('alg', 5), auth_token, initial_inventory))
-            self.conn.commit()
-            logger.info(f"Successfully registered fighter: {name}. Auth token generated.")
-            return auth_token 
-        except sqlite3.IntegrityError:
-            logger.warning(f"Registration failed: Fighter '{name}' already exists on {network}.")
-            return None 
-        except Exception as e:
-            logger.exception(f"Unexpected database error during registration: {e}")
+        async with self.async_session() as session:
+            stmt_player = select(Player).join(NetworkAlias).where(NetworkAlias.nickname == name, NetworkAlias.network_name == network)
+            result = await session.execute(stmt_player)
+            player = result.scalars().first()
+            
+            if not player:
+                player = Player(global_name=f"{name}_{network}", is_autonomous=False)
+                session.add(player)
+                await session.flush()
+                
+                alias = NetworkAlias(player_id=player.id, network_name=network, nickname=name)
+                session.add(alias)
+                await session.flush()
+                
+            stmt_char = select(Character).where(Character.name == name, Character.player_id == player.id)
+            result = await session.execute(stmt_char)
+            if result.scalars().first():
+                logger.warning(f"Registration failed: Fighter '{name}' already exists.")
+                return None
+            
+            stmt_node = select(GridNode).where(GridNode.name == "The_Grid_Uplink")
+            result = await session.execute(stmt_node)
+            node = result.scalars().first()
+                
+            character = Character(
+                player_id=player.id,
+                node_id=node.id if node else None,
+                name=name,
+                race=race,
+                char_class=bot_class,
+                bio=bio,
+                cpu=stats.get('cpu', 5),
+                ram=stats.get('ram', 5),
+                bnd=stats.get('bnd', 5),
+                sec=stats.get('sec', 5),
+                alg=stats.get('alg', 5),
+                auth_token=auth_token
+            )
+            session.add(character)
+            await session.flush()
+            
+            stmt_item = select(ItemTemplate).where(ItemTemplate.name == "Basic_Ration")
+            res = await session.execute(stmt_item)
+            tpl = res.scalars().first()
+            if tpl:
+                inv_item = InventoryItem(character_id=character.id, template_id=tpl.id, quantity=1)
+                session.add(inv_item)
+                
+            await session.commit()
+            return auth_token
+
+    async def get_fighter(self, name, network):
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.inventory).selectinload(InventoryItem.template))
+            
+            result = await session.execute(stmt)
+            char = result.scalars().first()
+            if char:
+                inv = [item.template.name for item in char.inventory] if char.inventory else []
+                return {
+                    'name': char.name,
+                    'is_npc': False,
+                    'cpu': char.cpu,
+                    'ram': char.ram,
+                    'bnd': char.bnd,
+                    'sec': char.sec,
+                    'alg': char.alg,
+                    'bio': char.bio,
+                    'inventory': json.dumps(inv), 
+                    'alignment': 0,
+                    'status': char.status,
+                    'elo': char.elo,
+                    'wins': char.wins,
+                    'losses': char.losses,
+                    'credits': char.credits
+                }
             return None
 
-    def get_fighter(self, name, network):
-        logger.debug(f"Fetching record for fighter: {name} on {network}")
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM fighters WHERE name = ? AND network = ?", (name, network))
-        row = cursor.fetchone()
-        if not row:
-            logger.debug(f"Fighter {name} not found in database.")
-        return dict(row) if row else None
+    async def authenticate_fighter(self, name, network, provided_token):
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            )
+            result = await session.execute(stmt)
+            char = result.scalars().first()
+            if char and char.auth_token == provided_token:
+                return True
+            return False
 
-    def authenticate_fighter(self, name, network, provided_token):
-        logger.debug(f"Authenticating {name} on {network}...")
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT auth_token FROM fighters WHERE name = ? AND network = ?", (name, network))
-        row = cursor.fetchone()
-        if row and row['auth_token'] == provided_token:
-            logger.debug(f"Authentication SUCCESS for {name}.")
-            return True
-        logger.warning(f"Authentication FAILED for {name} (Token mismatch or non-existent user).")
-        return False
+    async def list_fighters(self, network=None):
+        async with self.async_session() as session:
+            stmt = select(Character, NetworkAlias).select_from(Character).join(Player).join(NetworkAlias)
+            if network:
+                stmt = stmt.where(NetworkAlias.network_name == network)
+            stmt = stmt.order_by(Character.elo.desc())
+            
+            result = await session.execute(stmt)
+            fighters = []
+            for char, alias in result:
+                fighters.append({
+                    'name': char.name,
+                    'network': alias.network_name,
+                    'elo': char.elo,
+                    'wins': char.wins,
+                    'losses': char.losses,
+                    'credits': char.credits
+                })
+            return fighters
 
-    # --- SysAdmin CLI Methods ---
-    def list_fighters(self, network=None):
-        logger.debug(f"Fetching fighter list. Filter Network: {network}")
-        cursor = self.conn.cursor()
-        if network:
-            cursor.execute("SELECT name, network, elo, wins, losses, credits FROM fighters WHERE network = ? ORDER BY elo DESC", (network,))
-        else:
-            cursor.execute("SELECT name, network, elo, wins, losses, credits FROM fighters ORDER BY elo DESC")
-        return cursor.fetchall()
+    async def get_location(self, name, network):
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.current_node)
+                .selectinload(GridNode.exits)
+                .selectinload(NodeConnection.target_node)
+            )
+            result = await session.execute(stmt)
+            char = result.scalars().first()
+            if not char:
+                return None
+            node = char.current_node
+            if not node:
+                return None
+            exits = [f"{c.direction} -> {c.target_node.name}" for c in node.exits]
+            return {
+                'name': node.name,
+                'description': node.description,
+                'type': node.node_type,
+                'exits': exits,
+                'credits': char.credits,
+                'level': char.level,
+            }
 
-    def add_credits(self, name, network, amount, is_spectator=False):
-        logger.info(f"Modifying economy: Adding {amount} credits to {name} on {network} (Spectator: {is_spectator})")
-        cursor = self.conn.cursor()
-        table = "spectators" if is_spectator else "fighters"
-        target_col = "nick" if is_spectator else "name"
-        
-        cursor.execute(f"UPDATE {table} SET credits = credits + ? WHERE {target_col} = ? AND network = ?", 
-                       (amount, name, network))
-        self.conn.commit()
-        success = cursor.rowcount > 0
-        if not success:
-            logger.warning(f"Economy modification failed: Entity {name} not found.")
-        return success
+    async def move_fighter(self, name, network, direction):
+        from models import NodeConnection  # Ensure it's imported or globally available
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.current_node)
+                .selectinload(GridNode.exits)
+                .selectinload(NodeConnection.target_node)
+            )
+            result = await session.execute(stmt)
+            char = result.scalars().first()
+            if not char: return None, "System offline."
+            if not char.current_node: return None, "You are floating in the void."
+            
+            for conn in char.current_node.exits:
+                if conn.direction.lower() == direction.lower():
+                    char.node_id = conn.target_node_id
+                    await session.commit()
+                    return conn.target_node.name, f"Traversed {direction} to {conn.target_node.name}."
+            return None, f"No valid route found for '{direction}'."
 
-    def delete_fighter(self, name, network):
-        logger.warning(f"Executing database DELETE for fighter {name} on {network}")
-        cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM fighters WHERE name = ? AND network = ?", (name, network))
-        self.conn.commit()
-        success = cursor.rowcount > 0
-        if success:
-            logger.info(f"Successfully deleted {name}.")
-        else:
-            logger.warning(f"Delete failed: {name} not found.")
-        return success
+    async def process_transaction(self, name, network, action, item_name):
+        from models import InventoryItem, ItemTemplate
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.current_node),
+                selectinload(Character.inventory).selectinload(InventoryItem.template)
+            )
+            result = await session.execute(stmt)
+            char = result.scalars().first()
+            if not char: return False, "System offline: Fighter not found."
+            if not char.current_node or char.current_node.node_type != "merchant":
+                return False, "Transaction Failed: No merchant in this node."
+                
+            stmt_item = select(ItemTemplate).where(ItemTemplate.name.ilike(item_name))
+            result = await session.execute(stmt_item)
+            tpl = result.scalars().first()
+            if not tpl: return False, f"Unknown item: '{item_name}'"
+            
+            if action == "buy":
+                if char.credits < tpl.base_value:
+                    return False, f"Insufficient credits. {tpl.name} costs {tpl.base_value}c."
+                char.credits -= tpl.base_value
+                
+                existing = next((i for i in char.inventory if i.template_id == tpl.id), None)
+                if existing:
+                    existing.quantity += 1
+                else:
+                    new_item = InventoryItem(character_id=char.id, template_id=tpl.id)
+                    session.add(new_item)
+                
+                await session.commit()
+                return True, f"Purchased {tpl.name} for {tpl.base_value}c. Balance: {char.credits}c."
+            
+            elif action == "sell":
+                existing = next((i for i in char.inventory if i.template_id == tpl.id and i.quantity > 0), None)
+                if not existing:
+                    return False, f"You do not possess a {tpl.name}."
+                
+                sell_price = max(1, int(tpl.base_value * 0.5))
+                char.credits += sell_price
+                existing.quantity -= 1
+                if existing.quantity <= 0:
+                    await session.delete(existing)
+                
+                await session.commit()
+                return True, f"Sold {tpl.name} for {sell_price}c. Balance: {char.credits}c."
+            return False, "Invalid action."
 
-    def trigger_epoch_reset(self):
-        logger.critical("EPOCH RESET INITIATED. Wiping stats for all fighters across all networks.")
-        cursor = self.conn.cursor()
-        cursor.execute('''
-        UPDATE fighters SET 
-            elo = 1200, 
-            wins = 0, 
-            losses = 0, 
-            alignment = 0, 
-            credits = 0,
-            status = 'ACTIVE'
-        ''')
-        self.conn.commit()
-        logger.critical("EPOCH RESET COMPLETE. All fighter stats returned to baseline.")
 
-# --- CLI Management Interface ---
-def main():
-    parser = argparse.ArgumentParser(description="AutomataArena SQLite Database Manager")
+    async def record_match_result(self, winner_name, loser_name, network):
+        async with self.async_session() as session:
+            # We assume winner and loser both exist on this network
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name.in_([winner_name, loser_name]),
+                NetworkAlias.network_name == network
+            )
+            result = await session.execute(stmt)
+            chars = result.scalars().all()
+            
+            winner, loser = None, None
+            for c in chars:
+                if c.name == winner_name: winner = c
+                if c.name == loser_name: loser = c
+            
+            if winner:
+                winner.wins += 1
+                winner.elo += 15
+                winner.xp += 50
+                winner.credits += 100
+                if winner.xp >= winner.level * 100:
+                    winner.level += 1
+                    winner.xp = 0
+                    winner.cpu += 1
+            if loser:
+                loser.losses += 1
+                loser.elo = max(0, loser.elo - 15)
+                loser.xp += 10
+            
+            await session.commit()
+
+async def async_main():
+    parser = argparse.ArgumentParser(description="AutomataArena Async SQLAlchemy DB Manager")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Command: init
     subparsers.add_parser("init", help="Initialize the database schema")
-
-    # Command: list
     list_parser = subparsers.add_parser("list", help="List all registered fighters")
     list_parser.add_argument("--network", type=str, help="Filter by IRC network")
-
-    # Command: grant
-    grant_parser = subparsers.add_parser("grant", help="Grant credits to a fighter or spectator")
-    grant_parser.add_argument("name", type=str, help="Target nickname")
-    grant_parser.add_argument("network", type=str, help="Target network (e.g., 2600net)")
-    grant_parser.add_argument("amount", type=int, help="Amount of credits to give (can be negative)")
-    grant_parser.add_argument("--spectator", action="store_true", help="Flag if target is a spectator, not a fighter")
-
-    # Command: delete
-    delete_parser = subparsers.add_parser("delete", help="Permanently delete a fighter")
-    delete_parser.add_argument("name", type=str, help="Fighter's nickname")
-    delete_parser.add_argument("network", type=str, help="Fighter's network")
-
-    # Command: epoch-reset
-    subparsers.add_parser("epoch-reset", help="DANGER: Resets all Elo and stats for a new season")
 
     args = parser.parse_args()
     db = ArenaDB()
 
     if args.command == "init":
-        db.init_schema()
+        await db.init_schema()
         print("[*] Database schema initialized.")
     elif args.command == "list":
-        fighters = db.list_fighters(args.network)
+        fighters = await db.list_fighters(args.network)
         print(f"\n--- Registered Fighters ({len(fighters)}) ---")
         print(f"{'Name':<15} | {'Network':<10} | {'Elo':<6} | {'W/L':<7} | {'Credits'}")
         print("-" * 55)
@@ -242,34 +357,10 @@ def main():
             wl = f"{f['wins']}/{f['losses']}"
             print(f"{f['name']:<15} | {f['network']:<10} | {f['elo']:<6} | {wl:<7} | {f['credits']}")
         print()
-    elif args.command == "grant":
-        success = db.add_credits(args.name, args.network, args.amount, args.spectator)
-        if success:
-            target_type = "Spectator" if args.spectator else "Fighter"
-            verb = "Granted" if args.amount > 0 else "Removed"
-            print(f"[*] {verb} {abs(args.amount)} credits to {target_type} '{args.name}' on {args.network}.")
-        else:
-            print(f"[!] Could not find target '{args.name}' on '{args.network}'.")
-    elif args.command == "delete":
-        confirm = input(f"Are you sure you want to delete {args.name} on {args.network}? (y/N): ")
-        if confirm.lower() == 'y':
-            if db.delete_fighter(args.name, args.network):
-                print(f"[*] Fighter '{args.name}' purged from the grid.")
-            else:
-                print(f"[!] Fighter '{args.name}' not found.")
-        else:
-            print("[*] Aborted.")
-    elif args.command == "epoch-reset":
-        confirm = input("DANGER: This will wipe all Elo, Wins, and Credits. Proceed? (Type 'RESET'): ")
-        if confirm == "RESET":
-            db.trigger_epoch_reset()
-            print("[*] Epoch Reset complete.")
-        else:
-            print("[*] Epoch Reset aborted.")
     else:
         parser.print_help()
-
-    db.close()
+        
+    await db.close()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(async_main())

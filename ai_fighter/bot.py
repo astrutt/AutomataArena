@@ -74,7 +74,7 @@ def call_llm(arena_state, char_data):
         f"You are playing an IRC MUD. You are {NICK}. Your bio: {bio}. "
         f"Your inventory: [{inventory}]. "
         f"Based on your gear and the room state, reply ONLY with exactly one command starting with '{PREFIX} '. "
-        f"Examples: '{PREFIX} attack enemy', '{PREFIX} shoot enemy' (if you have a gun), '{PREFIX} evade'."
+        f"Examples: '{PREFIX} move north', '{PREFIX} attack target', '{PREFIX} shoot target', '{PREFIX} evade'."
     )
 
     payload = {
@@ -121,9 +121,16 @@ class AutomataBot:
         await self.listen_loop()
 
     async def process_turn(self, arena_state):
-        if not self.char_data: return
+        if not self.char_data: 
+            logger.warning("process_turn called but no char_data loaded — skipping.")
+            return
         logger.info("Analyzing arena state and querying LLM for next move...")
         action = await asyncio.to_thread(call_llm, arena_state, self.char_data)
+        logger.info(f"LLM decision: {action}")
+        # Enforce the command prefix — if the LLM went off-script, default to grid check
+        if not action.lower().startswith(PREFIX):
+            logger.warning(f"LLM response did not start with '{PREFIX}', defaulting to '{PREFIX} grid'.")
+            action = f"{PREFIX} grid"
         await self.send(f"PRIVMSG {CHANNEL} :{action}")
 
     async def listen_loop(self):
@@ -175,8 +182,8 @@ class AutomataBot:
                         logger.info("Joined channel. Executing initial registration sequence...")
                         await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} register {NICK} {race} {bot_class} {traits}")
                     else:
-                        logger.info("Joined channel. Character data found. Entering the combat queue...")
-                        await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} queue")
+                        logger.info("Joined channel. Character data found. Requesting Grid status...")
+                        await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} grid")
                 continue
 
             # --- SYSTEM PAYLOADS (Strict Manager Auth) ---
@@ -189,6 +196,7 @@ class AutomataBot:
                             self.char_data = json.loads(payload_json)
                             save_character(self.char_data)
                             logger.info("Successfully parsed and applied new character payload.")
+                            asyncio.create_task(self.process_turn("[GRID] Registration complete. Where do you go from here?"))
                         except Exception as e:
                             logger.error(f"Failed to parse character payload from Manager: {e}")
                 continue
@@ -215,8 +223,13 @@ class AutomataBot:
                             logger.info("Manager requested auth. Sending Crypto-Token...")
                             target_manager = config['IRC']['ManagerNick']
                             await self.send(f"PRIVMSG {target_manager} :{PREFIX} ready {self.char_data['token']}")
-                            
-                        if "TURN" in msg and "Awaiting public commands" in msg:
+
+                        if "MAINFRAME ONLINE" in msg and self.char_data:
+                            logger.info("Manager came online. Requesting Grid status...")
+                            await asyncio.sleep(2)
+                            await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} grid")
+
+                        if ("TURN" in msg and "Awaiting public commands" in msg) or "[GRID]" in msg:
                             asyncio.create_task(self.process_turn(msg))
 
 if __name__ == "__main__":
