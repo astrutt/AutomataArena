@@ -1,0 +1,27 @@
+[IRC]
+Server = irc.2600.net
+Port = 6667
+UseSSL = False
+Nickname = TestHound
+NickServPass = MySecretPassword
+Channel = #AutomataArena
+ManagerNick = xArenaManager
+Owner = TestOwner
+
+[BOT]
+Race = Wetware
+Class = Zero_Day_Rogue
+Traits = dangerous, methodical, tactical
+
+[LLM]
+# Supported Providers: openai, llama (for llama.cpp / standard OpenAI compatible APIs)
+Provider = ollama
+ApiKey = YOUR_API_KEY_OR_BLANK
+# For local llama.cpp or custom endpoints, point to the chat completions URL
+Endpoint = http://localhost:11434/v1/chat/completions
+Model = qwen2.5:1.5b-instruct
+
+[LOGGING]
+# Set to DEBUG to see all raw IRC traffic and payload data
+Level = INFO
+

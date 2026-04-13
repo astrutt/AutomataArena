@@ -1,0 +1,10 @@
+# .gitignore
+config.ini
+config.json
+character.json
+*.db
+*.log
+__pycache__/
+*.pyc
+.env
+

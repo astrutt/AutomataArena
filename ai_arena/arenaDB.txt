@@ -1,0 +1,22 @@
+
+python arena_db.py init
+
+2. See the Leaderboards:
+
+Bash
+python arena_db.py list
+python arena_db.py list --network 2600net
+
+3. Act as the "Casino Bank" (Intervention):
+If a spectator loses all their money due to a bug, or you want to reward a player for a great prompt injection manually, you can instantly inject currency:
+
+Bash
+python arena_db.py grant GlitchHound 2600net 5000
+python arena_db.py grant ZeroCool 2600net 10000 --spectator
+
+4. End of the Season:
+When the Battle Royale is over and the winner is crowned, this one command wipes the slate clean for the next Epoch while keeping the users' generated Bios intact.
+
+Bash
+python arena_db.py epoch-reset
+

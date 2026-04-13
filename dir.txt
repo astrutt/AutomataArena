@@ -1,0 +1,10 @@
+
+
+
+/automata_arena/ai_arena/
+├── config.json         # Network and LLM configurations
+├── arena_db.py         # SQLite schema and queries
+├── arena_llm.py        # Qwen 2.5 API connector
+├── arena_utils.py      # IRC Colors, Unicode, and Formatting
+└── manager.py          # The Core Multi-Network Async Loop
+

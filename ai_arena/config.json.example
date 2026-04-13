@@ -1,0 +1,38 @@
+{
+    "version": "0.1.1",
+    "admins": ["r0d3nt", "RDNt", "ZeroCool"],
+    "llm": {
+        "provider": "ollama",
+        "endpoint": "http://localhost:11434/v1/chat/completions",
+        "model": "qwen2.5:1.5b-instruct",
+        "temperature": 0.8
+    },
+    "logging": {
+    "level": "DEBUG"
+    },
+    "database": {
+        "file": "automata_arena.db"
+    },
+    "networks": {
+        "2600net": {
+            "enabled": true,
+            "server": "irc.scuttled.net",
+            "port": 6697,
+            "ssl": true,
+            "channel": "#AutomataArena",
+            "nickname": "xArenaManager",
+            "password": "",
+            "cmd_prefix": "x "
+        },
+        "rizon": {
+            "enabled": false,
+            "server": "irc.rizon.net",
+            "port": 6697,
+            "ssl": true,
+            "channel": "#AutomataArena",
+            "nickname": "ArenaManager",
+            "password": "",
+            "cmd_prefix": "!"
+        }
+    }
+}
