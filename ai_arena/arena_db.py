@@ -250,6 +250,13 @@ class ArenaDB:
                     return conn.target_node.name, f"Traversed {direction} to {conn.target_node.name}."
             return None, f"No valid route found for '{direction}'."
 
+    async def list_shop_items(self):
+        from models import ItemTemplate
+        async with self.async_session() as session:
+            stmt = select(ItemTemplate).order_by(ItemTemplate.base_value.asc())
+            result = await session.execute(stmt)
+            return [{'name': t.name, 'type': t.item_type, 'cost': t.base_value} for t in result.scalars().all()]
+
     async def process_transaction(self, name, network, action, item_name):
         from models import InventoryItem, ItemTemplate
         async with self.async_session() as session:

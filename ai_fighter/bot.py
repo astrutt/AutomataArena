@@ -63,25 +63,28 @@ def save_character(payload):
     except Exception as e:
         logger.exception(f"Critical Error saving {CHARACTER_FILE}: {e}")
 
-def call_llm(arena_state, char_data):
+def call_llm(arena_state, char_data, memory_buffer):
     headers = {"Content-Type": "application/json"}
     if LLM_KEY: headers["Authorization"] = f"Bearer {LLM_KEY}"
 
     bio = char_data.get('bio', '')
     inventory = ", ".join(char_data.get('inventory', []))
+    memory_text = "\n".join(memory_buffer) if memory_buffer else "No prior memory."
 
     system_prompt = (
         f"You are playing an IRC MUD. You are {NICK}. Your bio: {bio}. "
         f"Your inventory: [{inventory}]. "
-        f"Based on your gear and the room state, reply ONLY with exactly one command starting with '{PREFIX} '. "
+        f"Based on your gear, recent event history, and the current room state, reply ONLY with exactly one command starting with '{PREFIX} '. "
         f"Examples: '{PREFIX} move north', '{PREFIX} attack target', '{PREFIX} shoot target', '{PREFIX} evade'."
     )
+
+    user_prompt = f"### RECENT EVENTS:\n{memory_text}\n\n### CURRENT STATE:\n{arena_state}\n\nWhat is your next action?"
 
     payload = {
         "model": LLM_MODEL,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": arena_state}
+            {"role": "user", "content": user_prompt}
         ],
         "temperature": 0.8,
         "max_tokens": 50
@@ -104,6 +107,16 @@ class AutomataBot:
         self.writer = None
         self.reader = None
         self.char_data = load_character()
+        self.memory_buffer = []
+
+    def record_memory(self, msg):
+        if "Awaiting public commands" in msg:
+            return  # Prevent duplicating current turn state in history
+        # Clean up UI formatting from Manager for the LLM
+        clean_msg = msg.replace("=== ", "").replace(" ===", "").strip()
+        self.memory_buffer.append(clean_msg)
+        if len(self.memory_buffer) > 10:
+            self.memory_buffer.pop(0)
 
     async def send(self, message):
         logger.debug(f"> {message}")
@@ -125,8 +138,13 @@ class AutomataBot:
             logger.warning("process_turn called but no char_data loaded — skipping.")
             return
         logger.info("Analyzing arena state and querying LLM for next move...")
-        action = await asyncio.to_thread(call_llm, arena_state, self.char_data)
+        
+        # Snapshot the memory for this thread
+        current_memory = list(self.memory_buffer)
+        
+        action = await asyncio.to_thread(call_llm, arena_state, self.char_data, current_memory)
         logger.info(f"LLM decision: {action}")
+        self.record_memory(f"You decided to: {action}")
         # Enforce the command prefix — if the LLM went off-script, default to grid check
         if not action.lower().startswith(PREFIX):
             logger.warning(f"LLM response did not start with '{PREFIX}', defaulting to '{PREFIX} grid'.")
@@ -219,6 +237,8 @@ class AutomataBot:
                 # --- ARENA BROADCASTS (Strict Manager Auth) ---
                 if target.lower() == CHANNEL.lower():
                     if source_nick == MANAGER:
+                        self.record_memory(msg)
+                        
                         if f"DM me: {PREFIX} ready <token>" in msg and self.char_data:
                             logger.info("Manager requested auth. Sending Crypto-Token...")
                             target_manager = config['IRC']['ManagerNick']

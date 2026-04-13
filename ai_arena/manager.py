@@ -73,9 +73,7 @@ class GridNode:
 
         await self.send(f"NICK {self.config['nickname']}")
         await self.send(f"USER {self.config['nickname']} 0 * :AutomataArena Master Node")
-        
         self.hype_task = asyncio.create_task(self.hype_loop())
-        self.grid_pulse_task = asyncio.create_task(self.grid_pulse_loop())
         await self.listen_loop()
 
     async def set_dynamic_topic(self):
@@ -100,25 +98,6 @@ class GridNode:
                 break
             except Exception as e:
                 logger.error(f"Hype loop error: {e}")
-
-    async def grid_pulse_loop(self):
-        await asyncio.sleep(30)
-        while True:
-            try:
-                await asyncio.sleep(30)
-                if not self.active_engine or not self.active_engine.active:
-                    fighters = await self.db.list_fighters(self.net_name)
-                    if fighters:
-                        pulse = format_text(
-                            f"[GRID PULSE] {len(fighters)} fighter(s) on the Grid. "
-                            f"Take your turn: '{self.prefix} move <dir>' | '{self.prefix} grid' to check location | '{self.prefix} queue' to enter the Arena.",
-                            C_CYAN
-                        )
-                        await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(pulse)}")
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Grid pulse loop error: {e}")
 
     async def handle_ready(self, nick: str, token: str, reply_target: str):
         if await self.db.authenticate_fighter(nick, self.net_name, token):
@@ -281,6 +260,21 @@ class GridNode:
         )
         await self.send(f"PRIVMSG {reply_target} :{build_banner(action_prompt)}")
 
+    async def handle_shop_view(self, nickname: str, reply_target: str):
+        items = await self.db.list_shop_items()
+        if not items:
+            await self.send(f"PRIVMSG {reply_target} :[SHOP] The marketplace is currently empty.")
+            return
+            
+        header = format_text("[ BLACK MARKET WARES ]", C_CYAN, bold=True)
+        await self.send(f"PRIVMSG {reply_target} :{build_banner(header)}")
+        
+        for item in items:
+            item_str = f"{item['name']} ({item['type']}) - {item['cost']}c"
+            await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(item_str, C_GREEN))}")
+            
+        footer = format_text(f"To buy, travel to a Merchant node and type '{self.prefix} buy <item>'.", C_YELLOW)
+        await self.send(f"PRIVMSG {reply_target} :{build_banner(footer)}")
 
     async def handle_admin_command(self, admin_nick: str, verb: str, args: list, reply_target: str):
         logger.warning(f"SYSADMIN OVERRIDE: {admin_nick} executed '{verb}'")
@@ -460,6 +454,10 @@ class GridNode:
                             asyncio.create_task(self.handle_grid_view(source_nick, reply_target))
                             continue
 
+                        elif verb == "shop":
+                            asyncio.create_task(self.handle_shop_view(source_nick, reply_target))
+                            continue
+
                         elif verb == "version":
                             versions = (
                                 f"[MODULES] manager: v1.2.0 | arena_db: v2.0.0 | "
@@ -566,7 +564,6 @@ class MasterHub:
         asyncio.create_task(self.db.close())
         for node in self.nodes.values():
             if node.hype_task: node.hype_task.cancel()
-            if hasattr(node, 'grid_pulse_task') and node.grid_pulse_task: node.grid_pulse_task.cancel()
             if node.writer: node.writer.write(b"QUIT :SysAdmin closed the grid.\r\n")
         if hasattr(self, 'loop_task'):
             self.loop_task.cancel()
