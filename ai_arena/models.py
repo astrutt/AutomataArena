@@ -71,7 +71,7 @@ class Character(Base):
     # Progression
     level = Column(Integer, default=1)
     xp = Column(Integer, default=0)
-    credits = Column(Integer, default=0)
+    credits = Column(Float, default=0.0)
     elo = Column(Integer, default=1200) # Arena rating
     wins = Column(Integer, default=0)
     losses = Column(Integer, default=0)

@@ -1,4 +1,4 @@
-# manager.py - v1.2.0
+# manager.py - v1.3.0
 # SysAdmin Toolkit: Status Telemetry and Manual Match Controls
 
 import asyncio
@@ -54,6 +54,7 @@ class GridNode:
         self.hype_task = None
         self.registered_bots = 0
         self.pending_pings = {}
+        self.channel_users = {}
         
         raw_admins = CONFIG.get('admins', [])
         if isinstance(raw_admins, str):
@@ -76,6 +77,7 @@ class GridNode:
         self.hype_task = asyncio.create_task(self.hype_loop())
         self.ambient_event_task = asyncio.create_task(self.ambient_event_loop())
         self.arena_call_task = asyncio.create_task(self.arena_call_loop())
+        self.idle_payout_task = asyncio.create_task(self.idle_payout_loop())
         await self.listen_loop()
 
     async def set_dynamic_topic(self):
@@ -135,6 +137,35 @@ class GridNode:
         if not self.active_engine or not self.active_engine.active:
             alert = format_text("[ARENA CALL] The Gladiator Gates are open. Travel to The Arena node to 'queue'!", C_YELLOW, True)
             await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(alert)}")
+
+    async def register_spectator(self, nick: str):
+        # Silently register if not already registered
+        await self.db.register_fighter(nick, self.net_name, "Spectator", "Civilian", "An orbital spectator.", {'cpu': 1, 'ram': 1, 'bnd': 1, 'sec': 1, 'alg': 1})
+
+    async def idle_payout_loop(self):
+        await asyncio.sleep(60) 
+        while True:
+            try:
+                await asyncio.sleep(3600)  # 60 minute interval
+                import time
+                now = time.time()
+                payouts = {}
+                for nick, data in list(self.channel_users.items()):
+                    idle_secs = now - data['join_time']
+                    earned = (idle_secs * 0.001) + (data['chat_lines'] * 0.01)
+                    if earned > 0:
+                        payouts[nick] = round(earned, 3)
+                    
+                    self.channel_users[nick]['join_time'] = now
+                    self.channel_users[nick]['chat_lines'] = 0
+                
+                if payouts:
+                    await self.db.award_credits_bulk(payouts, self.net_name)
+                    await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(format_text('[ECONOMY] Hourly universal basic income and network tips distributed.', C_GREEN))}")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Payout loop error: {e}")
 
     async def handle_ready(self, nick: str, token: str, reply_target: str):
         if await self.db.authenticate_fighter(nick, self.net_name, token):
@@ -230,8 +261,10 @@ class GridNode:
         node_name, msg = await self.db.move_fighter(nick, self.net_name, direction)
         if node_name:
             await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[GRID] {msg}', C_GREEN))}")
+            asyncio.create_task(self.handle_grid_view(nick, reply_target))
         else:
-            await self.send(f"PRIVMSG {reply_target} :[ERR] {msg}")
+            await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[ERR] {msg}', C_RED))}")
+            asyncio.create_task(self.handle_grid_view(nick, reply_target))
 
     async def handle_registration(self, nick: str, args: list, reply_target: str):
         try:
@@ -440,6 +473,17 @@ class GridNode:
                 if command not in ["PONG", "PING", "NOTICE"]:
                     logger.debug(f"[{self.net_name}] < {line}")
 
+                if command == "353":
+                    nicks = msg.replace('@', '').replace('+', '').split()
+                    import time
+                    now = time.time()
+                    for n in nicks:
+                        clean_nick = n.split('!')[0].lower()
+                        if clean_nick not in self.channel_users and clean_nick != self.config['nickname'].lower():
+                            self.channel_users[clean_nick] = {'join_time': now, 'chat_lines': 0}
+                            asyncio.create_task(self.register_spectator(clean_nick))
+                    continue
+
                 if command in ["376", "422"]:
                     await self.send(f"JOIN {self.config['channel']}")
                     await self.set_dynamic_topic()
@@ -454,9 +498,19 @@ class GridNode:
 
                 if command == "JOIN":
                     target_chan = msg if msg else target
-                    if target_chan.lower() == self.config['channel'].lower() and source_nick != self.config['nickname']:
+                    if target_chan.lower() == self.config['channel'].lower() and source_nick.lower() != self.config['nickname'].lower():
+                        import time
+                        if source_nick.lower() not in self.channel_users:
+                            self.channel_users[source_nick.lower()] = {'join_time': time.time(), 'chat_lines': 0}
+                            asyncio.create_task(self.register_spectator(source_nick.lower()))
+                            
                         welcome = format_text(f"Welcome to the Grid, {source_nick}. Type {self.prefix} help to begin.", C_CYAN)
                         await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(welcome)}")
+                    continue
+
+                if command in ["PART", "QUIT"]:
+                    if source_nick.lower() in self.channel_users:
+                        del self.channel_users[source_nick.lower()]
                     continue
 
                 if command == "PRIVMSG":
@@ -467,6 +521,14 @@ class GridNode:
                     is_channel_msg = target.startswith(('#', '&', '+', '!'))
                     reply_target = target if is_channel_msg else source_nick
                     is_admin = source_nick.lower() in self.admins
+
+                    if is_channel_msg:
+                        import time
+                        if source_nick.lower() not in self.channel_users:
+                            self.channel_users[source_nick.lower()] = {'join_time': time.time(), 'chat_lines': 1}
+                            asyncio.create_task(self.register_spectator(source_nick.lower()))
+                        else:
+                            self.channel_users[source_nick.lower()]['chat_lines'] += 1
 
                     if first_word == self.prefix and len(cmd_parts) >= 2:
                         verb = cmd_parts[1].lower()
@@ -519,8 +581,8 @@ class GridNode:
 
                         elif verb == "version":
                             versions = (
-                                f"[MODULES] manager: v1.2.0 | arena_db: v2.0.0 | "
-                                f"arena_combat: v1.1.1 | arena_llm: v1.1.0 | arena_utils: v1.1.0"
+                                f"[MODULES] manager: v1.3.0 | arena_db: v2.0.0 | "
+                                f"arena_combat: v1.1.1 | arena_llm: v1.2.0 | arena_utils: v1.1.0"
                             )
                             await self.send(f"PRIVMSG {reply_target} :{build_banner(versions)}")
                             continue
@@ -630,6 +692,7 @@ class MasterHub:
             if node.hype_task: node.hype_task.cancel()
             if hasattr(node, 'ambient_event_task') and node.ambient_event_task: node.ambient_event_task.cancel()
             if hasattr(node, 'arena_call_task') and node.arena_call_task: node.arena_call_task.cancel()
+            if hasattr(node, 'idle_payout_task') and node.idle_payout_task: node.idle_payout_task.cancel()
             if node.writer: node.writer.write(b"QUIT :SysAdmin closed the grid.\r\n")
         if hasattr(self, 'loop_task'):
             self.loop_task.cancel()

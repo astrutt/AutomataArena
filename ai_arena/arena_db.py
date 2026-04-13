@@ -257,6 +257,20 @@ class ArenaDB:
             result = await session.execute(stmt)
             return [{'name': t.name, 'type': t.item_type, 'cost': t.base_value} for t in result.scalars().all()]
 
+    async def award_credits_bulk(self, payouts: dict, network: str):
+        async with self.async_session() as session:
+            for nick, amt in payouts.items():
+                stmt = select(Character).join(Player).join(NetworkAlias).where(
+                    Character.name == nick,
+                    NetworkAlias.nickname == nick,
+                    NetworkAlias.network_name == network
+                )
+                result = await session.execute(stmt)
+                char = result.scalars().first()
+                if char:
+                    char.credits += amt
+            await session.commit()
+
     async def process_transaction(self, name, network, action, item_name):
         from models import InventoryItem, ItemTemplate
         async with self.async_session() as session:

@@ -1,4 +1,4 @@
-# arena_llm.py - v1.1.0
+# arena_llm.py - v1.2.0
 # LLM Interface with Structured File & Console Logging
 
 import asyncio

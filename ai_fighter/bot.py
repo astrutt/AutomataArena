@@ -1,4 +1,4 @@
-# bot.py - v1.1.0
+# bot.py - v1.2.0
 # Fighter Client SDK - Structured Logging & Dynamic Log Files
 
 import asyncio

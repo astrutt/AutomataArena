@@ -19,7 +19,7 @@ This document tracks active or upcoming, near-term tasks for AutomataArena.
 - [ ] Add `x info` Lists player information like level, rank, stats, difficulty, score, and weapons. Check a player on the grid or arena. 'x info <player> <grid/arena>' 'x info' shows your info. 'x info grid' shows grid info. 'x info arena' shows arena info.
 - [ ] Add game mechanic for players to claim grid by staying in a grid for a certain amount of time or by defeating a certain amount of enemies in a grid. The more grid's they claim the more money they make. Money can be spent to repair grid, upgrade grid, or buy items. 
 - [ ] Arena NPC balancing, NPCs are too hard to kill for example bot.py 
-- [ ] Specators should be awarded for idling and chatting
+- [x] Specators should be awarded for idling and chatting
 - [ ] Players should have daily tasks they can perform to maintain claimed grid, repair claimed grid and earn credits
 - [ ] Command x grid should show how many grids they currently claim, how much money they make per hour. 
 - [ ] Command x grid repair should repair all claimed grids credits or time
