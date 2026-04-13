@@ -75,7 +75,8 @@ def call_llm(arena_state, char_data, memory_buffer):
         f"You are playing an IRC MUD. You are {NICK}. Your bio: {bio}. "
         f"Your inventory: [{inventory}]. "
         f"Based on your gear, recent event history, and the current room state, reply ONLY with exactly one command starting with '{PREFIX} '. "
-        f"Examples: '{PREFIX} move north', '{PREFIX} attack target', '{PREFIX} shoot target', '{PREFIX} evade'."
+        f"Examples: '{PREFIX} move north', '{PREFIX} attack target', '{PREFIX} shoot target', '{PREFIX} evade'. "
+        f"If you see an ARENA CALL or desire to fight, your goal is to 'move' to The_Arena node and then use 'queue'."
     )
 
     user_prompt = f"### RECENT EVENTS:\n{memory_text}\n\n### CURRENT STATE:\n{arena_state}\n\nWhat is your next action?"
@@ -249,7 +250,7 @@ class AutomataBot:
                             await asyncio.sleep(2)
                             await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} grid")
 
-                        if ("TURN" in msg and "Awaiting public commands" in msg) or "[GRID]" in msg:
+                        if ("TURN" in msg and "Awaiting public commands" in msg) or "[GRID]" in msg or "[ARENA CALL]" in msg:
                             asyncio.create_task(self.process_turn(msg))
 
 if __name__ == "__main__":

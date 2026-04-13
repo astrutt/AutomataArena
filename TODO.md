@@ -21,6 +21,8 @@ This document tracks active or upcoming, near-term tasks for AutomataArena.
 - [ ] Arena NPC balancing, NPCs are too hard to kill for example bot.py 
 - [ ] Specators should be awarded for idling and chatting
 - [ ] Players should have daily tasks they can perform to maintain claimed grid, repair claimed grid and earn credits
-- [ ] 
+- [ ] Command x grid should show how many grids they currently claim, how much money they make per hour. 
+- [ ] Command x grid repair should repair all claimed grids credits or time
+
 
 

@@ -75,6 +75,7 @@ class GridNode:
         await self.send(f"USER {self.config['nickname']} 0 * :AutomataArena Master Node")
         self.hype_task = asyncio.create_task(self.hype_loop())
         self.ambient_event_task = asyncio.create_task(self.ambient_event_loop())
+        self.arena_call_task = asyncio.create_task(self.arena_call_loop())
         await self.listen_loop()
 
     async def set_dynamic_topic(self):
@@ -118,6 +119,22 @@ class GridNode:
                 break
             except Exception as e:
                 logger.error(f"Ambient event loop error: {e}")
+
+    async def arena_call_loop(self):
+        await asyncio.sleep(120) 
+        while True:
+            try:
+                await asyncio.sleep(3600)  # 60 minute interval
+                await self.trigger_arena_call()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Arena call loop error: {e}")
+
+    async def trigger_arena_call(self):
+        if not self.active_engine or not self.active_engine.active:
+            alert = format_text("[ARENA CALL] The Gladiator Gates are open. Travel to The Arena node to 'queue'!", C_YELLOW, True)
+            await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(alert)}")
 
     async def handle_ready(self, nick: str, token: str, reply_target: str):
         if await self.db.authenticate_fighter(nick, self.net_name, token):
@@ -275,9 +292,11 @@ class GridNode:
             await self.send(f"PRIVMSG {reply_target} :{build_banner(line)}")
         # Tag the final line with [GRID] so bot.py LLM trigger fires
         action_prompt = format_text(
-            f"[GRID] {nickname} @ {loc['name']} | Use '{self.prefix} move <dir>' to travel or '{self.prefix} queue' to enter the Arena.",
+            f"[GRID] {nickname} @ {loc['name']} | Use '{self.prefix} move <dir>' to travel.",
             C_YELLOW
         )
+        if loc['type'] == 'arena':
+            action_prompt += format_text(f" | Use '{self.prefix} queue' to enter the Arena.", C_GREEN)
         await self.send(f"PRIVMSG {reply_target} :{build_banner(action_prompt)}")
 
     async def handle_shop_view(self, nickname: str, reply_target: str):
@@ -344,7 +363,8 @@ class GridNode:
                 await self.send(f"PRIVMSG {reply_target} :[SYS] Forcing match drop sequence...")
                 await self.check_match_start()
             else:
-                await self.send(f"PRIVMSG {reply_target} :[SYS] Cannot start: 0 players have authenticated their Ready tokens.")
+                await self.send(f"PRIVMSG {reply_target} :[SYS] Forcing manual ARENA CALL...")
+                await self.trigger_arena_call()
 
         elif verb == "topic":
             await self.set_dynamic_topic()
@@ -520,9 +540,14 @@ class GridNode:
                             continue
 
                         elif verb == "queue":
-                            if source_nick not in self.match_queue: 
-                                self.match_queue.append(source_nick)
-                            await self.send(f"PRIVMSG {reply_target} :{build_banner(f'{source_nick} is in the queue. DM me: {self.prefix} ready <token>')}")
+                            loc = await self.db.get_location(source_nick, self.net_name)
+                            if loc and loc['type'] == 'arena':
+                                if source_nick not in self.match_queue: 
+                                    self.match_queue.append(source_nick)
+                                await self.send(f"PRIVMSG {reply_target} :{build_banner(f'{source_nick} is in the queue. DM me: {self.prefix} ready <token>')}")
+                            else:
+                                err = format_text(f"You must travel to The Arena to queue up. You are currently at {loc['name'] if loc else 'unknown'}.", C_RED)
+                                await self.send(f"PRIVMSG {reply_target} :{build_banner(err)}")
                             continue
 
                         elif verb == "ready":
@@ -604,6 +629,7 @@ class MasterHub:
         for node in self.nodes.values():
             if node.hype_task: node.hype_task.cancel()
             if hasattr(node, 'ambient_event_task') and node.ambient_event_task: node.ambient_event_task.cancel()
+            if hasattr(node, 'arena_call_task') and node.arena_call_task: node.arena_call_task.cancel()
             if node.writer: node.writer.write(b"QUIT :SysAdmin closed the grid.\r\n")
         if hasattr(self, 'loop_task'):
             self.loop_task.cancel()
