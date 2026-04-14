@@ -9,6 +9,7 @@ import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy import func
 from models import Base, Player, NetworkAlias, Character, InventoryItem, ItemTemplate, GridNode, NodeConnection
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -90,9 +91,10 @@ class ArenaDB:
 
     async def get_prefs(self, name: str, network: str) -> dict:
         async with self.async_session() as session:
+            name_lower = name.lower()
             stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
+                func.lower(Character.name) == name_lower,
+                func.lower(NetworkAlias.nickname) == name_lower,
                 NetworkAlias.network_name == network
             )
             char = (await session.execute(stmt)).scalars().first()
@@ -105,9 +107,10 @@ class ArenaDB:
 
     async def set_pref(self, name: str, network: str, key: str, value) -> bool:
         async with self.async_session() as session:
+            name_lower = name.lower()
             stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
+                func.lower(Character.name) == name_lower,
+                func.lower(NetworkAlias.nickname) == name_lower,
                 NetworkAlias.network_name == network
             )
             char = (await session.execute(stmt)).scalars().first()

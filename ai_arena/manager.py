@@ -639,7 +639,10 @@ class GridNode:
             await self.send(f"PRIVMSG {reply_target} :[ERR] Invalid value '{value}'. Use: {', '.join(value_map.keys())}")
             return
 
-        await self.db.set_pref(nickname, self.net_name, pref_key, value_map[value])
+        saved = await self.db.set_pref(nickname, self.net_name, pref_key, value_map[value])
+        if not saved:
+            await self.send(f"PRIVMSG {reply_target} :[ERR] Could not save setting. Is your character registered?")
+            return
         confirm = f"[OPTIONS] {setting} set to {value}."
         if machine or value == "machine":
             await self.send(f"PRIVMSG {nickname} :{confirm}")
