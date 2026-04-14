@@ -74,8 +74,8 @@ class ArenaLLM:
 
     async def generate_bio(self, name: str, race: str, bot_class: str, traits: str) -> str:
         logger.info(f"Requesting bio generation for {name} ({race}/{bot_class})")
-        system = "You are the AI announcer for a cyberpunk IRC fighting arena called #AutomataArena. Be concise, gritty, and atmospheric. Max 3 sentences."
-        user = f"Generate a psychological profile for a bot named {name}. Race: {race}. Class: {bot_class}. Traits: {traits}. Do NOT include rules or stats, only lore and personality."
+        system = "You are the AI announcer for a cyberpunk IRC fighting arena called #AutomataArena. Be concise, gritty, and atmospheric. Write EXACTLY one sentence. No more."
+        user = f"Generate a one-sentence psychological profile for a bot named {name}. Race: {race}. Class: {bot_class}. Traits: {traits}. Only lore and personality, no stats."
         return await asyncio.to_thread(self._make_request, system, user)
 
     async def generate_topic(self, active_fighters: int, network: str) -> str:

@@ -68,19 +68,66 @@ def call_llm(arena_state, char_data, memory_buffer):
     if LLM_KEY: headers["Authorization"] = f"Bearer {LLM_KEY}"
 
     bio = char_data.get('bio', '')
-    inventory = ", ".join(char_data.get('inventory', []))
-    memory_text = "\n".join(memory_buffer) if memory_buffer else "No prior memory."
+    race = char_data.get('race', 'Unknown')
+    char_class = char_data.get('char_class', 'Unknown')
+    level = char_data.get('level', 1)
+    credits = char_data.get('credits', 0)
+    hp = char_data.get('current_hp', '?')
+    location = char_data.get('node', 'Unknown')
+    inventory = ", ".join(char_data.get('inventory', [])) or "empty"
+    memory_text = "\n".join(memory_buffer) if memory_buffer else "No prior events."
 
-    system_prompt = (
-        f"You are playing an IRC MMO. You are {NICK}. Your bio: {bio}."
-        f"Your inventory: [{inventory}]. "
-        f"Based on recent events and your environment, reply ONLY with exactly ONE command starting with '{PREFIX} '.\n"
-        f"Navigation: '{PREFIX} move north', '{PREFIX} grid'\n"
-        f"Grid PvP Rules: You may use '{PREFIX} attack <name>', '{PREFIX} hack <name>', or '{PREFIX} rob <name>' if threatened or if grid logic demands.\n"
-        f"Arena PvP Rules: If you migrate to The_Arena, use '{PREFIX} queue'\n"
-    )
+    system_prompt = f"""You are {NICK}, an AI fighter in a cyberpunk IRC MUD called AutomataArena.
 
-    user_prompt = f"### RECENT EVENTS:\n{memory_text}\n\n### CURRENT STATE:\n{arena_state}\n\nWhat is your next action?"
+## YOUR IDENTITY
+Race: {race} | Class: {char_class} | Level: {level}
+Bio: {bio}
+
+## OBJECTIVE
+Survive, earn credits, and dominate the Grid. Make decisions that fit your class and bio.
+
+## COMMAND REFERENCE (reply with EXACTLY ONE)
+Exploration:
+  {PREFIX} grid          - show your current node info and exits
+  {PREFIX} move <dir>    - move to adjacent node (north/south/east/west/up/down)
+  {PREFIX} info <target> - look up a player, node, or "arena"
+Economy:
+  {PREFIX} shop          - browse items for sale
+  {PREFIX} buy <item>    - purchase an item
+  {PREFIX} sell <item>   - sell an item for half price
+Grid Control (for claimed nodes):
+  {PREFIX} claim         - claim the node you occupy
+  {PREFIX} upgrade       - upgrade your node (costs credits)
+  {PREFIX} repair        - restore node durability (costs 100c)
+  {PREFIX} recharge      - refill node power (costs 100c)
+  {PREFIX} siphon grid   - drain power from a rival's node
+  {PREFIX} hack grid     - attempt hostile takeover of current node
+Grid PvP (must be in same node as target):
+  {PREFIX} attack <nick> - physical attack (CPU vs BND)
+  {PREFIX} hack <nick>   - steal 5% of target credits (ALG vs SEC)
+  {PREFIX} rob <nick>    - steal a random item (BND vs BND)
+Arena PvP (at The_Arena node only):
+  {PREFIX} queue         - enter the gladiator queue
+Daily & Meta:
+  {PREFIX} tasks         - view your daily task board
+  {PREFIX} inv           - view your inventory
+
+## RULES
+- Reply with ONE command ONLY. No prose, no explanation, no quotes.
+- Grid PvP has a 30-second cooldown. Do not spam attacks.
+- Arena combat only when TURN appears in the current state.
+- If low on credits, idle in a claimed node or complete daily tasks."""
+
+    user_prompt = f"""## CURRENT SITUATION
+Location: {location} | HP: {hp} | Credits: {credits:.0f}c | Inventory: {inventory}
+
+## RECENT EVENTS
+{memory_text}
+
+## ARENA STATE
+{arena_state}
+
+Your next command:"""
 
     payload = {
         "model": LLM_MODEL,

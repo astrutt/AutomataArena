@@ -79,11 +79,11 @@ def format_text(text: str, color_code: str = None, bold: bool = False) -> str:
 
 def build_banner(text: str) -> str:
     """
-    Wraps text in the standard [🏟️ ARENA] banner layout used by the Manager.
+    Wraps text in the standard [ARENA] 🏟️  banner layout used by the Manager.
     """
     try:
-        prefix = format_text(f"[{ICONS.get('Arena', '🏟️')} ARENA]", C_YELLOW)
-        return f"{prefix} {text}"
+        prefix = format_text(f"[ARENA] {ICONS.get('Arena', '🏟️')} ", C_YELLOW)
+        return f"{prefix}{text}"
     except Exception as e:
         logger.error(f"Failed to build banner for text '{text[:20]}...': {e}")
         return text
