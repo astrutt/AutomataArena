@@ -477,6 +477,10 @@ class GridNode:
             success, msg = await self.db.upgrade_node(nickname, self.net_name)
         elif action == "siphon":
             success, msg = await self.db.siphon_node(nickname, self.net_name)
+        elif action == "repair":
+            success, msg = await self.db.grid_repair(nickname, self.net_name)
+        elif action == "recharge":
+            success, msg = await self.db.grid_recharge(nickname, self.net_name)
         elif action == "hack":
             success, msg = await self.db.hack_node(nickname, self.net_name)
             if not success and msg == "PVE_GUARDIAN_SPAWN":
@@ -487,9 +491,26 @@ class GridNode:
         banner = format_text(msg, C_GREEN if success else C_RED)
         await self.send(f"PRIVMSG {reply_target} :{build_banner(banner)}")
         
-        if success and action in ["claim", "upgrade", "hack"]:
+        if success and action in ["claim", "upgrade", "hack", "repair", "recharge"]:
             sigact = format_text(f"[SIGACT] Grid Alert: {nickname} executed a territorial {action}!", C_YELLOW)
             await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(sigact)}")
+
+    async def handle_tasks_view(self, nickname: str, reply_target: str):
+        tasks_json = await self.db.get_daily_tasks(nickname, self.net_name)
+        import json
+        try: tasks = json.loads(tasks_json)
+        except: tasks = {}
+        
+        banner = format_text("=== [DAILY TASKS] ===", C_CYAN)
+        await self.send(f"PRIVMSG {reply_target} :{build_banner(banner)}")
+        
+        for k, v in tasks.items():
+            if k in ["date", "completed"]: continue
+            status = format_text("[x]", C_GREEN) if v >= 1 else "[ ]"
+            await self.send(f"PRIVMSG {reply_target} :{status} {k}")
+            
+        if tasks.get("completed"):
+            await self.send(f"PRIVMSG {reply_target} :🏆 " + format_text("All Tasks Completed! Bonus Paid.", C_YELLOW))
 
     async def handle_admin_command(self, admin_nick: str, verb: str, args: list, reply_target: str):
         logger.warning(f"SYSADMIN OVERRIDE: {admin_nick} executed '{verb}'")
@@ -727,6 +748,14 @@ class GridNode:
                             asyncio.create_task(self.handle_grid_command(source_nick, reply_target, "hack"))
                             continue
 
+                        elif verb == "tasks":
+                            asyncio.create_task(self.handle_tasks_view(source_nick, reply_target))
+                            continue
+
+                        elif verb in ["repair", "recharge"]:
+                            asyncio.create_task(self.handle_grid_command(source_nick, reply_target, verb))
+                            continue
+
                         elif verb == "siphon" and len(args) > 0 and args[0].lower() == "grid":
                             asyncio.create_task(self.handle_grid_command(source_nick, reply_target, "siphon"))
                             continue
@@ -759,6 +788,8 @@ class GridNode:
                                 if source_nick not in self.match_queue: 
                                     self.match_queue.append(source_nick)
                                     sigact = format_text(f"[SIGACT] {source_nick} stepped into the Gladiator Queue!", C_YELLOW)
+                                    reward_msg = await self.db.complete_task(source_nick, self.net_name, "Queue in Arena")
+                                    if reward_msg: sigact += f"\n{reward_msg}"
                                     await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(sigact)}")
                                 await self.send(f"PRIVMSG {reply_target} :{build_banner(f'{source_nick} is in the queue. DM me: {self.prefix} ready <token>')}")
                             else:

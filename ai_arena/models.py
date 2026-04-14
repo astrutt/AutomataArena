@@ -21,6 +21,7 @@ class GridNode(Base):
     power_stored = Column(Float, default=0.0)
     power_consumed = Column(Float, default=0.0)
     power_generated = Column(Float, default=0.0)
+    durability = Column(Float, default=100.0)
     
     # Relationships
     owner = relationship("Character", foreign_keys=[owner_character_id])
@@ -85,6 +86,7 @@ class Character(Base):
     losses = Column(Integer, default=0)
     status = Column(String, default='ACTIVE')
     auth_token = Column(String, nullable=True)
+    daily_tasks = Column(String, default='{}')
     
     # Core Attributes
     cpu = Column(Integer, default=5) # Physical/Kinetic
