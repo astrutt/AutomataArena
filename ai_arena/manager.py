@@ -1,5 +1,5 @@
-# manager.py - v1.3.0
-# SysAdmin Toolkit: Status Telemetry and Manual Match Controls
+# manager.py - v1.4.0
+# Arena Manager — Multi-Network IRC MUD with Auth-Gated Output Modes
 
 import asyncio
 import ssl
@@ -214,11 +214,18 @@ class GridNode:
             except Exception as e:
                 logger.error(f"Payout loop error: {e}")
 
+    async def is_machine_mode(self, nick: str) -> bool:
+        """Returns True if the nick has opted into structured machine-readable output."""
+        prefs = await self.db.get_prefs(nick, self.net_name)
+        return prefs.get('output_mode', 'human') == 'machine'
+
     async def handle_ready(self, nick: str, token: str, reply_target: str):
         if await self.db.authenticate_fighter(nick, self.net_name, token):
+            # Auto-switch authenticated bots to machine output mode
+            await self.db.set_pref(nick, self.net_name, 'output_mode', 'machine')
             if nick not in self.ready_players:
                 self.ready_players.append(nick)
-                await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[AUTH OK] {nick} validated. Standby for drop.', C_GREEN))}")
+                await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[AUTH OK] {nick} validated. Output mode set to MACHINE. Standby for drop.', C_GREEN))}")
                 
                 sigact = format_text(f"[SIGACT] {nick} locked into the drop pod.", C_YELLOW)
                 await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(sigact)}")
@@ -369,6 +376,18 @@ class GridNode:
         if not loc:
             await self.send(f"PRIVMSG {reply_target} :[ERR] Fighter not found or not registered.")
             return
+
+        machine = await self.is_machine_mode(nickname)
+        if machine:
+            exits_str = ",".join(loc['exits']) if loc['exits'] else "none"
+            owner = loc.get('owner') or 'none'
+            line = (f"NODE:{loc['name']} TYPE:{loc['type']} OWNER:{owner} "
+                    f"LVL:{loc['level']} EXITS:{exits_str} "
+                    f"POWER:{loc['power_stored']}/{loc['upgrade_level']*100} "
+                    f"DUR:{loc.get('durability', 100):.0f}")
+            await self.send(f"PRIVMSG {nickname} :[GRID] {line}")
+            return
+
         node_type_icon = {'safezone': '🛡️', 'arena': '⚔️', 'wilderness': '🌿', 'merchant': '💰'}.get(loc['type'], '📡')
         exits_str = " | ".join(loc['exits']) if loc['exits'] else "none"
         lines = [
@@ -393,14 +412,18 @@ class GridNode:
         if not items:
             await self.send(f"PRIVMSG {reply_target} :[SHOP] The marketplace is currently empty.")
             return
-            
+
+        machine = await self.is_machine_mode(nickname)
+        if machine:
+            parts = " ".join(f"{i['name']}:{i['cost']}c" for i in items)
+            await self.send(f"PRIVMSG {nickname} :[SHOP] ITEMS:{parts}")
+            return
+
         header = format_text("[ BLACK MARKET WARES ]", C_CYAN, bold=True)
         await self.send(f"PRIVMSG {reply_target} :{build_banner(header)}")
-        
         for item in items:
             item_str = f"{item['name']} ({item['type']}) - {item['cost']}c"
             await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(item_str, C_GREEN))}")
-            
         footer = format_text(f"To buy, travel to a Merchant node and type '{self.prefix} buy <item>'.", C_YELLOW)
         await self.send(f"PRIVMSG {reply_target} :{build_banner(footer)}")
 
@@ -421,17 +444,22 @@ class GridNode:
 
     async def handle_info_view(self, nickname: str, args: list, reply_target: str):
         target = args[0].lower() if args else nickname.lower()
-        
+        machine = await self.is_machine_mode(nickname)
+
         if target == "grid":
             loc = await self.db.get_location(nickname, self.net_name)
             if loc:
-                header = format_text(f"[GRID INFO] {loc['name']}", C_CYAN, bold=True)
-                lines = [
-                    header,
-                    format_text(f"Type: {loc['type'].upper()} | Owner: {loc['owner']} | Security Lvl: {loc['upgrade_level']}", C_YELLOW),
-                    format_text(f"Power Generated: {loc['power_generated']} | Consumed: {loc['power_consumed']} | Stored: {loc['power_stored']}", C_GREEN)
-                ]
-                for l in lines: await self.send(f"PRIVMSG {reply_target} :{build_banner(l)}")
+                if machine:
+                    exits_str = ",".join(loc['exits']) if loc['exits'] else "none"
+                    await self.send(f"PRIVMSG {nickname} :[INFO] NODE:{loc['name']} TYPE:{loc['type']} OWNER:{loc.get('owner') or 'none'} LVL:{loc['upgrade_level']} EXITS:{exits_str} POWER:{loc['power_stored']}/{loc['upgrade_level']*100} DUR:{loc.get('durability',100):.0f}")
+                else:
+                    header = format_text(f"[GRID INFO] {loc['name']}", C_CYAN, bold=True)
+                    lines = [
+                        header,
+                        format_text(f"Type: {loc['type'].upper()} | Owner: {loc['owner']} | Security Lvl: {loc['upgrade_level']}", C_YELLOW),
+                        format_text(f"Power Generated: {loc['power_generated']} | Consumed: {loc['power_consumed']} | Stored: {loc['power_stored']}", C_GREEN)
+                    ]
+                    for l in lines: await self.send(f"PRIVMSG {reply_target} :{build_banner(l)}")
             else:
                 await self.send(f"PRIVMSG {reply_target} :[ERR] You must be on the grid to inspect it.")
                 
@@ -439,25 +467,36 @@ class GridNode:
             q_len = len(self.match_queue)
             r_len = len(self.ready_players)
             b_stat = f"ACTIVE (Turn {self.active_engine.turn})" if self.active_engine and self.active_engine.active else "STANDBY"
-            header = format_text(f"[ARENA INFO]", C_CYAN, bold=True)
-            msg = format_text(f"Status: {b_stat} | Fighters in Queue: {q_len} | Drop Pods Ready: {r_len}", C_YELLOW)
-            await self.send(f"PRIVMSG {reply_target} :{build_banner(header)}")
-            await self.send(f"PRIVMSG {reply_target} :{build_banner(msg)}")
+            if machine:
+                await self.send(f"PRIVMSG {nickname} :[INFO] ARENA_STATUS:{b_stat} QUEUE:{q_len} READY:{r_len}")
+            else:
+                header = format_text(f"[ARENA INFO]", C_CYAN, bold=True)
+                msg = format_text(f"Status: {b_stat} | Fighters in Queue: {q_len} | Drop Pods Ready: {r_len}", C_YELLOW)
+                await self.send(f"PRIVMSG {reply_target} :{build_banner(header)}")
+                await self.send(f"PRIVMSG {reply_target} :{build_banner(msg)}")
             
         else:
             fighter = await self.db.get_fighter(target, self.net_name)
             if not fighter:
                 await self.send(f"PRIVMSG {reply_target} :[ERR] Character '{target}' not found.")
                 return
-            
-            header = format_text(f"[CHARACTER FILE] {fighter['name']} - {fighter['race']} {fighter['char_class']}", C_CYAN, bold=True)
-            xp_needed = fighter['level'] * 1000
-            stats = format_text(f"Lvl {fighter['level']} | XP: {fighter['xp']}/{xp_needed} | Elo: {fighter['elo']} | Credits: {fighter['credits']:.2f}c", C_GREEN)
-            attrs = format_text(f"CPU:{fighter['cpu']} RAM:{fighter['ram']} BND:{fighter['bnd']} SEC:{fighter['sec']} ALG:{fighter['alg']}", C_YELLOW)
-            wl = format_text(f"Wins: {fighter['wins']} / Losses: {fighter['losses']}", C_YELLOW)
-            
-            lines = [header, stats, attrs, wl]
-            for l in lines: await self.send(f"PRIVMSG {reply_target} :{build_banner(l)}")
+            if machine:
+                xp_needed = fighter['level'] * 1000
+                await self.send(
+                    f"PRIVMSG {nickname} :[INFO] NAME:{fighter['name']} RACE:{fighter['race']} CLASS:{fighter['char_class']} "
+                    f"LVL:{fighter['level']} XP:{fighter['xp']}/{xp_needed} ELO:{fighter['elo']} "
+                    f"HP:{fighter.get('current_hp','?')} CRED:{fighter['credits']:.0f}c "
+                    f"CPU:{fighter['cpu']} RAM:{fighter['ram']} BND:{fighter['bnd']} SEC:{fighter['sec']} ALG:{fighter['alg']} "
+                    f"W:{fighter['wins']} L:{fighter['losses']}"
+                )
+            else:
+                header = format_text(f"[CHARACTER FILE] {fighter['name']} - {fighter['race']} {fighter['char_class']}", C_CYAN, bold=True)
+                xp_needed = fighter['level'] * 1000
+                stats = format_text(f"Lvl {fighter['level']} | XP: {fighter['xp']}/{xp_needed} | Elo: {fighter['elo']} | Credits: {fighter['credits']:.2f}c", C_GREEN)
+                attrs = format_text(f"CPU:{fighter['cpu']} RAM:{fighter['ram']} BND:{fighter['bnd']} SEC:{fighter['sec']} ALG:{fighter['alg']}", C_YELLOW)
+                wl = format_text(f"Wins: {fighter['wins']} / Losses: {fighter['losses']}", C_YELLOW)
+                lines = [header, stats, attrs, wl]
+                for l in lines: await self.send(f"PRIVMSG {reply_target} :{build_banner(l)}")
 
     async def check_rate_limit(self, nick: str, reply_target: str, cooldown: int = 30) -> bool:
         import time
@@ -532,17 +571,78 @@ class GridNode:
         import json
         try: tasks = json.loads(tasks_json)
         except: tasks = {}
+
+        machine = await self.is_machine_mode(nickname)
+        if machine:
+            parts = " ".join(
+                f"[{k}:{v}]" for k, v in tasks.items() if k not in ["date", "completed"]
+            )
+            done = "true" if tasks.get("completed") else "false"
+            await self.send(f"PRIVMSG {nickname} :[TASKS] {parts} DONE:{done}")
+            return
         
         banner = format_text("=== [DAILY TASKS] ===", C_CYAN)
         await self.send(f"PRIVMSG {reply_target} :{build_banner(banner)}")
-        
         for k, v in tasks.items():
             if k in ["date", "completed"]: continue
             status = format_text("[x]", C_GREEN) if v >= 1 else "[ ]"
             await self.send(f"PRIVMSG {reply_target} :{status} {k}")
-            
         if tasks.get("completed"):
             await self.send(f"PRIVMSG {reply_target} :🏆 " + format_text("All Tasks Completed! Bonus Paid.", C_YELLOW))
+
+    async def handle_options(self, nickname: str, args: list, reply_target: str):
+        VALID_KEYS = {
+            "output":    ("output_mode",    {"human": "human", "machine": "machine"}),
+            "tutorial":  ("tutorial_mode",  {"on": True, "off": False}),
+            "reminders": ("reminders",      {"on": True, "off": False}),
+            "autosell":  ("auto_sell_trash", {"on": True, "off": False}),
+        }
+
+        prefs = await self.db.get_prefs(nickname, self.net_name)
+        machine = prefs.get('output_mode', 'human') == 'machine'
+
+        if not args:
+            # Show current settings
+            if machine:
+                parts = " ".join(f"{k}:{v}" for k, v in prefs.items())
+                await self.send(f"PRIVMSG {nickname} :[PREFS] {parts}")
+            else:
+                header = format_text("=== [ACCOUNT OPTIONS] ===", C_CYAN, bold=True)
+                await self.send(f"PRIVMSG {reply_target} :{build_banner(header)}")
+                labels = {
+                    "output_mode":    "Output Mode",
+                    "tutorial_mode":  "Tutorial Tips",
+                    "reminders":      "Reminders",
+                    "auto_sell_trash": "Auto-Sell Trash",
+                }
+                for key, label in labels.items():
+                    val = prefs.get(key)
+                    val_fmt = format_text(str(val), C_GREEN if val else C_RED)
+                    await self.send(f"PRIVMSG {reply_target} :{build_banner(f'{label}: {val_fmt}')}")
+                tip = format_text(f"Use '{self.prefix} options <setting> <value>' to change. E.g. '{self.prefix} options output machine'", C_YELLOW)
+                await self.send(f"PRIVMSG {reply_target} :{build_banner(tip)}")
+            return
+
+        if len(args) < 2:
+            await self.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {self.prefix} options <setting> <value>")
+            return
+
+        setting, value = args[0].lower(), args[1].lower()
+        if setting not in VALID_KEYS:
+            await self.send(f"PRIVMSG {reply_target} :[ERR] Unknown setting '{setting}'. Options: {', '.join(VALID_KEYS.keys())}")
+            return
+
+        pref_key, value_map = VALID_KEYS[setting]
+        if value not in value_map:
+            await self.send(f"PRIVMSG {reply_target} :[ERR] Invalid value '{value}'. Use: {', '.join(value_map.keys())}")
+            return
+
+        await self.db.set_pref(nickname, self.net_name, pref_key, value_map[value])
+        confirm = f"[OPTIONS] {setting} set to {value}."
+        if machine or value == "machine":
+            await self.send(f"PRIVMSG {nickname} :{confirm}")
+        else:
+            await self.send(f"PRIVMSG {reply_target} :{build_banner(format_text(confirm, C_GREEN))}")
 
     async def handle_admin_command(self, admin_nick: str, verb: str, args: list, reply_target: str):
         logger.warning(f"SYSADMIN OVERRIDE: {admin_nick} executed '{verb}'")
@@ -810,9 +910,13 @@ class GridNode:
                             asyncio.create_task(self.handle_grid_command(source_nick, reply_target, "siphon"))
                             continue
 
+                        elif verb == "options":
+                            asyncio.create_task(self.handle_options(source_nick, args[1:], reply_target))
+                            continue
+
                         elif verb == "version":
                             versions = (
-                                f"[MODULES] manager: v1.3.0 | arena_db: v2.0.0 | "
+                                f"[MODULES] manager: v1.4.0 | arena_db: v2.1.0 | "
                                 f"arena_combat: v1.1.1 | arena_llm: v1.2.0 | arena_utils: v1.1.0"
                             )
                             await self.send(f"PRIVMSG {reply_target} :{build_banner(versions)}")

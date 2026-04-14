@@ -1,3 +1,5 @@
+# arena_db.py - v2.1.0
+# Database layer with auth-gated prefs, daily tasks, and Grid PvP transactions
 import asyncio
 import json
 import uuid
@@ -78,6 +80,47 @@ class ArenaDB:
             
             await session.commit()
         logger.info("Schema v2 successfully initialized with seeded Grid topology.")
+
+    DEFAULT_PREFS = {
+        "output_mode": "human",
+        "auto_sell_trash": False,
+        "tutorial_mode": True,
+        "reminders": True
+    }
+
+    async def get_prefs(self, name: str, network: str) -> dict:
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char:
+                return dict(self.DEFAULT_PREFS)
+            try:
+                return {**self.DEFAULT_PREFS, **json.loads(char.prefs or '{}')}
+            except Exception:
+                return dict(self.DEFAULT_PREFS)
+
+    async def set_pref(self, name: str, network: str, key: str, value) -> bool:
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char:
+                return False
+            try:
+                prefs = {**self.DEFAULT_PREFS, **json.loads(char.prefs or '{}')}
+            except Exception:
+                prefs = dict(self.DEFAULT_PREFS)
+            prefs[key] = value
+            char.prefs = json.dumps(prefs)
+            await session.commit()
+            return True
 
     async def grid_repair(self, name, network):
         async with self.async_session() as session:
