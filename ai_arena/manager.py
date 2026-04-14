@@ -834,10 +834,17 @@ class GridNode:
                         else:
                             self.channel_users[nick_lower]['chat_lines'] += 1
 
+                    verb, args = None, []
                     if first_word == self.prefix and len(cmd_parts) >= 2:
+                        # Space form: "x help args..."
                         verb = cmd_parts[1].lower()
                         args = cmd_parts[2:]
-                        
+                    elif first_word.startswith(self.prefix) and len(first_word) > len(self.prefix):
+                        # Attached form: "xhelp args..."
+                        verb = first_word[len(self.prefix):].lower()
+                        args = cmd_parts[1:]
+
+                    if verb is not None:
                         logger.info(f"Command Rcvd | User: {source_nick} | Verb: {verb} | Target: {reply_target}")
 
                         if verb == "help":
