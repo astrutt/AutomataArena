@@ -237,7 +237,7 @@ class AutomataBot:
 
             if command == "PRIVMSG":
                 
-                # --- OWNER OVERRIDES (Private Messages) ---
+                # --- OWNER OVERRIDES & MANAGER DMS (Private Messages) ---
                 if target.lower() == NICK.lower():
                     if OWNER and source_nick == OWNER:
                         logger.warning(f"Secure Owner Override Received from {source_nick}: {msg}")
@@ -248,6 +248,10 @@ class AutomataBot:
                         else:
                             # Forward anything else directly to the channel (Puppet Mode)
                             await self.send(f"PRIVMSG {CHANNEL} :{msg}")
+                    elif source_nick == MANAGER:
+                        self.record_memory(msg)
+                        if ("TURN" in msg and "Awaiting public commands" in msg) or "[GRID]" in msg or "[ARENA CALL]" in msg or "[GRID PvP]" in msg:
+                            asyncio.create_task(self.process_turn(msg))
                     continue
 
                 # --- ARENA BROADCASTS (Strict Manager Auth) ---
