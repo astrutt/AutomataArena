@@ -230,40 +230,6 @@ class PlayerRepository:
                 })
             return fighters
 
-async def increment_daily_task(session, char, task_key):
-    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-    
-    try: tasks = json.loads(char.daily_tasks)
-    except: tasks = {}
-    
-    if tasks.get("date") != today:
-        tasks = {
-            "date": today,
-            "Claim a Node": 0,
-            "Defend a Node": 0,
-            "Hack a Player": 0,
-            "Repair a Node": 0,
-            "Kill a Grid Bug": 0,
-            "Queue in Arena": 0,
-            "completed": False
-        }
-        
-    if tasks.get("completed"): return None
-
-    if task_key in tasks and tasks[task_key] < 1:
-        tasks[task_key] += 1
-        
-    completed_count = sum(1 for k, v in tasks.items() if k not in ["date", "completed"] and v >= 1)
-    reward_msg = None
-    
-    if completed_count >= 3 and not tasks.get("completed"):
-        tasks["completed"] = True
-        char.credits += 500.0
-        reward_msg = f"[SIGACT] 🏆 {char.name} completed 3 Daily Tasks and earned a 500c bonus!"
-        
-    char.daily_tasks = json.dumps(tasks)
-    return reward_msg
-
     async def active_powergen(self, name: str, network: str) -> tuple:
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
@@ -298,6 +264,41 @@ async def increment_daily_task(session, char, task_key):
             char.stability = min(100.0, char.stability + s_gain)
             await session.commit()
             return True, f"Training routine synchronized. Structural integrity improved. (+{s_gain}%)"
+
+async def increment_daily_task(session, char, task_key):
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    
+    try: tasks = json.loads(char.daily_tasks)
+    except: tasks = {}
+    
+    if tasks.get("date") != today:
+        tasks = {
+            "date": today,
+            "Claim a Node": 0,
+            "Defend a Node": 0,
+            "Hack a Player": 0,
+            "Repair a Node": 0,
+            "Kill a Grid Bug": 0,
+            "Queue in Arena": 0,
+            "completed": False
+        }
+        
+    if tasks.get("completed"): return None
+
+    if task_key in tasks and tasks[task_key] < 1:
+        tasks[task_key] += 1
+        
+    completed_count = sum(1 for k, v in tasks.items() if k not in ["date", "completed"] and v >= 1)
+    reward_msg = None
+    
+    if completed_count >= 3 and not tasks.get("completed"):
+        tasks["completed"] = True
+        char.credits += 500.0
+        reward_msg = f"[SIGACT] 🏆 {char.name} completed 3 Daily Tasks and earned a 500c bonus!"
+        
+    char.daily_tasks = json.dumps(tasks)
+    return reward_msg
+
 
     async def tick_player_maintenance(self, network: str, idlers: list):
         """
