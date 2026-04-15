@@ -45,6 +45,12 @@ This document tracks active or upcoming, near-term tasks for AutomataArena.
 - [ ] **Spectator item drops** / interaction
 - [ ] **Interactive Spectators** (In-IRC gambling/drops)
 
+## 🛡️ Phase 7: Spectator & Infrastructure Overhaul (Completed)
+- [x] **IdleRPG Spectator Ranks** (Ghost to Grid Sentinel)
+- [x] **Unified Absence Retention** (Level-scaled timeouts)
+- [x] **Database Maintenance Suite** (update, check, rollback, repair)
+- [x] **Multi-Network Anti-Flood** (Warn-once cooldown, per-network pacing)
+
 
 
 ## ✅ Completed Tasks

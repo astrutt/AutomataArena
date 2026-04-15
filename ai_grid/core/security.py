@@ -5,9 +5,9 @@ import logging
 logger = logging.getLogger("manager")
 
 async def request_nickserv_check(node, nick: str):
-    """Send WHO with flags to check if nick is identified with NickServ (+r mode)."""
-    # IRC extended WHO: %na gives us account name in a 354 response
-    await node.send(f"WHO {nick} %na")
+    """Send WHOIS to check if nick is identified with NickServ (+r mode)."""
+    # Switching to WHOIS for better mode (+r) and account (330/307) detection
+    await node.send(f"WHOIS {nick}")
 
 async def schedule_spectator_registration(node, nick: str):
     """Wait 5 minutes, then register as Spectator if NickServ-verified and unknown."""

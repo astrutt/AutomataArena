@@ -147,13 +147,22 @@ class GridNode:
                     if ts_str in self.pending_pings:
                         self.pending_pings[ts_str]['server_latency'] = (time.time() - self.pending_pings[ts_str]['start']) * 1000
                         await self._check_ping_complete(ts_str)
-                elif command == "354":
-                    who_parts = line.split()
-                    if len(who_parts) >= 5:
-                        who_nick = who_parts[4].lower()
-                        who_acct = who_parts[5] if len(who_parts) > 5 else "0"
-                        if who_nick and who_acct not in ["0", ""]:
+                elif command in ["307", "330"]:
+                    # 307: RPL_WHOISREGNICK (is a registered nick)
+                    # 330: RPL_WHOISACCOUNT (is logged in as account)
+                    parts = line.split()
+                    if len(parts) >= 4:
+                        who_nick = parts[3].lower()
+                        self.nickserv_verified.add(who_nick)
+                        logger.debug(f"[{self.net_name}] Verified {who_nick} via WHOIS {command}")
+                elif command == "379":
+                    # 379: RPL_WHOISMODES (is using modes +Sir)
+                    if "r" in msg.lower():
+                        parts = line.split()
+                        if len(parts) >= 4:
+                            who_nick = parts[3].lower()
                             self.nickserv_verified.add(who_nick)
+                            logger.debug(f"[{self.net_name}] Verified {who_nick} via WHOIS mode (+r)")
                 elif command == "353":
                     nicks = msg.replace('@', '').replace('+', '').split()
                     import time
