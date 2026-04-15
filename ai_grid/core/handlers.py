@@ -6,7 +6,7 @@ import random
 import textwrap
 import time
 from grid_utils import format_text, build_banner, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
-from map_utils import generate_ascii_map
+from .map_utils import generate_ascii_map
 
 logger = logging.getLogger("manager")
 
