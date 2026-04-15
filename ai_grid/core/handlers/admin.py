@@ -59,4 +59,4 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
         await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text('MAINFRAME SHUTDOWN INITIATED BY ADMIN.', C_RED, True))}")
         if node.active_engine: node.active_engine.active = False
         await asyncio.sleep(1)
-        node.hub.shutdown()
+        await node.hub.shutdown()

@@ -176,6 +176,7 @@ class MasterHub:
     def __init__(self):
         import time
         self.start_time = time.time()
+        self.stop_signal = asyncio.Event()
         self.llm = ArenaLLM(CONFIG); self.db = ArenaDB(); self.nodes = {}
     async def start(self):
         for net_name, net_config in CONFIG['networks'].items():
@@ -184,7 +185,7 @@ class MasterHub:
                 self.nodes[net_name] = node
                 asyncio.create_task(node.connect())
         logger.info(f"Hub initialized. Bridging {len(self.nodes)} networks...")
-        while True: await asyncio.sleep(3600)
+        await self.stop_signal.wait()
 
     async def relay_message(self, target_net: str, target_nick: str, message: str) -> bool:
         """Relays a message to a specific target on a different network."""
@@ -203,13 +204,16 @@ class MasterHub:
             return True
         return False
 
-    def shutdown(self):
+    async def shutdown(self):
         logger.warning("Shutting down...")
-        asyncio.create_task(self.db.close())
+        await self.db.close()
         for node in self.nodes.values():
-            if node.irc.writer: node.irc.writer.write(b"QUIT :Mainframe shutdown.\r\n")
+            if node.irc.writer: 
+                node.irc.writer.write(b"QUIT :Mainframe shutdown.\r\n")
+                await node.irc.writer.drain()
+        self.stop_signal.set()
 
 if __name__ == "__main__":
     hub = MasterHub()
     try: asyncio.run(hub.start())
-    except KeyboardInterrupt: hub.shutdown()
+    except KeyboardInterrupt: asyncio.run(hub.shutdown())
