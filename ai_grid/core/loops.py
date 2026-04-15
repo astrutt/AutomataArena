@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import time
+import random
 from grid_utils import format_text, build_banner, C_GREEN, C_CYAN, C_RED, C_YELLOW
 
 logger = logging.getLogger("manager")

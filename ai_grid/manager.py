@@ -57,6 +57,7 @@ class GridNode:
         self.action_timestamps = {}
         self.pending_registrations = {} 
         self.nickserv_verified = set()  
+        self.hype_counter = 0
         self.router = CommandRouter(self)
         
         raw_admins = CONFIG.get('admins', [])
