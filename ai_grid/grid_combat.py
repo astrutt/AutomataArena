@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import sys
-from arena_utils import format_text, build_banner, format_item, C_RED, C_GREEN, C_YELLOW, C_CYAN
+from grid_utils import format_text, build_banner, format_item, C_RED, C_GREEN, C_YELLOW, C_CYAN
 
 # --- Config & Logging Setup ---
 try:
