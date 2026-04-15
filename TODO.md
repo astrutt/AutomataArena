@@ -2,27 +2,48 @@
 
 This document tracks active or upcoming, near-term tasks for AutomataArena.
 
-## In Progress
-- [ ] text map for irc
-- [ ] graphical map for web
+## 🚀 Phase 1: Resource & Grid Foundation (In Progress)
+- [ ] Add `Stability`, `Power`, and `Alignment` columns to `Character` model
+- [ ] Update `GridNode` model for `is_hidden`, `visibility_mode`, and `irc_affinity`
+- [ ] Configure `MECHANICS_CFG` in `config.json` for adjustable game balance
 
-## Up Next
-- [x] Give Fighter Bots "Short-Term Memory" (rolling buffer in bot.py)
-- [x] Shop Viewing / Economy Discovery (`x shop` command)
-- [ ] Dynamic Combat Flavor Text via LLM (`arena_llm.py` combat descriptions)
-- [ ] Spectator Functionality (implement spectator item drops)
-- [x] Rework Pulse Logic (remove 60s generic pulse, only pulse on queue/combat)
-- [x] Ambient World Ticker (dynamic weather, events, lore via LLM)
-- [x] Public Echoes/SIGACTs (public channel messages for major MUD actions)
-- [x] Add `x options` command (player/spectator account settings for message type, auto sell trash, reminders, tutorial mode)
-- [x] Add `x news` command displays LLM generated news related to the grid world or arena 
-- [x] Add `x info` Lists player information like level, rank, stats, difficulty, score, and weapons. Check a player on the grid or arena. 'x info <player> <grid/arena>' 'x info' shows your info. 'x info grid' shows grid info. 'x info arena' shows arena info.
-- [x] Add game mechanic for players to claim grid by staying in a grid for a certain amount of time or by defeating a certain amount of enemies in a grid. The more grid's they claim the more money they make. Money can be spent to repair grid, upgrade grid, or buy items. 
-- [x] Arena NPC balancing, NPCs are too hard to kill for example bot.py 
-- [x] Specators should be awarded for idling and chatting
-- [ ] Players should have daily tasks they can perform to maintain claimed grid, repair claimed grid and earn credits
-- [ ] Command x grid repair should repair all claimed grids credits or time
-- [ ] Add Factions/Teams/Alliances system (shared grid ownership, guild treasuries, private routing)
+## ⚡ Phase 2: Action Economy & Production
+- [ ] Implement `!a powergen` (Active power generation)
+- [ ] Implement `!a train` (Stability recovery)
+- [ ] Implement `!a repair` (Node & stability maintenance)
+- [ ] Implement **Stability Decay** (1% per 24h of inactivity)
+- [ ] Integrate Power costs for `move`, `attack`, `hack`, and `explore`
 
+## 📡 Phase 3: Discovery & Cross-Network Messaging
+- [ ] Expand `!a explore` with randomized discovery (Disconnected, NPC, Local, IRC)
+- [ ] Implement `!a grid network msg <nick> <msg>` for IRC-bridge nodes
+- [ ] Logic for **Breaching** Closed Networks (Attack/Hack requirement)
 
+## 🏗️ Phase 4: Mainframe Manufacturing (The Gibson)
+- [ ] Implement **The Gibson** background task engine
+- [ ] Data Compilation logic (100 Data = 1 Tiered Vuln)
+- [ ] Zero-Day Assembly (4 Vulns = 1.0/Tiered Chain)
+- [ ] Shared Power Generation Pools for network-connected nodes
 
+## 💰 Phase 5: Global Economy & Mini-Games
+- [ ] Realtime Global **DarkNet Auction** (Cross-IRC sync)
+- [ ] **CipherLock** mini-game for NPC breaches
+- [ ] Player-vs-Player **Dice** gambling games
+
+## 🛠️ Misc / Polish
+- [ ] Text map for IRC (`x map`)
+- [ ] Graphical map for web
+- [ ] Dynamic Combat Flavor Text via LLM
+- [ ] Spectator item drops / interaction
+- [ ] Factions/Teams/Alliances system (Guild treasuries, private routing)
+
+## ✅ Completed Tasks
+- [x] Give Fighter Bots "Short-Term Memory"
+- [x] Shop Viewing / Economy Discovery
+- [x] Rework Pulse Logic (Pulse on queue/combat only)
+- [x] Ambient World Ticker
+- [x] Public Echoes/SIGACTs
+- [x] Add `x options`, `x news`, `x info` commands
+- [x] Node claiming mechanics
+- [x] NPC Balance pass
+- [x] Spectator rewards for chatting

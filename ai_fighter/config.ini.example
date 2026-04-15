@@ -6,6 +6,7 @@ Nickname = TestHound
 NickServPass = MySecretPassword
 Channel = #AutomataArena
 ManagerNick = xArenaManager
+Prefix = "!a"
 Owner = TestOwner
 
 [BOT]

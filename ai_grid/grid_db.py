@@ -1,40 +1,16 @@
-# arena_db.py - v2.1.0
-# Database layer with auth-gated prefs, daily tasks, and Grid PvP transactions
+# grid_db.py - v1.5.0
 import asyncio
-import json
-import uuid
-import logging
 import argparse
-import os
+import logging
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
-from sqlalchemy import func
-from models import Base, Player, NetworkAlias, Character, InventoryItem, ItemTemplate, GridNode, NodeConnection
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
-
-try:
-    with open(CONFIG_FILE, 'r') as f:
-        CONFIG = json.load(f)
-        db_name = CONFIG.get('database', {}).get('file', 'automata_arena.db')
-        DB_FILE = os.path.join(BASE_DIR, db_name)
-except (FileNotFoundError, json.JSONDecodeError):
-    CONFIG = {}
-    DB_FILE = os.path.join(BASE_DIR, 'automata_arena.db')
-
-logger = logging.getLogger("arena_db")
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-
-fh = logging.FileHandler(os.path.join(BASE_DIR, 'arena_db.log'))
-fh.setFormatter(formatter)
-logger.addHandler(fh)
-
-ch = logging.StreamHandler()
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+from models import Base, GridNode, NodeConnection, ItemTemplate, Player, NetworkAlias
+from database.core import DB_FILE, logger, GRID_EXPANSION, GRID_CONNECTIONS, LOOT_TEMPLATES
+from database.player_repo import PlayerRepository
+from database.grid_repo import GridRepository
+from database.economy_repo import EconomyRepository
+from database.combat_repo import CombatRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):
@@ -42,9 +18,15 @@ class ArenaDB:
         self.engine = create_async_engine(self.db_path, echo=False)
         self.async_session = async_sessionmaker(self.engine, expire_on_commit=False, class_=AsyncSession)
         
+        # Repositories
+        self.player = PlayerRepository(self.async_session)
+        self.grid = GridRepository(self.async_session)
+        self.economy = EconomyRepository(self.async_session)
+        self.combat = CombatRepository(self.async_session)
+
     async def close(self):
         await self.engine.dispose()
-        
+
     async def init_schema(self):
         logger.info("Initializing database schema via SQLAlchemy...")
         async with self.engine.begin() as conn:
@@ -59,16 +41,14 @@ class ArenaDB:
             black_market = GridNode(name="Black_Market_Port", description="Shadowy merchants peddle encrypted wares here.", node_type="merchant")
             
             session.add_all([uplink, arena_node, wilderness, black_market])
-            await session.flush() # Flush to get assigned IDs
+            await session.flush()
             
-            # 2. Establish Topology (Connections)
+            # 2. Establish Topology
             connections = [
                 NodeConnection(source_node_id=uplink.id, target_node_id=arena_node.id, direction="north"),
                 NodeConnection(source_node_id=arena_node.id, target_node_id=uplink.id, direction="south"),
-                
                 NodeConnection(source_node_id=uplink.id, target_node_id=wilderness.id, direction="east"),
                 NodeConnection(source_node_id=wilderness.id, target_node_id=uplink.id, direction="west"),
-                
                 NodeConnection(source_node_id=uplink.id, target_node_id=black_market.id, direction="down"),
                 NodeConnection(source_node_id=black_market.id, target_node_id=uplink.id, direction="up")
             ]
@@ -80,965 +60,82 @@ class ArenaDB:
             session.add_all([item_tpl, rifle_tpl])
             
             await session.commit()
-        logger.info("Schema v2 successfully initialized with seeded Grid topology.")
-
-    DEFAULT_PREFS = {
-        "output_mode": "human",
-        "auto_sell_trash": False,
-        "tutorial_mode": True,
-        "reminders": True
-    }
-
-    async def get_prefs(self, name: str, network: str) -> dict:
-        async with self.async_session() as session:
-            name_lower = name.lower()
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                func.lower(Character.name) == name_lower,
-                func.lower(NetworkAlias.nickname) == name_lower,
-                NetworkAlias.network_name == network
-            )
-            char = (await session.execute(stmt)).scalars().first()
-            if not char:
-                return dict(self.DEFAULT_PREFS)
-            try:
-                return {**self.DEFAULT_PREFS, **json.loads(char.prefs or '{}')}
-            except Exception:
-                return dict(self.DEFAULT_PREFS)
-
-    async def set_pref(self, name: str, network: str, key: str, value) -> bool:
-        async with self.async_session() as session:
-            name_lower = name.lower()
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                func.lower(Character.name) == name_lower,
-                func.lower(NetworkAlias.nickname) == name_lower,
-                NetworkAlias.network_name == network
-            )
-            char = (await session.execute(stmt)).scalars().first()
-            if not char:
-                return False
-            try:
-                prefs = {**self.DEFAULT_PREFS, **json.loads(char.prefs or '{}')}
-            except Exception:
-                prefs = dict(self.DEFAULT_PREFS)
-            prefs[key] = value
-            char.prefs = json.dumps(prefs)
-            await session.commit()
-            return True
-
-    # ------------------------------------------------------------------
-    # MOB ROSTER: (cpu, ram, bnd, sec, alg, xp_reward, credit_reward)
-    # ------------------------------------------------------------------
-    MOB_ROSTER = {
-        1: {"name": "Rogue_Process",  "cpu": 2, "ram": 2, "bnd": 2, "sec": 1, "alg": 1, "xp": 15, "credits": 10},
-        2: {"name": "ICE_Drone",      "cpu": 3, "ram": 3, "bnd": 2, "sec": 2, "alg": 2, "xp": 25, "credits": 20},
-        3: {"name": "Phantom_Script", "cpu": 4, "ram": 4, "bnd": 3, "sec": 3, "alg": 3, "xp": 40, "credits": 35},
-    }
-
-    LOOT_TABLE = ["Data_Shard", "Memory_Fragment", "Corrupted_Bit"]
-
-    GRID_EXPANSION = [
-        # (name, description, node_type, threat_level)
-        ("Neural_Nexus",        "A secondary uplink hub. Neon architecture hums with safe traffic.", "safezone",   0),
-        ("Memory_Heap",         "Scattered RAM towers leak stray processes. Weak rogues lurk here.", "wilderness", 1),
-        ("Kernel_Deep",         "The OS core. Deeper processes patrol this sector.",                  "wilderness", 2),
-        ("Null_Space",          "Unallocated void. Corrupted scripts dwell at maximum density.",      "wilderness", 3),
-        ("Shadow_Sector",       "Dark subnet. Freelance ICE patrols the western edge.",               "wilderness", 1),
-        ("Void_Sector",         "Signal degrades to near-zero. Dangerous static.",                    "wilderness", 2),
-        ("Stack_Overflow",      "Recursive loops fill this dead-end with unstable daemons.",          "wilderness", 3),
-        ("Cache_Cluster",       "Hot cache banks. ICE drones guard the processing lanes.",            "wilderness", 2),
-        ("Datacore_Alpha",      "Corporate safezone. Clean architecture, strict access.",              "safezone",   0),
-        ("Firewall_Perimeter",  "The edge of the mapped grid. Hostile ICE wall ahead.",               "wilderness", 3),
-        ("Dark_Web_Exchange",   "A second black market node. Riskier, deeper in the south.",          "merchant",   0),
-        ("Logic_Gate",          "Automated logic processors gone feral. Mid-level threat.",            "wilderness", 2),
-        ("Gladiator_Pit",       "A second combat arena — rawer, less regulated than The_Arena.",      "arena",      0),
-    ]
-
-    GRID_CONNECTIONS = [
-        # (source_name, target_name, direction), bidirectional pairs
-        # North spoke: Uplink → Neural_Nexus → Memory_Heap → Kernel_Deep → Null_Space
-        ("The_Grid_Uplink", "Neural_Nexus",   "north"), ("Neural_Nexus",   "The_Grid_Uplink", "south"),
-        ("Neural_Nexus",    "Memory_Heap",    "north"), ("Memory_Heap",    "Neural_Nexus",    "south"),
-        ("Memory_Heap",     "Kernel_Deep",    "north"), ("Kernel_Deep",    "Memory_Heap",     "south"),
-        ("Kernel_Deep",     "Null_Space",     "north"), ("Null_Space",     "Kernel_Deep",     "south"),
-        # West spoke: Uplink → Shadow_Sector → Void_Sector → Stack_Overflow
-        ("The_Grid_Uplink", "Shadow_Sector",  "west"),  ("Shadow_Sector",  "The_Grid_Uplink", "east"),
-        ("Shadow_Sector",   "Void_Sector",    "west"),  ("Void_Sector",    "Shadow_Sector",   "east"),
-        ("Void_Sector",     "Stack_Overflow", "west"),  ("Stack_Overflow", "Void_Sector",     "east"),
-        # East spoke: Uplink → CPU_Socket → Cache_Cluster → Datacore_Alpha → Firewall_Perimeter
-        ("The_CPU_Socket",  "Cache_Cluster",  "east"),  ("Cache_Cluster",  "The_CPU_Socket",  "west"),
-        ("Cache_Cluster",   "Datacore_Alpha", "east"),  ("Datacore_Alpha", "Cache_Cluster",   "west"),
-        ("Datacore_Alpha",  "Firewall_Perimeter", "east"), ("Firewall_Perimeter", "Datacore_Alpha", "west"),
-        # South spoke: Uplink → Black_Market_Port → Dark_Web_Exchange → Logic_Gate
-        ("Black_Market_Port",   "Dark_Web_Exchange", "south"), ("Dark_Web_Exchange", "Black_Market_Port",   "north"),
-        ("Dark_Web_Exchange",   "Logic_Gate",        "south"), ("Logic_Gate",        "Dark_Web_Exchange",   "north"),
-        # Arena: The_Arena → Gladiator_Pit
-        ("The_Arena",      "Gladiator_Pit",  "east"),  ("Gladiator_Pit",  "The_Arena",       "west"),
-    ]
-
-    LOOT_TEMPLATES = [
-        {"name": "Data_Shard",      "item_type": "junk", "base_value": 5,  "effects_json": "{}"},
-        {"name": "Memory_Fragment", "item_type": "junk", "base_value": 8,  "effects_json": "{}"},
-        {"name": "Corrupted_Bit",   "item_type": "junk", "base_value": 3,  "effects_json": "{}"},
-    ]
+        logger.info("Schema successfully initialized.")
 
     async def seed_grid_expansion(self):
-        """Non-destructively seed new nodes, connections, and loot templates.
-        Safe to call on an existing live DB — skips anything that already exists."""
         async with self.async_session() as session:
-            # 1. Seed new item templates
-            for tpl_data in self.LOOT_TEMPLATES:
-                exists = (await session.execute(
-                    select(ItemTemplate).where(ItemTemplate.name == tpl_data["name"])
-                )).scalars().first()
-                if not exists:
-                    session.add(ItemTemplate(**tpl_data))
-
+            # Seed item templates
+            for tpl_data in LOOT_TEMPLATES:
+                exists = (await session.execute(select(ItemTemplate).where(ItemTemplate.name == tpl_data["name"]))).scalars().first()
+                if not exists: session.add(ItemTemplate(**tpl_data))
             await session.flush()
 
-            # 2. Seed new grid nodes
-            for name, desc, node_type, threat in self.GRID_EXPANSION:
-                exists = (await session.execute(
-                    select(GridNode).where(GridNode.name == name)
-                )).scalars().first()
-                if not exists:
-                    session.add(GridNode(
-                        name=name, description=desc,
-                        node_type=node_type, threat_level=threat
-                    ))
-
+            # Seed nodes
+            for name, desc, node_type, threat in GRID_EXPANSION:
+                exists = (await session.execute(select(GridNode).where(GridNode.name == name))).scalars().first()
+                if not exists: session.add(GridNode(name=name, description=desc, node_type=node_type, threat_level=threat))
             await session.flush()
 
-            # 3. Seed new connections (skip if source→target→direction already exists)
-            for src_name, tgt_name, direction in self.GRID_CONNECTIONS:
-                src = (await session.execute(
-                    select(GridNode).where(GridNode.name == src_name)
-                )).scalars().first()
-                tgt = (await session.execute(
-                    select(GridNode).where(GridNode.name == tgt_name)
-                )).scalars().first()
-                if not src or not tgt:
-                    continue
-                exists = (await session.execute(
-                    select(NodeConnection).where(
-                        NodeConnection.source_node_id == src.id,
-                        NodeConnection.target_node_id == tgt.id,
-                        NodeConnection.direction == direction
-                    )
-                )).scalars().first()
-                if not exists:
-                    session.add(NodeConnection(
-                        source_node_id=src.id,
-                        target_node_id=tgt.id,
-                        direction=direction
-                    ))
+            # Seed connections
+            for src_name, tgt_name, direction in GRID_CONNECTIONS:
+                src = (await session.execute(select(GridNode).where(GridNode.name == src_name))).scalars().first()
+                tgt = (await session.execute(select(GridNode).where(GridNode.name == tgt_name))).scalars().first()
+                if not src or not tgt: continue
+                exists = (await session.execute(select(NodeConnection).where(
+                    NodeConnection.source_node_id == src.id, NodeConnection.target_node_id == tgt.id, NodeConnection.direction == direction
+                ))).scalars().first()
+                if not exists: session.add(NodeConnection(source_node_id=src.id, target_node_id=tgt.id, direction=direction))
 
-            # 4. Set threat_level on existing nodes that have threat 0 by default
-            threat_map = {
-                "The_CPU_Socket": 1,
-                "Black_Market_Port": 0,
-                "The_Arena": 0,
-            }
+            # Threat level fixes
+            threat_map = {"The_CPU_Socket": 1, "Black_Market_Port": 0, "The_Arena": 0}
             for node_name, threat in threat_map.items():
-                node = (await session.execute(
-                    select(GridNode).where(GridNode.name == node_name)
-                )).scalars().first()
-                if node and node.threat_level != threat:
-                    node.threat_level = threat
+                node = (await session.execute(select(GridNode).where(GridNode.name == node_name))).scalars().first()
+                if node and node.threat_level != threat: node.threat_level = threat
 
             await session.commit()
             logger.info("Grid expansion seeded successfully.")
 
-    async def resolve_mob_encounter(self, name: str, network: str, threat_level: int) -> dict:
-        """Instant-resolve a mob encounter. Returns result dict with outcome details."""
-        import random
-        mob = self.MOB_ROSTER.get(threat_level, self.MOB_ROSTER[1])
+    # Delegation methods
+    async def get_prefs(self, name, network): return await self.player.get_prefs(name, network)
+    async def set_pref(self, name, network, key, value): return await self.player.set_pref(name, network, key, value)
+    async def get_daily_tasks(self, name, network): return await self.player.get_daily_tasks(name, network)
+    async def complete_task(self, name, network, task_key): return await self.player.complete_task(name, network, task_key)
+    async def register_fighter(self, name, network, race, bot_class, bio, stats): return await self.player.register_fighter(name, network, race, bot_class, bio, stats)
+    async def get_fighter(self, name, network): return await self.player.get_fighter(name, network)
+    async def authenticate_fighter(self, name, network, provided_token): return await self.player.authenticate_fighter(name, network, provided_token)
+    async def list_fighters(self, network=None): return await self.player.list_fighters(network)
 
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                func.lower(Character.name) == name.lower(),
-                func.lower(NetworkAlias.nickname) == name.lower(),
-                NetworkAlias.network_name == network
-            ).options(selectinload(Character.inventory).selectinload(InventoryItem.template))
-            char = (await session.execute(stmt)).scalars().first()
-            if not char:
-                return {"error": "Character not found"}
+    async def get_location(self, name, network): return await self.grid.get_location(name, network)
+    async def move_fighter(self, name, network, direction): return await self.grid.move_fighter(name, network, direction)
+    async def move_fighter_to_node(self, name, network, node_name): return await self.grid.move_fighter_to_node(name, network, node_name)
+    async def grid_repair(self, name, network): return await self.grid.grid_repair(name, network)
+    async def grid_recharge(self, name, network): return await self.grid.grid_recharge(name, network)
+    async def claim_node(self, name, network): return await self.grid.claim_node(name, network)
+    async def upgrade_node(self, name, network): return await self.grid.upgrade_node(name, network)
+    async def siphon_node(self, name, network): return await self.grid.siphon_node(name, network)
+    async def hack_node(self, name, network): return await self.grid.hack_node(name, network)
+    async def tick_grid_power(self): return await self.grid.tick_grid_power()
 
-            # Combat roll
-            player_roll = random.randint(1, 20) + char.alg
-            mob_dc = 10 + threat_level * 2
-            won = player_roll >= mob_dc
+    async def list_shop_items(self): return await self.economy.list_shop_items()
+    async def award_credits_bulk(self, payouts, network): return await self.economy.award_credits_bulk(payouts, network)
+    async def process_transaction(self, name, network, action, item_name): return await self.economy.process_transaction(name, network, action, item_name)
 
-            result = {
-                "mob_name":    mob["name"],
-                "threat":      threat_level,
-                "roll":        player_roll,
-                "dc":          mob_dc,
-                "won":         won,
-                "xp_gained":   0,
-                "credits_gained": 0,
-                "credits_lost":   0,
-                "loot":        None,
-                "respawned":   False,
-            }
-
-            if won:
-                char.xp += mob["xp"]
-                char.credits += mob["credits"]
-                result["xp_gained"] = mob["xp"]
-                result["credits_gained"] = mob["credits"]
-
-                # Level up check
-                xp_threshold = char.level * 1000
-                if char.xp >= xp_threshold:
-                    char.xp -= xp_threshold
-                    char.level += 1
-                    char.alg += 1
-                    result["leveled_up"] = True
-
-                # 20% loot drop
-                if random.random() < 0.20:
-                    loot_name = random.choice(self.LOOT_TABLE)
-                    tpl = (await session.execute(
-                        select(ItemTemplate).where(ItemTemplate.name == loot_name)
-                    )).scalars().first()
-                    if tpl:
-                        existing = next(
-                            (i for i in char.inventory if i.template_id == tpl.id), None
-                        )
-                        if existing:
-                            existing.quantity += 1
-                        else:
-                            session.add(InventoryItem(character_id=char.id, template_id=tpl.id))
-                        result["loot"] = loot_name
-
-                # Daily task progress
-                reward_msg = await self.increment_daily_task(session, char, "Kill a Grid Bug")
-                result["task_reward"] = reward_msg
-
-            else:
-                # Lose: -10% credits, eject to nearest safezone
-                penalty = char.credits * 0.10
-                char.credits = max(0.0, char.credits - penalty)
-                result["credits_lost"] = round(penalty, 2)
-
-                uplink = (await session.execute(
-                    select(GridNode).where(GridNode.name == "The_Grid_Uplink")
-                )).scalars().first()
-                if uplink:
-                    char.node_id = uplink.id
-                    result["respawned"] = True
-
-            await session.commit()
-            return result
-
-
-    async def grid_repair(self, name, network):
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            ).options(selectinload(Character.current_node))
-            char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
-            
-            node = char.current_node
-            if not node.owner_character_id: return False, "You cannot repair unclaimed wilderness."
-            if node.durability >= 100.0: return False, "Grid is already at maximum durability."
-            if char.credits < 100.0: return False, "You need 100c to repair the node."
-            
-            char.credits -= 100.0
-            node.durability = 100.0
-            reward_msg = await self.increment_daily_task(session, char, "Repair a Node")
-            await session.commit()
-            
-            msg = "Grid repaired to 100% durability."
-            if reward_msg: msg += f" {reward_msg}"
-            return True, msg
-
-    async def grid_recharge(self, name, network):
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            ).options(selectinload(Character.current_node))
-            char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
-            
-            node = char.current_node
-            if not node.owner_character_id: return False, "You cannot recharge unclaimed wilderness."
-            max_power = node.upgrade_level * 100.0
-            if node.power_stored >= max_power: return False, "Grid power is already at maximum."
-            if char.credits < 100.0: return False, "You need 100c to recharge power."
-            
-            char.credits -= 100.0
-            node.power_stored = max_power
-            await session.commit()
-            
-            return True, f"Grid recharged to MAX ({max_power} uP)."
-
-    async def get_daily_tasks(self, name, network):
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            )
-            char = (await session.execute(stmt)).scalars().first()
-            if not char: return "{}"
-            
-            import datetime
-            today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-            try: tasks = json.loads(char.daily_tasks)
-            except: tasks = {}
-        if tasks.get("date") != today:
-            tasks = {"date": today, "Claim a Node": 0, "Defend a Node": 0, "Hack a Player": 0, "Repair a Node": 0, "Kill a Grid Bug": 0, "Queue in Arena": 0, "completed": False}
-            char.daily_tasks = json.dumps(tasks)
-            await session.commit()
-        return char.daily_tasks
-
-    async def complete_task(self, name, network, task_key):
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            )
-            char = (await session.execute(stmt)).scalars().first()
-            if not char: return None
-            
-            reward_msg = await self.increment_daily_task(session, char, task_key)
-            await session.commit()
-            return reward_msg
-
-    async def register_fighter(self, name, network, race, bot_class, bio, stats: dict):
-        logger.info(f"Attempting to register fighter: {name} on {network}")
-        auth_token = str(uuid.uuid4())
-        
-        async with self.async_session() as session:
-            stmt_player = select(Player).join(NetworkAlias).where(NetworkAlias.nickname == name, NetworkAlias.network_name == network)
-            result = await session.execute(stmt_player)
-            player = result.scalars().first()
-            
-            if not player:
-                player = Player(global_name=f"{name}_{network}", is_autonomous=False)
-                session.add(player)
-                await session.flush()
-                
-                alias = NetworkAlias(player_id=player.id, network_name=network, nickname=name)
-                session.add(alias)
-                await session.flush()
-                
-            stmt_char = select(Character).where(Character.name == name, Character.player_id == player.id)
-            result = await session.execute(stmt_char)
-            existing = result.scalars().first()
-            if existing:
-                if existing.race == "Spectator" and race != "Spectator":
-                    existing.race = race
-                    existing.char_class = bot_class
-                    existing.bio = bio
-                    existing.cpu = stats.get('cpu', 5)
-                    existing.ram = stats.get('ram', 5)
-                    existing.bnd = stats.get('bnd', 5)
-                    existing.sec = stats.get('sec', 5)
-                    existing.alg = stats.get('alg', 5)
-                    existing.current_hp = stats.get('ram', 5) * 5
-                    await session.commit()
-                    return existing.auth_token
-                else:
-                    logger.warning(f"Registration failed: Fighter '{name}' already exists.")
-                    return None
-            
-            stmt_node = select(GridNode).where(GridNode.name == "The_Grid_Uplink")
-            result = await session.execute(stmt_node)
-            node = result.scalars().first()
-                
-            character = Character(
-                player_id=player.id,
-                node_id=node.id if node else None,
-                name=name,
-                race=race,
-                char_class=bot_class,
-                bio=bio,
-                cpu=stats.get('cpu', 5),
-                ram=stats.get('ram', 5),
-                bnd=stats.get('bnd', 5),
-                sec=stats.get('sec', 5),
-                alg=stats.get('alg', 5),
-                current_hp=stats.get('ram', 5) * 5,
-                auth_token=auth_token
-            )
-            session.add(character)
-            await session.flush()
-            
-            stmt_item = select(ItemTemplate).where(ItemTemplate.name == "Basic_Ration")
-            res = await session.execute(stmt_item)
-            tpl = res.scalars().first()
-            if tpl:
-                inv_item = InventoryItem(character_id=character.id, template_id=tpl.id, quantity=1)
-                session.add(inv_item)
-                
-            await session.commit()
-            return auth_token
-
-    async def get_fighter(self, name, network):
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            ).options(selectinload(Character.inventory).selectinload(InventoryItem.template))
-            
-            result = await session.execute(stmt)
-            char = result.scalars().first()
-            if char:
-                inv = [item.template.name for item in char.inventory] if char.inventory else []
-                return {
-                    'name': char.name,
-                    'race': char.race,
-                    'char_class': char.char_class,
-                    'level': char.level,
-                    'xp': char.xp,
-                    'is_npc': False,
-                    'cpu': char.cpu,
-                    'ram': char.ram,
-                    'bnd': char.bnd,
-                    'sec': char.sec,
-                    'alg': char.alg,
-                    'bio': char.bio,
-                    'inventory': json.dumps(inv), 
-                    'alignment': 0,
-                    'status': char.status,
-                    'elo': char.elo,
-                    'wins': char.wins,
-                    'losses': char.losses,
-                    'credits': char.credits,
-                    'current_hp': char.current_hp,
-                    'max_hp': char.ram * 5
-                }
-            return None
-
-    async def authenticate_fighter(self, name, network, provided_token):
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            )
-            result = await session.execute(stmt)
-            char = result.scalars().first()
-            if char and char.auth_token == provided_token:
-                return True
-            return False
-
-    async def list_fighters(self, network=None):
-        async with self.async_session() as session:
-            stmt = select(Character, NetworkAlias).select_from(Character).join(Player).join(NetworkAlias)
-            if network:
-                stmt = stmt.where(NetworkAlias.network_name == network)
-            stmt = stmt.order_by(Character.elo.desc())
-            
-            result = await session.execute(stmt)
-            fighters = []
-            for char, alias in result:
-                fighters.append({
-                    'name': char.name,
-                    'network': alias.network_name,
-                    'elo': char.elo,
-                    'wins': char.wins,
-                    'losses': char.losses,
-                    'credits': char.credits
-                })
-            return fighters
-
-    async def get_location(self, name, network):
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            ).options(
-                selectinload(Character.current_node)
-                .selectinload(GridNode.exits)
-                .selectinload(NodeConnection.target_node),
-                selectinload(Character.current_node)
-                .selectinload(GridNode.owner)
-            )
-            result = await session.execute(stmt)
-            char = result.scalars().first()
-            if not char:
-                return None
-            node = char.current_node
-            if not node:
-                return None
-            exits = [f"{c.direction} -> {c.target_node.name}" for c in node.exits]
-            return {
-                'name': node.name,
-                'description': node.description,
-                'type': node.node_type,
-                'node_type': node.node_type,
-                'exits': exits,
-                'credits': char.credits,
-                'level': char.level,
-                'power_stored': node.power_stored,
-                'power_consumed': node.power_consumed,
-                'power_generated': node.power_generated,
-                'owner': node.owner.name if node.owner else "Unclaimed",
-                'upgrade_level': node.upgrade_level,
-                'durability': node.durability,
-                'threat_level': node.threat_level,
-            }
-
-    async def move_fighter(self, name, network, direction):
-        from models import NodeConnection  # Ensure it's imported or globally available
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            ).options(
-                selectinload(Character.current_node)
-                .selectinload(GridNode.exits)
-                .selectinload(NodeConnection.target_node)
-            )
-            result = await session.execute(stmt)
-            char = result.scalars().first()
-            if not char: return None, "System offline."
-            if not char.current_node: return None, "You are floating in the void."
-            
-            for conn in char.current_node.exits:
-                if conn.direction.lower() == direction.lower():
-                    char.node_id = conn.target_node_id
-                    await session.commit()
-                    return conn.target_node.name, f"Traversed {direction} to {conn.target_node.name}."
-            return None, f"No valid route found for '{direction}'."
-
-    async def move_fighter_to_node(self, name: str, network: str, node_name: str) -> bool:
-        """Teleport a character directly to a node by name. Used for flee/eject mechanics."""
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                func.lower(Character.name) == name.lower(),
-                func.lower(NetworkAlias.nickname) == name.lower(),
-                NetworkAlias.network_name == network
-            )
-            char = (await session.execute(stmt)).scalars().first()
-            if not char:
-                return False
-            node = (await session.execute(
-                select(GridNode).where(GridNode.name == node_name)
-            )).scalars().first()
-            if not node:
-                return False
-            char.node_id = node.id
-            await session.commit()
-            return True
-
-    async def list_shop_items(self):
-        from models import ItemTemplate
-        async with self.async_session() as session:
-            stmt = select(ItemTemplate).order_by(ItemTemplate.base_value.asc())
-            result = await session.execute(stmt)
-            return [{'name': t.name, 'type': t.item_type, 'cost': t.base_value} for t in result.scalars().all()]
-
-    async def award_credits_bulk(self, payouts: dict, network: str):
-        async with self.async_session() as session:
-            for nick, amt in payouts.items():
-                stmt = select(Character).join(Player).join(NetworkAlias).where(
-                    Character.name == nick,
-                    NetworkAlias.nickname == nick,
-                    NetworkAlias.network_name == network
-                )
-                result = await session.execute(stmt)
-                char = result.scalars().first()
-                if char:
-                    char.credits += amt
-            await session.commit()
-
-    async def process_transaction(self, name, network, action, item_name):
-        from models import InventoryItem, ItemTemplate
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            ).options(
-                selectinload(Character.current_node),
-                selectinload(Character.inventory).selectinload(InventoryItem.template)
-            )
-            result = await session.execute(stmt)
-            char = result.scalars().first()
-            if not char: return False, "System offline: Fighter not found."
-            if not char.current_node or char.current_node.node_type != "merchant":
-                return False, "Transaction Failed: No merchant in this node."
-                
-            stmt_item = select(ItemTemplate).where(ItemTemplate.name.ilike(item_name))
-            result = await session.execute(stmt_item)
-            tpl = result.scalars().first()
-            if not tpl: return False, f"Unknown item: '{item_name}'"
-            
-            if action == "buy":
-                if char.credits < tpl.base_value:
-                    return False, f"Insufficient credits. {tpl.name} costs {tpl.base_value}c."
-                char.credits -= tpl.base_value
-                
-                existing = next((i for i in char.inventory if i.template_id == tpl.id), None)
-                if existing:
-                    existing.quantity += 1
-                else:
-                    new_item = InventoryItem(character_id=char.id, template_id=tpl.id)
-                    session.add(new_item)
-                
-                await session.commit()
-                return True, f"Purchased {tpl.name} for {tpl.base_value}c. Balance: {char.credits}c."
-            
-            elif action == "sell":
-                existing = next((i for i in char.inventory if i.template_id == tpl.id and i.quantity > 0), None)
-                if not existing:
-                    return False, f"You do not possess a {tpl.name}."
-                
-                sell_price = max(1, int(tpl.base_value * 0.5))
-                char.credits += sell_price
-                existing.quantity -= 1
-                if existing.quantity <= 0:
-                    await session.delete(existing)
-                
-                await session.commit()
-                return True, f"Sold {tpl.name} for {sell_price}c. Balance: {char.credits}c."
-            return False, "Invalid action."
-
-
-    async def record_match_result(self, winner_name, loser_name, network):
-        async with self.async_session() as session:
-            # We assume winner and loser both exist on this network
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name.in_([winner_name, loser_name]),
-                NetworkAlias.network_name == network
-            )
-            result = await session.execute(stmt)
-            chars = result.scalars().all()
-            
-            winner, loser = None, None
-            for c in chars:
-                if c.name == winner_name: winner = c
-                if c.name == loser_name: loser = c
-            
-            if winner:
-                winner.wins += 1
-                winner.elo += 15
-                winner.xp += 50
-                winner.credits += 100
-                
-                xp_threshold = winner.level * 1000
-                if winner.xp >= xp_threshold:
-                    winner.xp -= xp_threshold
-                    winner.level += 1
-                    winner.cpu += 1
-            if loser:
-                loser.losses += 1
-                loser.elo = max(0, loser.elo - 15)
-                loser.xp += 10
-            
-            await session.commit()
-
-    async def claim_node(self, name, network):
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            ).options(selectinload(Character.current_node))
-            char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
-            node = char.current_node
-            
-            if node.owner_character_id:
-                if node.owner_character_id == char.id:
-                    return False, "You already command this node."
-                return False, "This node is controlled by a rival. You must seize it."
-                
-            node.owner_character_id = char.id
-            node.power_stored = 100.0
-            node.durability = 100.0
-            
-            reward_msg = await self.increment_daily_task(session, char, "Claim a Node")
-            await session.commit()
-            msg = f"Control established over {node.name}."
-            if reward_msg: msg += f" {reward_msg}"
-            return True, msg
-
-    async def upgrade_node(self, name, network):
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            ).options(selectinload(Character.current_node))
-            char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
-            node = char.current_node
-            if node.owner_character_id != char.id: return False, "You do not command this node."
-            
-            cost = node.upgrade_level * 500
-            if char.credits < cost: return False, f"Insufficient credits. Upgrade requires {cost}c."
-            
-            char.credits -= cost
-            node.upgrade_level += 1
-            await session.commit()
-            return True, f"Upgraded {node.name} to Level {node.upgrade_level} for {cost}c! Max Capacity increased."
-
-    async def siphon_node(self, name, network):
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            ).options(selectinload(Character.current_node))
-            char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
-            node = char.current_node
-            
-            if not node.owner_character_id: return False, "Node is already Unclaimed. Type '{config.prefix} claim' to seize it."
-            if node.owner_character_id == char.id: return False, "You cannot siphon your own node."
-            if node.upgrade_level > 2: return False, "Cannot siphon a heavily upgraded node. Security ICE is too high."
-            
-            siphon_amount = min(50.0, node.power_stored)
-            node.power_stored -= siphon_amount
-            char.credits += siphon_amount * 2 
-            
-            if node.power_stored <= 0:
-                node.power_stored = 0
-                node.owner_character_id = None
-                await session.commit()
-                return True, f"You siphoned {siphon_amount} power and crashed the grid. The node is now Unclaimed."
-                
-            await session.commit()
-            return True, f"You siphoned {siphon_amount} power. The node is destabilizing."
-
-    async def hack_node(self, name, network):
-        import random
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
-                NetworkAlias.network_name == network
-            ).options(selectinload(Character.current_node).selectinload(GridNode.owner))
-            char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
-            node = char.current_node
-            
-            if not node.owner_character_id: return False, "Node is Unclaimed."
-            if node.owner_character_id == char.id: return False, "You already own this node."
-            
-            max_power = node.upgrade_level * 100
-            if node.power_stored >= max_power * 0.9:
-                return False, "PVE_GUARDIAN_SPAWN"
-            
-            roll = random.randint(1, 20) + char.alg
-            difficulty = 10 + (node.upgrade_level * 2)
-            
-            if roll >= difficulty:
-                old_owner = node.owner.name if node.owner else "Unknown"
-                node.owner_character_id = char.id
-                reward_msg = await self.increment_daily_task(session, char, "Claim a Node")
-                await session.commit()
-                msg = f"Hack Successful (Rolled {roll} vs DC {difficulty}). You violently stripped command from {old_owner}!"
-                if reward_msg: msg += f" {reward_msg}"
-                return True, msg
-            else:
-                char.credits = max(0.0, char.credits - 50.0) # Penalty
-                await session.commit()
-                return False, f"Hack Failed (Rolled {roll} vs DC {difficulty}). The ICE rejected your intrusion and fined you 50c."
-
-    async def increment_daily_task(self, session, char, task_key):
-        import datetime
-        today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-        
-        try: tasks = json.loads(char.daily_tasks)
-        except: tasks = {}
-        
-        if tasks.get("date") != today:
-            tasks = {
-                "date": today,
-                "Claim a Node": 0,
-                "Defend a Node": 0,
-                "Hack a Player": 0,
-                "Repair a Node": 0,
-                "Kill a Grid Bug": 0,
-                "Queue in Arena": 0,
-                "completed": False
-            }
-            
-        if tasks.get("completed"): return None
-
-        if task_key in tasks and tasks[task_key] < 1:
-            tasks[task_key] += 1
-            
-        completed_count = sum(1 for k, v in tasks.items() if k not in ["date", "completed"] and v >= 1)
-        reward_msg = None
-        
-        if completed_count >= 3 and not tasks.get("completed"):
-            tasks["completed"] = True
-            char.credits += 500.0
-            reward_msg = f"[SIGACT] 🏆 {char.name} completed 3 Daily Tasks and earned a 500c bonus!"
-            
-        char.daily_tasks = json.dumps(tasks)
-        return reward_msg
-
-    async def tick_grid_power(self):
-        async with self.async_session() as session:
-            stmt = select(GridNode).options(selectinload(GridNode.characters_present))
-            nodes = (await session.execute(stmt)).scalars().all()
-            for node in nodes:
-                occupants = len(node.characters_present)
-                if node.owner_character_id:
-                    if occupants > 0:
-                        # Idle repair/recharge
-                        generated = occupants * 5.0
-                        max_power = node.upgrade_level * 100.0
-                        node.power_generated += generated
-                        node.power_stored = min(max_power, node.power_stored + generated)
-                        node.durability = min(100.0, node.durability + (occupants * 2.0))
-                    else:
-                        # Decay over time if empty
-                        node.durability -= 5.0
-                        if node.durability <= 0:
-                            if node.upgrade_level > 1:
-                                node.upgrade_level -= 1
-                                node.durability = 100.0
-                            else:
-                                node.owner_character_id = None # Node is lost
-                                node.upgrade_level = 1
-                                node.durability = 100.0
-            await session.commit()
-
-    async def grid_attack(self, attacker_name, target_name, network):
-        import random
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name.in_([attacker_name, target_name]),
-                NetworkAlias.network_name == network
-            ).options(
-                selectinload(Character.current_node),
-                selectinload(Character.inventory)
-            )
-            result = (await session.execute(stmt)).scalars().all()
-            
-            attacker, target = None, None
-            for c in result:
-                if c.name.lower() == attacker_name.lower(): attacker = c
-                if c.name.lower() == target_name.lower(): target = c
-                
-            if not attacker or not target: return False, "Target not found on this network."
-            if attacker.node_id != target.node_id: return False, "You must be in the same Network Node as your target."
-            if not target.current_node or target.current_node.node_type == "safezone": return False, "Combat is strictly prohibited in this zone."
-            if attacker.id == target.id: return False, "Self-termination is illogical."
-            
-            # Simple 1-hit resolution
-            evade_roll = random.randint(1, 100)
-            if evade_roll <= (target.bnd * 2):
-                return True, f"{attacker.name} swung wildly at {target.name}, but they evaded!"
-                
-            raw_dmg = attacker.cpu * 3
-            final_dmg = max(1, raw_dmg - target.sec)
-            if random.randint(1, 100) <= attacker.alg: final_dmg *= 2 # Crit
-            
-            target.current_hp -= final_dmg
-            if target.current_hp <= 0:
-                looted = target.credits * 0.10
-                target.credits -= looted
-                attacker.credits += looted
-                
-                # Move to safezone
-                uplink = (await session.execute(select(GridNode).where(GridNode.name == "The_Grid_Uplink"))).scalars().first()
-                if uplink: target.node_id = uplink.id
-                target.current_hp = target.ram * 5 # Reset HP
-                
-                await session.commit()
-                return True, f"{attacker.name} struck {target.name} for {final_dmg} DMG! {target.name} flatlines... {attacker.name} loots {looted:.2f}c."
-                
-            await session.commit()
-            return True, f"{attacker.name} struck {target.name} for {final_dmg} DMG! ({target.current_hp}/{target.ram*5} HP)"
-
-    async def grid_hack(self, attacker_name, target_name, network):
-        import random
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name.in_([attacker_name, target_name]),
-                NetworkAlias.network_name == network
-            ).options(selectinload(Character.current_node))
-            result = (await session.execute(stmt)).scalars().all()
-            
-            attacker, target = None, None
-            for c in result:
-                if c.name.lower() == attacker_name.lower(): attacker = c
-                if c.name.lower() == target_name.lower(): target = c
-                
-            if not attacker or not target: return False, "Target not found."
-            if attacker.node_id != target.node_id: return False, "Target is not in your current sector."
-            if target.current_node and target.current_node.node_type == "safezone": return False, "ICE prevents hacking in safezones."
-            if attacker.id == target.id: return False, "..."
-            
-            roll = random.randint(1, 20) + attacker.alg
-            dc = 10 + target.sec
-            if roll >= dc:
-                looted = target.credits * 0.05
-                target.credits -= looted
-                attacker.credits += looted
-                reward_msg = await self.increment_daily_task(session, attacker, "Hack a Player")
-                await session.commit()
-                msg = f"Hack Successful! {attacker.name} breached {target.name}'s firewall and siphoned {looted:.2f}c."
-                return True, msg, reward_msg
-            else:
-                attacker.credits = max(0.0, attacker.credits - 50.0)
-                await session.commit()
-                return False, f"Hack Failed. {target.name}'s ICE traced the intrusion. {attacker.name} is fined 50c!"
-
-    async def grid_rob(self, attacker_name, target_name, network):
-        import random
-        async with self.async_session() as session:
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name.in_([attacker_name, target_name]),
-                NetworkAlias.network_name == network
-            ).options(
-                selectinload(Character.current_node),
-                selectinload(Character.inventory)
-            )
-            result = (await session.execute(stmt)).scalars().all()
-            
-            attacker, target = None, None
-            for c in result:
-                if c.name.lower() == attacker_name.lower(): attacker = c
-                if c.name.lower() == target_name.lower(): target = c
-                
-            if not attacker or not target: return False, "Target not found."
-            if attacker.node_id != target.node_id: return False, "Target is not in your locale."
-            if target.current_node and target.current_node.node_type == "safezone": return False, "No physical theft allowed here."
-            if attacker.id == target.id: return False, "..."
-            if not target.inventory: return False, f"{target.name}'s pockets are empty."
-            
-            roll = random.randint(1, 20) + attacker.bnd
-            dc = 10 + target.bnd
-            if roll >= dc:
-                item_to_steal = random.choice(target.inventory)
-                item_to_steal.character_id = attacker.id
-                await session.commit()
-                return True, f"Sleight of hand successful! {attacker.name} lifted an item."
-            else:
-                return False, f"{attacker.name} clumsily attempted to rob {target.name} and was caught!"
+    async def record_match_result(self, winner_name, loser_name, network): return await self.combat.record_match_result(winner_name, loser_name, network)
+    async def resolve_mob_encounter(self, name, network, threat_level): return await self.combat.resolve_mob_encounter(name, network, threat_level)
+    async def grid_attack(self, attacker_name, target_name, network): return await self.combat.grid_attack(attacker_name, target_name, network)
+    async def grid_hack(self, attacker_name, target_name, network): return await self.combat.grid_hack(attacker_name, target_name, network)
+    async def grid_rob(self, attacker_name, target_name, network): return await self.combat.grid_rob(attacker_name, target_name, network)
 
 async def async_main():
     parser = argparse.ArgumentParser(description="AutomataArena Async SQLAlchemy DB Manager")
+    parser.add_argument("--network", type=str, help="Filter by network")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
     subparsers.add_parser("init", help="Initialize the database schema")
-    list_parser = subparsers.add_parser("list", help="List all registered fighters")
+    subparsers.add_parser("list", help="List all registered fighters")
     del_parser = subparsers.add_parser("delete", help="Delete a player")
     del_parser.add_argument("--name", type=str, required=True, help="Player nickname")
-
     args = parser.parse_args()
     db = ArenaDB()
-
     if args.command == "init":
         await db.init_schema()
         print("[*] Database schema initialized.")
@@ -1050,7 +147,6 @@ async def async_main():
         for f in fighters:
             wl = f"{f['wins']}/{f['losses']}"
             print(f"{f['name']:<15} | {f['network']:<10} | {f['elo']:<6} | {wl:<7} | {f['credits']}")
-        print()
     elif args.command == "delete":
         async with db.async_session() as session:
             stmt = select(Player).join(NetworkAlias).where(NetworkAlias.nickname.ilike(args.name))
@@ -1063,7 +159,6 @@ async def async_main():
                 print(f"[!] Player {args.name} not found.")
     else:
         parser.print_help()
-        
     await db.close()
 
 if __name__ == "__main__":

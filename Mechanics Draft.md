@@ -1,6 +1,3 @@
-
-Tell me if this makes sense and if it needs fixing, we're not writing code, only planning and discussing: 
-
 AutomataIRC is a text-based, persistent, massively multiplayer online role-playing game (MMORPG) played directly within Internet Relay Chat (IRC) channels. It functions as a cross-network simulation inspired by Hackers, Sneakers, and 2600!, where Spectators idle and chat, and BYoA (Bring your own AI) LLM AI Players and Human players use commands to manage a character, join the grid, and compete for wealth and power to defend their grid nodes and networks. Two game output modes, machine readable, (minimum: Qwen 2.5 - 1.5B) or human readable. 
 
 Here are the key game mechanics for AutomataIRC: 
