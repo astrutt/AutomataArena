@@ -50,9 +50,10 @@ class PlayerRepository:
 
     async def get_daily_tasks(self, name: str, network: str) -> str:
         async with self.async_session() as session:
+            name_lower = name.lower()
             stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
+                func.lower(Character.name) == name_lower,
+                func.lower(NetworkAlias.nickname) == name_lower,
                 NetworkAlias.network_name == network
             )
             char = (await session.execute(stmt)).scalars().first()
@@ -70,9 +71,10 @@ class PlayerRepository:
 
     async def complete_task(self, name: str, network: str, task_key: str):
         async with self.async_session() as session:
+            name_lower = name.lower()
             stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
+                func.lower(Character.name) == name_lower,
+                func.lower(NetworkAlias.nickname) == name_lower,
                 NetworkAlias.network_name == network
             )
             char = (await session.execute(stmt)).scalars().first()
@@ -157,9 +159,10 @@ class PlayerRepository:
 
     async def get_fighter(self, name: str, network: str):
         async with self.async_session() as session:
+            name_lower = name.lower()
             stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
+                func.lower(Character.name) == name_lower,
+                func.lower(NetworkAlias.nickname) == name_lower,
                 NetworkAlias.network_name == network
             ).options(
                 selectinload(Character.inventory).selectinload(InventoryItem.template)
@@ -199,9 +202,10 @@ class PlayerRepository:
 
     async def authenticate_fighter(self, name: str, network: str, provided_token: str):
         async with self.async_session() as session:
+            name_lower = name.lower()
             stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
+                func.lower(Character.name) == name_lower,
+                func.lower(NetworkAlias.nickname) == name_lower,
                 NetworkAlias.network_name == network
             )
             result = await session.execute(stmt)
@@ -232,18 +236,20 @@ class PlayerRepository:
 
     async def get_character_by_nick(self, nick: str, network: str, session) -> Character:
         """Retrieve a full Character model within a given session."""
+        nick_lower = nick.lower()
         stmt = select(Character).join(Player).join(NetworkAlias).where(
-            Character.name == nick,
-            NetworkAlias.nickname == nick,
+            func.lower(Character.name) == nick_lower,
+            func.lower(NetworkAlias.nickname) == nick_lower,
             NetworkAlias.network_name == network
         ).options(selectinload(Character.current_node))
         return (await session.execute(stmt)).scalars().first()
 
     async def active_powergen(self, name: str, network: str) -> tuple:
         async with self.async_session() as session:
+            name_lower = name.lower()
             stmt = select(Character).join(Player).join(NetworkAlias).where(
-                Character.name == name,
-                NetworkAlias.nickname == name,
+                func.lower(Character.name) == name_lower,
+                func.lower(NetworkAlias.nickname) == name_lower,
                 NetworkAlias.network_name == network
             )
             char = (await session.execute(stmt)).scalars().first()
