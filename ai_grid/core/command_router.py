@@ -131,8 +131,11 @@ class CommandRouter:
                 asyncio.create_task(handlers.handle_ready(self.node, source_nick, args[0], reply_target))
 
             # 7. Information & Meta
-            elif verb == "info":
-                asyncio.create_task(handlers.handle_info_view(self.node, source_nick, args, reply_target))
+            elif verb in ["info", "help", "?"]:
+                if verb == "info":
+                    asyncio.create_task(handlers.handle_info_view(self.node, source_nick, args, reply_target))
+                else:
+                    asyncio.create_task(handlers.handle_help(self.node, source_nick, args, reply_target))
             elif verb == "tasks":
                 asyncio.create_task(handlers.handle_tasks_view(self.node, source_nick, reply_target))
             elif verb == "options":

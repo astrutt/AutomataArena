@@ -12,6 +12,76 @@ logger = logging.getLogger("manager")
 
 # --- Utility Handlers ---
 
+async def handle_help(node, nick: str, args: list, reply_target: str):
+    """Displays a comprehensive list of all v1.6.0 commands or details for a specific verb."""
+    
+    # Detailed Command Registry
+    registry = {
+        "register": {"desc": "Found your digital persona.", "syntax": "register <Name> <Race> <Class> <Traits>"},
+        "grid": {"desc": "Diagnostic view of the current node.", "syntax": "grid"},
+        "move": {"desc": "Travel to an adjacent node.", "syntax": "move <n/s/e/w>"},
+        "explore": {"desc": "Scan sector for hidden architecture or fragments.", "syntax": "explore", "cost": "20u Power"},
+        "map": {"desc": "Generate topological visualization. Radius scales with SEC/ALG.", "syntax": "map"},
+        "info": {"desc": "Targeted diagnostics.", "syntax": "info [grid|arena|<nick>]"},
+        "tasks": {"desc": "View active objectives and harvest rewards.", "syntax": "tasks"},
+        "options": {"desc": "Set terminal preferences (e.g., machine mode).", "syntax": "options <key> <val>"},
+        "shop": {"desc": "View local merchant wares.", "syntax": "shop"},
+        "buy": {"desc": "Purchase hardware/software from a Merchant node.", "syntax": "buy <item>"},
+        "sell": {"desc": "Liquidate inventory items for credits.", "syntax": "sell <item>"},
+        "auction": {"desc": "Global DarkNet marketplace.", "syntax": "auction <list|bid|post> [id|item] [amt|price]"},
+        "market": {"desc": "View economic volatility and price multipliers.", "syntax": "market"},
+        "mainframe": {"desc": "Check Gibson compilation/assembly status.", "syntax": "mainframe"},
+        "compile": {"desc": "Synthesize 100 Data into 1 Vulnerability.", "syntax": "compile <amt>"},
+        "assemble": {"desc": "Fuse 4 Vulnerabilities into 1 Zero-Day Chain.", "syntax": "assemble"},
+        "use": {"desc": "Execute an inventory payload.", "syntax": "use <item>"},
+        "claim": {"desc": "Establish command over an Unclaimed node.", "syntax": "claim", "cost": "50u Power"},
+        "upgrade": {"desc": "Fortify node security and storage capacity.", "syntax": "upgrade", "cost": "100u Power + Credits"},
+        "repair": {"desc": "Restore node durability.", "syntax": "repair", "cost": "25u Power"},
+        "recharge": {"desc": "Transfer character reserves to the node pool.", "syntax": "recharge <amt>"},
+        "hack": {"desc": "Sabotage foreign node integrity or siphon data.", "syntax": "hack", "cost": "30u Power"},
+        "raid": {"desc": "Rapid resource extraction from a local node.", "syntax": "raid"},
+        "breach": {"desc": "Brute-force entry into high-sec architectures.", "syntax": "breach"},
+        "syndicate": {"desc": "Faction logistics.", "syntax": "syndicate <list|info|store|draw|create|join>"},
+        "cipher": {"desc": "Initiate decryption of guarded data nodes.", "syntax": "cipher"},
+        "guess": {"desc": "Submit a decryption sequence code.", "syntax": "guess <code>"},
+        "dice": {"desc": "PvP credit gambling.", "syntax": "dice <amt> <nick>"},
+        "top": {"desc": "View global High Roller leaderboards.", "syntax": "top"},
+        "attack": {"desc": "Primary kinetic strike against another Persona.", "syntax": "attack <nick>"},
+        "rob": {"desc": "Siphon credits from an unsuspecting target.", "syntax": "rob <nick>"},
+        "queue": {"desc": "Register for the next Arena gladiator match.", "syntax": "queue"},
+        "ready": {"desc": "Commit to an arena drop sequence.", "syntax": "ready <token>"}
+    }
+
+    if args:
+        verb = args[0].lower()
+        if verb in registry:
+            info = registry[verb]
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[ COMMAND: {verb.upper()} ]', C_CYAN, True))}")
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('DESCRIPTION: ', C_YELLOW) + format_text(info['desc'], C_WHITE))}")
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('SYNTAX: ', C_YELLOW) + format_text(f'{node.prefix} {info['syntax']}', C_GREEN))}")
+            if 'cost' in info:
+                await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('COST: ', C_YELLOW) + format_text(info['cost'], C_RED))}")
+            return
+        else:
+            await node.send(f"PRIVMSG {reply_target} :[ERR] Command '{verb}' not found in registry.")
+
+    # Generic Categorical Help
+    help_categories = {
+        "🧭 NAVIGATION": ["grid", "move", "explore", "map"],
+        "🆔 IDENTITY": ["register", "info", "tasks", "options"],
+        "💰 ECONOMY": ["shop", "buy/sell", "auction", "market"],
+        "🏗️ THE GIBSON": ["mainframe", "compile", "assemble", "use"],
+        "⚔️ TACTICAL": ["claim", "upgrade", "hack/raid", "syndicate", "repair"],
+        "🎮 GAMES": ["cipher/guess", "dice", "top", "attack/rob", "queue/ready"]
+    }
+
+    await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('[ AUTOMATA ARENA v1.6.0 - COMMAND INTERFACE ]', C_CYAN, bold=True))}")
+    for cat, cmds in help_categories.items():
+        cmd_str = ", ".join([f"{node.prefix} {c}" for c in cmds])
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(cat, C_YELLOW) + ': ' + format_text(cmd_str, C_WHITE))}")
+
+    await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'Type {node.prefix} help <command> for detailed syntax.', C_CYAN))}")
+
 async def is_machine_mode(node, nick: str) -> bool:
     prefs = await node.db.get_prefs(nick, node.net_name)
     return prefs.get('output_mode', 'human') == 'machine'
