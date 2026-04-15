@@ -5,7 +5,7 @@ import datetime
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
-from models import Player, NetworkAlias, Character, InventoryItem, ItemTemplate, GridNode
+from models import Player, NetworkAlias, Character, InventoryItem, ItemTemplate, GridNode, Syndicate
 from .core import logger, DEFAULT_PREFS
 
 class PlayerRepository:
@@ -163,7 +163,7 @@ class PlayerRepository:
                 NetworkAlias.network_name == network
             ).options(
                 selectinload(Character.inventory).selectinload(InventoryItem.template),
-                selectinload(Character.syndicate).selectinload(Syndicate.active_mission)
+                selectinload("syndicate").selectinload(Syndicate.active_mission)
             )
             
             result = await session.execute(stmt)
