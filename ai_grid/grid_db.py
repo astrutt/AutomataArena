@@ -164,6 +164,7 @@ async def async_main():
     parser.add_argument("--network", type=str, help="Filter by network")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     subparsers.add_parser("init", help="Initialize the database schema")
+    subparsers.add_parser("reseed", help="Update grid expansion nodes and connections")
     subparsers.add_parser("list", help="List all registered fighters")
     del_parser = subparsers.add_parser("delete", help="Delete a player")
     del_parser.add_argument("--name", type=str, required=True, help="Player nickname")
@@ -172,6 +173,9 @@ async def async_main():
     if args.command == "init":
         await db.init_schema()
         print("[*] Database schema initialized.")
+    elif args.command == "reseed":
+        await db.seed_grid_expansion()
+        print("[*] Grid expansion re-seeded.")
     elif args.command == "list":
         fighters = await db.list_fighters(args.network)
         print(f"\n--- Registered Fighters ({len(fighters)}) ---")

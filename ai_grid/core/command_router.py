@@ -28,7 +28,10 @@ class CommandRouter:
 
             # 2. Grid Navigation & Exploration
             elif verb == "grid":
-                asyncio.create_task(handlers.handle_grid_view(self.node, source_nick, reply_target))
+                if args and args[0].lower() == "map":
+                    asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target))
+                else:
+                    asyncio.create_task(handlers.handle_grid_view(self.node, source_nick, reply_target))
             elif verb == "move":
                 if not self.node.active_engine or not self.node.active_engine.active:
                     if args: asyncio.create_task(handlers.handle_grid_movement(self.node, source_nick, args[0], reply_target))
