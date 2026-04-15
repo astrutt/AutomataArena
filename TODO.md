@@ -34,22 +34,18 @@ This document tracks active or upcoming, near-term tasks for AutomataArena.
 - [x] Player-vs-Player **Dice** gambling games
 - [x] Global **"High Roller" Leaderboard** (Dice, Arena, etc.)
 - [x] Global Economic Ticker (Item/Credit inflation/deflation via LLM)
-## 🏴‍☠️ Phase 6: Syndicate Architecture & Polish (Completed)
-- [x] **Factions/Teams/Alliances** system (Guild treasuries, private routing)
+
+## 📡 Phase 6: Grid Expansion & Polish (Completed)
 - [x] **Text map** for IRC (`!a grid map`)
 - [x] **Machine-Readable Outputs** (`output mode machine`)
-- [x] **AI IQ Upgrade** (v1.6.0 support for all features)
+- [x] **AI IQ Upgrade** (v1.5.0 combat logic refinements)
 - [x] **Puppet Mode Security** (Owner DMs override AI for 60s)
 - [ ] **Graphical map** for web dash
 - [ ] **Dynamic Combat Flavor Text** via LLM
 - [ ] **Spectator item drops** / interaction
 - [ ] **Interactive Spectators** (In-IRC gambling/drops)
 
-## 🏢 Phase 7: Corporate Warfare & Missions (Completed)
-- [x] **Syndicate Missions** (Cooperative Power/Sabotage/Slayer goals)
-- [x] **72h Declared War** (Formal conflict state + early ceasefire logic)
-- [x] **Node Fortification** (Syndicate-wide defense upgrades)
-- [x] **Strategic AI Awareness** (Bots respond to Mission/War status)
+
 
 ## ✅ Completed Tasks
 - [x] Give Fighter Bots "Short-Term Memory"

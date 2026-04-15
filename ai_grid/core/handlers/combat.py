@@ -1,0 +1,142 @@
+# handlers/combat.py - Combat, PvP & Mini-Game Handlers
+import asyncio
+import random
+import logging
+from grid_utils import format_text, build_banner, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from .base import is_machine_mode, check_rate_limit
+
+logger = logging.getLogger("manager")
+
+async def handle_mob_encounter(node, nick: str, node_name: str, threat: int, prev_node: str, reply_target: str):
+    mob = node.db.combat.MOB_ROSTER.get(threat, node.db.combat.MOB_ROSTER[1])
+    mob_name = mob['name']
+    machine = await is_machine_mode(node, nick)
+    if machine:
+        warn = f"[MOB] THREAT:{threat} NAME:{mob_name} NODE:{node_name} ENGAGE:{node.prefix} engage FLEE:{node.prefix} flee TIMEOUT:15"
+        await node.send(f"PRIVMSG {nick} :{warn}")
+    else:
+        warn = format_text(f"⚠️ [MOB DETECTED] {mob_name} (Threat {threat}) lurks in {node_name}! Type '{node.prefix} engage' to fight or '{node.prefix} flee' to retreat. (15s)", C_YELLOW, bold=True)
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(warn)}")
+    await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(f'[SIGACT] {mob_name} detected near {nick} at {node_name}.', C_RED))}")
+    async def auto_engage():
+        try:
+            await asyncio.sleep(15)
+            if nick in node.pending_encounters:
+                asyncio.create_task(resolve_mob(node, nick, reply_target))
+        except asyncio.CancelledError: pass
+    timer = asyncio.create_task(auto_engage())
+    node.pending_encounters[nick] = {'mob_name': mob_name, 'threat': threat, 'prev_node': prev_node, 'timer': timer, 'reply_target': reply_target}
+
+async def resolve_mob(node, nick: str, reply_target: str):
+    enc = node.pending_encounters.pop(nick, None)
+    if not enc: return
+    enc['timer'].cancel()
+    result = await node.db.resolve_mob_encounter(nick, node.net_name, enc['threat'])
+    if 'error' in result:
+        await node.send(f"PRIVMSG {reply_target} :[ERR] {result['error']}")
+        return
+    machine = await is_machine_mode(node, nick)
+    if result['won']:
+        if machine:
+            parts = f"[MOB] RESULT:WIN XP:{result['xp_gained']} CRED:+{result['credits_gained']}"
+            if result.get('loot'): parts += f" LOOT:{result['loot']}"
+            if result.get('leveled_up'): parts += " LEVELUP:true"
+            await node.send(f"PRIVMSG {nick} :{parts}")
+        else:
+            loot_str = f" Dropped: {result['loot']}!" if result.get('loot') else ""
+            lvl_str = f" 🆙 Level Up!" if result.get('leveled_up') else ""
+            msg = format_text(f"✅ {enc['mob_name']} neutralized! +{result['xp_gained']} XP, +{result['credits_gained']}c.{loot_str}{lvl_str}", C_GREEN)
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(msg)}")
+        sigact = format_text(f"[SIGACT] {nick} eliminated {enc['mob_name']}! +{result['xp_gained']} XP.", C_YELLOW)
+        await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(sigact)}")
+        if result.get('task_reward'):
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['task_reward'], C_CYAN))}")
+    else:
+        if machine:
+            await node.send(f"PRIVMSG {nick} :[MOB] RESULT:LOSS CRED:-{result['credits_lost']} EJECTED:The_Grid_Uplink")
+        else:
+            loss_credits = result['credits_lost']
+            msg = format_text(f"💀 {enc['mob_name']} overwhelmed you! Lost {loss_credits:.2f}c. Ejected to The_Grid_Uplink.", C_RED)
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(msg)}")
+
+async def handle_pvp_command(node, nickname: str, reply_target: str, action: str, target_name: str):
+    if not await check_rate_limit(node, nickname, reply_target, cooldown=30): return
+    success, msg = False, ""
+    if action == "attack": success, msg = await node.db.grid_attack(nickname, target_name, node.net_name)
+    elif action == "hack": success, msg = await node.db.grid_hack(nickname, target_name, node.net_name)
+    elif action == "rob": success, msg = await node.db.grid_rob(nickname, target_name, node.net_name)
+    if success: await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(f'[GRID PvP] {msg}', C_YELLOW))}")
+    else: await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(msg, C_RED))}")
+
+async def handle_ready(node, nick: str, token: str, reply_target: str):
+    if await node.db.authenticate_fighter(nick, node.net_name, token):
+        await node.db.set_pref(nick, node.net_name, 'output_mode', 'machine')
+        if nick not in node.ready_players:
+            node.ready_players.append(nick)
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[AUTH OK] {nick} validated. Output mode set to MACHINE. Standby for drop.', C_GREEN))}")
+            await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(f'[SIGACT] {nick} locked into the drop pod.', C_YELLOW))}")
+            await node.check_match_start()
+    else:
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[AUTH FAIL] {nick} Cryptographic mismatch.', C_RED))}")
+
+async def handle_dice_roll(node, nick: str, args: list, reply_target: str):
+    """Play a game of 2d6 dice."""
+    if len(args) < 2:
+        await node.send(f"PRIVMSG {reply_target} :Usage: {node.prefix} dice <bet> <high|low|seven>")
+        return
+    
+    try: bet = int(args[0])
+    except: bet = 0
+    choice = args[1].lower()
+    
+    if choice not in ["high", "low", "seven"]:
+        await node.send(f"PRIVMSG {reply_target} :Choice must be high (8-12), low (2-6), or seven.")
+        return
+
+    result = await node.db.roll_dice(nick, node.net_name, bet, choice)
+    if "error" in result:
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['error'], C_RED))}")
+    else:
+        banner = format_text(result['msg'], C_GREEN if result['win'] else C_YELLOW)
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(banner)}")
+
+async def handle_cipher_start(node, nick: str, reply_target: str):
+    """Start a CipherLock session."""
+    result = await node.db.start_cipher(nick, node.net_name)
+    if "error" in result:
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['error'], C_RED))}")
+    else:
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['msg'], C_YELLOW))}")
+
+async def handle_guess(node, nick: str, args: list, reply_target: str):
+    """Submit a CipherLock guess."""
+    if not args:
+        await node.send(f"PRIVMSG {reply_target} :Usage: {node.prefix} guess <4-digit-sequence>")
+        return
+        
+    result = await node.db.guess_cipher(nick, node.net_name, args[0])
+    if "error" in result:
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['error'], C_RED))}")
+    else:
+        color = C_GREEN if result.get('complete') and result.get('success') else C_YELLOW
+        if result.get('complete') and not result.get('success'): color = C_RED
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['msg'], color))}")
+
+async def handle_leaderboard(node, nick: str, args: list, reply_target: str):
+    """Show global high scores."""
+    cat = args[0].upper() if args else "DICE"
+    results = await node.db.get_leaderboard(cat)
+    if not results:
+        await node.send(f"PRIVMSG {reply_target} :[GRID] No records found for category: {cat}")
+        return
+    
+    machine = await is_machine_mode(node, nick)
+    if machine:
+        parts = " ".join(f"{r['name']}:{r['score']:.1f}" for r in results)
+        await node.send(f"PRIVMSG {nick} :[TOP] CAT:{cat} LIST:{parts}")
+        return
+
+    await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[ LEADERBOARD: {cat} ]', C_CYAN, True))}")
+    for i, r in enumerate(results):
+        line = f"#{i+1} | {r['name']} | score: {r['score']:.1f}"
+        await node.send(f"PRIVMSG {reply_target} :{line}")
