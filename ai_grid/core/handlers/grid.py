@@ -52,7 +52,14 @@ async def handle_grid_view(node, nickname: str, reply_target: str):
         meta_str += f" | Network: {loc['irc_affinity'].upper()}"
     await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(meta_str, C_CYAN))}")
 
-    await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'Exits: {exits_str}', C_CYAN))}")
+    # Local Topology Mini-Map (Radius 1)
+    async with node.db.async_session() as session:
+        char = await node.db.get_character_by_nick(nickname, node.net_name, session)
+        if char:
+            map_text = await generate_ascii_map(session, char, machine_mode=machine, limit_radius=1, show_legend=False)
+            for line in map_text.split("\n"):
+                await node.send(f"PRIVMSG {reply_target} :{build_banner(line)}")
+
     action_prompt = format_text(f"[GRID] {nickname} @ {loc['name']} | Use '{node.prefix} move <dir>' to travel.", C_YELLOW)
     if loc['type'] == 'arena': action_prompt += format_text(f" | Use '{node.prefix} queue' to enter the Arena.", C_GREEN)
     await node.send(f"PRIVMSG {reply_target} :{build_banner(action_prompt)}")

@@ -88,15 +88,18 @@ def get_connector_symbol(source: GridNode, target: GridNode, vertical: bool = Fa
         if is_closed: return "##"
         return "--"
 
-async def generate_ascii_map(session, char: Character, machine_mode: bool = False) -> str:
+async def generate_ascii_map(session, char: Character, machine_mode: bool = False, limit_radius: int = None, show_legend: bool = True) -> str:
     """Generate a grid representation with 2-char paths and tiered intelligence."""
     
     # 1. Calculate Radius Tier
-    total_stat = char.sec + char.alg
-    if total_stat >= 60: radius = 4
-    elif total_stat >= 40: radius = 3
-    elif total_stat >= 20: radius = 2
-    else: radius = 1
+    if limit_radius is not None:
+        radius = limit_radius
+    else:
+        total_stat = char.sec + char.alg
+        if total_stat >= 60: radius = 4
+        elif total_stat >= 40: radius = 3
+        elif total_stat >= 20: radius = 2
+        else: radius = 1
     
     grid = {} # (x, y) -> GridNode
     queue = [(char.current_node, 0, 0, 0)] 
@@ -183,6 +186,9 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
             output.append(row)
         if has_connectors:
             output.append(connector_row)
+            
+    if not show_legend:
+        return "\n".join(output)
             
     # Add legend
     mode_str = "MACHINE" if machine_mode else "HUMAN"
