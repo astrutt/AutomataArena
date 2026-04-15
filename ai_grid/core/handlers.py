@@ -717,7 +717,13 @@ async def handle_options(node, nickname: str, args: list, reply_target: str):
 
 async def handle_admin_command(node, admin_nick: str, verb: str, args: list, reply_target: str):
     logger.warning(f"SYSADMIN OVERRIDE: {admin_nick} -> {verb}")
-    if verb == "status":
+    if verb == "version":
+        # System Versions
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('[ SYSTEM VERSION ARCHIVE ]', C_CYAN, True))}")
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('Mainframe Core: v1.5.0-STABLE', C_WHITE))}")
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('DB Orchestrator: v1.5.0 | Repositories: v1.5.0', C_GREEN))}")
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('Command Router: v1.5.0 | AI Bot Client: v1.5.0', C_YELLOW))}")
+    elif verb == "status":
         import time
         # 1. Base Population & Systems
         fighters = await node.db.list_fighters(node.net_name)
