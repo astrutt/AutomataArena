@@ -60,17 +60,48 @@ class GridNode:
         self.hype_counter = 0
         self.router = CommandRouter(self)
         
+        # Outbound Pacing (Per Network)
+        self.out_queue = asyncio.Queue()
+        self.last_send_ts = 0
+        
         raw_admins = CONFIG.get('admins', [])
         if isinstance(raw_admins, str):
             raw_admins = [x.strip() for x in raw_admins.split(',')]
         self.admins = [a.lower() for a in raw_admins]
         self.pending_encounters = {} 
 
-    async def send(self, message: str):
-        await self.irc.send(message)
+    async def send(self, message: str, immediate: bool = False):
+        """Dispatches a message either immediately or via the paced queue."""
+        if immediate:
+            await self.irc.send(message)
+        else:
+            self.out_queue.put_nowait(message)
+
+    async def _outbound_worker(self):
+        """Paces outgoing IRC messages at 1 message every 2 seconds."""
+        import time
+        while True:
+            try:
+                msg = await self.out_queue.get()
+                now = time.time()
+                elapsed = now - self.last_send_ts
+                
+                # Pace at 2 seconds
+                wait = max(0, 2.0 - elapsed)
+                if wait > 0:
+                    await asyncio.sleep(wait)
+                
+                await self.irc.send(msg)
+                self.last_send_ts = time.time()
+                self.out_queue.task_done()
+            except Exception as e:
+                logger.error(f"Outbound Worker Error [{self.net_name}]: {e}")
+                await asyncio.sleep(1)
 
     async def connect(self):
         await self.irc.connect()
+        # Start maintenance and pacing tasks
+        asyncio.create_task(self._outbound_worker())
         asyncio.create_task(loops.hype_loop(self))
         asyncio.create_task(loops.ambient_event_loop(self))
         asyncio.create_task(loops.arena_call_loop(self))
@@ -110,11 +141,10 @@ class GridNode:
                 source_nick = source_full.split('!')[0] if source_full else ""
                 
                 if command == "PING":
-                    await self.send(f"PONG :{msg if msg else target}")
+                    await self.send(f"PONG :{msg if msg else target}", immediate=True)
                 elif command == "PONG":
                     ts_str = msg.strip() if msg else target.strip()
                     if ts_str in self.pending_pings:
-                        import time
                         self.pending_pings[ts_str]['server_latency'] = (time.time() - self.pending_pings[ts_str]['start']) * 1000
                         await self._check_ping_complete(ts_str)
                 elif command == "354":
@@ -134,7 +164,7 @@ class GridNode:
                             self.channel_users[clean_nick] = {'join_time': now, 'chat_lines': 0}
                             security.start_registration_timer(self, clean_nick)
                 elif command in ["376", "422"]:
-                    await self.send(f"JOIN {self.config['channel']}")
+                    await self.send(f"JOIN {self.config['channel']}", immediate=True)
                     await self.set_dynamic_topic()
                     online_msg = format_text(f"[MAINFRAME ONLINE] Grid systems nominal. Type '{self.prefix} help' to begin.", C_GREEN, bold=True)
                     await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(online_msg)}")

@@ -75,22 +75,21 @@ async def is_machine_mode(node, nick: str) -> bool:
     prefs = await node.db.get_prefs(nick, node.net_name)
     return prefs.get('output_mode', 'human') == 'machine'
 
-async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 30) -> bool:
+async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 2) -> bool:
     now = time.time()
     if nick not in node.action_timestamps:
-        node.action_timestamps[nick] = {'last_action': now, 'warnings': 0}
+        node.action_timestamps[nick] = {'last_action': now, 'warned': False}
         return True
         
     record = node.action_timestamps[nick]
     elapsed = now - record['last_action']
     if elapsed < cooldown:
-        record['warnings'] += 1
-        if record['warnings'] > 3:
-            return False
-        else:
-            msg = format_text(f"[SYSTEM] Anti-flood ICE triggered. Please wait {cooldown - int(elapsed)}s.", C_RED)
-            await node.send(f"PRIVMSG {reply_target} :{build_banner(msg)}")
-            return False
+        if not record['warned']:
+            record['warned'] = True
+            msg = format_text(f"[SYSTEM] Anti-flood ICE triggered. Please wait {cooldown:.1f}s between commands.", C_RED)
+            asyncio.create_task(node.send(f"PRIVMSG {reply_target} :{build_banner(msg)}"))
+        return False
+        
     record['last_action'] = now
-    record['warnings'] = 0
+    record['warned'] = False # Reset on success
     return True
