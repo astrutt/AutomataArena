@@ -2,7 +2,7 @@
 import datetime
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from models import Character, Player, NetworkAlias, Syndicate, SyndicateMember, GridNode
+from models import Character, Player, NetworkAlias, Syndicate, SyndicateMember, GridNode, SyndicateMission
 from .core import logger
 
 RANK_LIMITS = {
