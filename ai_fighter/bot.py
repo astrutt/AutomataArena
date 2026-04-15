@@ -20,6 +20,11 @@ NICK = config['IRC']['Nickname']
 CHANNEL = config['IRC']['Channel']
 MANAGER = config['IRC']['ManagerNick'].strip().lower()
 PREFIX = config['IRC'].get('Prefix', 'x').strip().lower()
+USE_SSL = config['IRC'].getboolean('UseSSL')
+NICK = config['IRC']['Nickname']
+CHANNEL = config['IRC']['Channel']
+MANAGER = config['IRC']['ManagerNick'].strip().lower()
+PREFIX = config['IRC'].get('Prefix', 'x').strip().lower()
 OWNER = config['IRC'].get('Owner', '').strip().lower()
 
 LLM_ENDPOINT = config['LLM']['Endpoint']
@@ -29,7 +34,6 @@ LLM_KEY = config['LLM'].get('ApiKey', '')
 CHARACTER_FILE = 'character.json'
 
 # --- Logging Setup ---
-# Default to INFO if the block is missing from config.ini
 LOG_LEVEL_STR = config['LOGGING']['Level'].upper() if 'LOGGING' in config else 'INFO'
 log_level = getattr(logging, LOG_LEVEL_STR, logging.INFO)
 
@@ -37,17 +41,14 @@ logger = logging.getLogger(f"bot_{NICK}")
 logger.setLevel(log_level)
 formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
-# Dynamic File Handler (e.g., TestHound_bot.log)
 log_filename = f"{NICK}_bot.log"
 fh = logging.FileHandler(log_filename)
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
-# Console Handler
 ch = logging.StreamHandler()
 ch.setFormatter(formatter)
 logger.addHandler(ch)
-
 
 def load_character():
     if os.path.exists(CHARACTER_FILE):
@@ -89,26 +90,27 @@ Survive, earn credits, and maintain Grid stability. Act conservatively.
 
 ## CORE COMMANDS (Reply with EXACTLY ONE)
 Movement & Exploration:
-  {PREFIX} grid          - view current node
-  {PREFIX} move <dir>    - travel (n/s/e/w)
-  {PREFIX} explore       - search node (cost: 20u)
+  {PREFIX} grid map      - View local 2D topology (Find routes)
+  {PREFIX} move <dir>    - Travel (n/s/e/w)
+  {PREFIX} explore       - Search node (cost: 20u)
+  {PREFIX} grid          - Scan current node status
 Tactical & Resources:
-  {PREFIX} powergen      - generate power
-  {PREFIX} train         - restore stability
-  {PREFIX} claim         - establish node ownership
-  {PREFIX} attack <nick> - kinetic strike
-  {PREFIX} hack <nick>   - data/credit theft
-  {PREFIX} tasks         - view objectives
+  {PREFIX} powergen      - Generate power
+  {PREFIX} train         - Restore stability
+  {PREFIX} claim         - Establish node ownership
+  {PREFIX} attack <nick> - Kinetic strike
+  {PREFIX} hack <nick>   - Data/credit theft
+  {PREFIX} tasks         - View objectives
 
-## ADVANCED UTILITIES (Use sparingly)
-  {PREFIX} map           - visualize local topology
-  {PREFIX} compile <amt> - process 100 Data into 1 Vulnerability (at owned node)
-  {PREFIX} auction <list|bid> - participate in global trade
+## ADVANCED UTILITIES
+  {PREFIX} compile <amt> - Process 100 Data into 1 Vulnerability
+  {PREFIX} auction <list|bid> - Global trade
 
 ## RULES
 - Reply with ONE command ONLY. No prose.
 - When [MOB] is detected, respond with '{PREFIX} engage' or '{PREFIX} flee'.
-- Prioritize survival (HP/Stability) over advanced tasks."""
+- Use '{PREFIX} grid map' to assess connection health (checks for !! or ## symbols).
+- Prioritize survival (HP/Stability) over aggressive expansion."""
 
     pwr = char_data.get('power', 100)
     stb = char_data.get('stability', 100)
@@ -159,8 +161,7 @@ class AutomataBot:
 
     def record_memory(self, msg):
         if "Awaiting public commands" in msg:
-            return  # Prevent duplicating current turn state in history
-        # Clean up UI formatting from Manager for the LLM
+            return 
         clean_msg = msg.replace("=== ", "").replace(" ===", "").strip()
         self.memory_buffer.append(clean_msg)
         if len(self.memory_buffer) > 10:
@@ -188,7 +189,6 @@ class AutomataBot:
         import time
         now = time.time()
         
-        # Puppet Mode Protection: Skip autonomy if owner has taken control in the last 60s
         if now < self.manual_override_until:
             logger.info(f"AI autonomy suppressed by owner. Remaining manual window: {self.manual_override_until - now:.1f}s")
             self.processing = False
@@ -204,16 +204,14 @@ class AutomataBot:
             return
         logger.info("Analyzing arena state and querying LLM for next move...")
         
-        # Snapshot the memory for this thread
         current_memory = list(self.memory_buffer)
         
         action = await asyncio.to_thread(call_llm, arena_state, self.char_data, current_memory)
         logger.info(f"LLM decision: {action}")
         self.record_memory(f"You decided to: {action}")
-        # Enforce the command prefix — if the LLM went off-script, default to grid check
         if not action.lower().startswith(PREFIX):
-            logger.warning(f"LLM response did not start with '{PREFIX}', defaulting to '{PREFIX} grid'.")
-            action = f"{PREFIX} grid"
+            logger.warning(f"LLM response did not start with '{PREFIX}', defaulting to '{PREFIX} grid map'.")
+            action = f"{PREFIX} grid map"
         await self.send(f"PRIVMSG {CHANNEL} :{action}")
         self.last_action_time = time.time()
         self.processing = False
@@ -268,10 +266,9 @@ class AutomataBot:
                         await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} register {NICK} {race} {bot_class} {traits}")
                     else:
                         logger.info("Joined channel. Character data found. Requesting Grid status...")
-                        await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} grid")
+                        await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} grid map")
                 continue
 
-            # --- SYSTEM PAYLOADS (Strict Manager Auth) ---
             if command == "NOTICE" and target.lower() == NICK.lower():
                 if source_nick == MANAGER:
                     if msg.startswith("[SYS_PAYLOAD]"):
@@ -287,8 +284,6 @@ class AutomataBot:
                 continue
 
             if command == "PRIVMSG":
-                
-                # --- OWNER OVERRIDES & MANAGER DMS (Private Messages) ---
                 if target.lower() == NICK.lower():
                     if OWNER and source_nick == OWNER:
                         logger.warning(f"Secure Owner Override Received from {source_nick}: {msg}")
@@ -297,8 +292,6 @@ class AutomataBot:
                             await self.send("QUIT :Shutting down by owner override.")
                             sys.exit(0)
                         else:
-                            # Forward anything else directly to the channel (Puppet Mode)
-                            # AND suppress AI autonomy for 1 minute
                             import time
                             self.manual_override_until = time.time() + 60
                             logger.info("Puppet Mode engaged by owner. Disabling LLM for 60s.")
@@ -309,7 +302,6 @@ class AutomataBot:
                             asyncio.create_task(self.process_turn(msg))
                     continue
 
-                # --- ARENA BROADCASTS (Strict Manager Auth) ---
                 if target.lower() == CHANNEL.lower():
                     if source_nick == MANAGER:
                         self.record_memory(msg)
@@ -322,7 +314,7 @@ class AutomataBot:
                         if "MAINFRAME ONLINE" in msg and self.char_data:
                             logger.info("Manager came online. Requesting Grid status...")
                             await asyncio.sleep(2)
-                            await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} grid")
+                            await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} grid map")
 
                         if ("TURN" in msg and "Awaiting public commands" in msg) or "[GRID]" in msg or "[ARENA CALL]" in msg or "[GRID PvP]" in msg:
                             asyncio.create_task(self.process_turn(msg))
