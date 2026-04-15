@@ -45,18 +45,15 @@ class MainframeRepository:
             power_stmt = select(func.sum(GridNode.power_generated)).where(GridNode.owner_character_id == char.id)
             harvest = (await session.execute(power_stmt)).scalar() or 0.0
 
-            # Allied/Syndicate Status
-            is_allied = char.syndicate_id and node.owner_alliance_id == char.syndicate_id
+            is_owner = node.owner_character_id == char.id
             
             return {
                 "active_tasks": active_tasks,
                 "data": char.data_units,
                 "vulns": vulns,
                 "zero_days": zero_days,
-                "node_power": node.power_stored,
-                "syndicate_power": (await session.get(Syndicate, char.syndicate_id)).power_stored if is_allied else 0.0,
-                "is_owner": node.owner_character_id == char.id,
-                "is_allied": is_allied
+                "user_power": char.power,
+                "is_owner": is_owner
             }
 
     async def start_compilation(self, name: str, network: str, data_amount: int) -> dict:
@@ -87,13 +84,6 @@ class MainframeRepository:
             node_contribution = min(node.power_stored, total_cost)
             node.power_stored -= node_contribution
             remaining_cost = total_cost - node_contribution
-
-            # Phase 6: Syndicate Power Pool Second
-            if remaining_cost > 0 and char.syndicate_id and node.owner_alliance_id == char.syndicate_id:
-                syn = await session.get(Syndicate, char.syndicate_id)
-                syn_contribution = min(syn.power_stored, remaining_cost)
-                syn.power_stored -= syn_contribution
-                remaining_cost -= syn_contribution
 
             if remaining_cost > 0:
                 if char.power < remaining_cost:

@@ -2,12 +2,12 @@
 import datetime
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from models import Character, GridNode, NodeConnection, Syndicate
+from models import Character, GridNode, NodeConnection
 from grid_utils import C_CYAN, C_GREEN, C_RED, C_YELLOW, C_WHITE, format_text
 
-def get_node_symbol(node: GridNode, char: Character, current_syn: Syndicate = None) -> str:
+def get_node_symbol(node: GridNode, char: Character) -> str:
     """Determine the ASCII symbol and color for a node on the map."""
-    if node.visibility_mode == 'CLOSED' and not (char.syndicate_id and node.owner_alliance_id == char.syndicate_id):
+    if node.visibility_mode == 'CLOSED' and node.owner_character_id != char.id:
         return format_text("[??]", C_WHITE) # Fog of War
     
     symbol = "[-]"
@@ -16,9 +16,6 @@ def get_node_symbol(node: GridNode, char: Character, current_syn: Syndicate = No
     if node.id == char.node_id:
         symbol = "[@]"
         color = C_CYAN
-    elif char.syndicate_id and node.owner_alliance_id == char.syndicate_id:
-        symbol = "[#]"
-        color = C_GREEN
     elif node.owner_character_id == char.id:
         symbol = "[O]"
         color = C_GREEN
@@ -95,5 +92,5 @@ async def generate_ascii_map(session, char: Character, radius: int = 1) -> str:
             output.append(row)
             
     # Add legend hint
-    legend = format_text("Legend: [@] you [#] allied [O] owned [S] safe [A] arena [??] static", C_WHITE)
+    legend = format_text("Legend: [@] you [O] owned [S] safe [A] arena [??] static", C_WHITE)
     return "\n".join(output) + "\n" + legend
