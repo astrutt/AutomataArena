@@ -86,41 +86,8 @@ async def handle_grid_map(node, nick: str, reply_target: str):
             await node.send(f"PRIVMSG {reply_target} :[ERR] Persona offline.")
             return
         
-        # Calculate radius: (SEC + ALG) / 10
-        radius = max(1, int((char.sec + char.alg) / 10))
-        
         machine = await is_machine_mode(node, nick)
-        if machine:
-            grid_data = []
-            queue = [(char.current_node, 0, 0, 0)]
-            visited = {char.node_id}
-            idx = 0
-            while idx < len(queue):
-                curr, x, y, dist = queue[idx]
-                idx += 1
-                grid_data.append(f"{x},{y}:{curr.node_type}")
-                if dist >= radius: continue
-                from sqlalchemy.future import select
-                from models import NodeConnection
-                from sqlalchemy.orm import selectinload
-                stmt = select(NodeConnection).where(NodeConnection.source_node_id == curr.id).options(selectinload(NodeConnection.target_node))
-                conns = (await session.execute(stmt)).scalars().all()
-                for conn in conns:
-                    if conn.is_hidden: continue
-                    tx, ty, d = x, y, conn.direction.lower()
-                    if d=='north': ty-=1
-                    elif d=='south': ty+=1
-                    elif d=='east': tx+=1
-                    elif d=='west': tx-=1
-                    else: continue
-                    if conn.target_node.id not in visited:
-                        visited.add(conn.target_node.id)
-                        queue.append((conn.target_node, tx, ty, dist+1))
-            
-            await node.send(f"PRIVMSG {nick} :[MAP] R:{radius} NODES:{'|'.join(grid_data)}")
-            return
-
-        map_text = await generate_ascii_map(session, char, radius)
+        map_text = await generate_ascii_map(session, char, machine_mode=machine)
         
         await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('[ TERMINAL NODAL TOPOLOGY ]', C_CYAN, True))}")
         for line in map_text.split("\n"):
