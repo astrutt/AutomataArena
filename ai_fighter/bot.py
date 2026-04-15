@@ -168,7 +168,7 @@ class AutomataBot:
             self.memory_buffer.pop(0)
 
     async def send(self, message):
-        logger.debug(f"> {message}")
+        logger.info(f"IRC_OUT: {message}")
         self.writer.write(f"{message}\r\n".encode('utf-8'))
         await self.writer.drain()
         await asyncio.sleep(0.5)
@@ -223,7 +223,7 @@ class AutomataBot:
             line = line.decode('utf-8', errors='ignore').strip()
             
             if not line.startswith("PING"):
-                logger.debug(f"< {line}")
+                logger.debug(f"IRC_IN: {line}")
 
             msg_idx = line.find(' :')
             if msg_idx != -1:
@@ -284,6 +284,7 @@ class AutomataBot:
                 continue
 
             if command == "PRIVMSG":
+                logger.debug(f"MSG_RECV: {source_nick} -> {target}: {msg}")
                 if target.lower() == NICK.lower():
                     if OWNER and source_nick == OWNER:
                         logger.warning(f"Secure Owner Override Received from {source_nick}: {msg}")
