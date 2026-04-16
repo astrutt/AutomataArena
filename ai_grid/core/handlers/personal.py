@@ -99,14 +99,31 @@ async def handle_tasks_view(node, nickname: str, reply_target: str):
     if tasks.get("completed"): await node.send(f"PRIVMSG {reply_target} :🏆 " + format_text("All Tasks Completed! Bonus Paid.", C_YELLOW))
 
 async def handle_options(node, nickname: str, args: list, reply_target: str):
-    VALID = { "output": ("output_mode", {"human": "human", "machine": "machine"}), "tutorial": ("tutorial_mode", {"on": True, "off": False}), "reminders": ("reminders", {"on": True, "off": False}), "autosell": ("auto_sell_trash", {"on": True, "off": False}) }
+    VALID = { 
+        "output": ("output_mode", {"human": "human", "machine": "machine"}), 
+        "tutorial": ("tutorial_mode", {"on": True, "off": False}), 
+        "reminders": ("reminders", {"on": True, "off": False}), 
+        "autosell": ("auto_sell_trash", {"on": True, "off": False}),
+        "msgtype": ("msgtype", {"notice": "NOTICE", "privmsg": "PRIVMSG"})
+    }
     prefs = await node.db.get_prefs(nickname, node.net_name)
+    
+    # Sync cache on every view to ensure GridNode knows the current preference
+    if 'msgtype' in prefs:
+        node.user_msgtype_cache[nickname.lower()] = prefs['msgtype']
+
     machine = prefs.get('output_mode', 'human') == 'machine'
     if not args:
         if machine: await node.send(f"PRIVMSG {nickname} :[PREFS] {' '.join(f'{k}:{v}' for k,v in prefs.items())}")
         else:
             await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('=== [ACCOUNT OPTIONS] ===', C_CYAN, bold=True))}")
-            labels = {"output_mode": "Output Mode", "tutorial_mode": "Tutorial Tips", "reminders": "Reminders", "auto_sell_trash": "Auto-Sell Trash"}
+            labels = {
+                "output_mode": "Output Mode", 
+                "tutorial_mode": "Tutorial Tips", 
+                "reminders": "Reminders", 
+                "auto_sell_trash": "Auto-Sell Trash",
+                "msgtype": "Message Type"
+            }
             for k, l in labels.items():
                 v = prefs.get(k)
                 await node.send(f"PRIVMSG {reply_target} :{build_banner(f'{l}: {format_text(str(v), C_GREEN if v else C_RED)} ')}")
@@ -123,10 +140,17 @@ async def handle_options(node, nickname: str, args: list, reply_target: str):
     if v not in val_map:
         await node.send(f"PRIVMSG {reply_target} :[ERR] Invalid value '{v}'.")
         return
-    saved = await node.db.set_pref(nickname, node.net_name, key, val_map[v])
+    
+    saved_val = val_map[v]
+    saved = await node.db.set_pref(nickname, node.net_name, key, saved_val)
     if not saved:
         await node.send(f"PRIVMSG {reply_target} :[ERR] Could not save setting.")
         return
+    
+    # Update cache immediately on change
+    if s == "msgtype":
+        node.user_msgtype_cache[nickname.lower()] = saved_val
+
     confirm = f"[OPTIONS] {s} set to {v}."
     if machine or v == "machine": await node.send(f"PRIVMSG {nickname} :{confirm}")
     else: await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(confirm, C_GREEN))}")

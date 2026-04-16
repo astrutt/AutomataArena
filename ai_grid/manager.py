@@ -60,9 +60,10 @@ class GridNode:
         self.hype_counter = 0
         self.router = CommandRouter(self)
         
-        # Outbound Pacing (Per Network)
+        # Outbound Pacing & Pref Cache (Per Network)
         self.out_queue = asyncio.Queue()
         self.last_send_ts = 0
+        self.user_msgtype_cache = {} # nick.lower() -> "NOTICE" or "PRIVMSG"
         
         raw_admins = CONFIG.get('admins', [])
         if isinstance(raw_admins, str):
@@ -71,7 +72,17 @@ class GridNode:
         self.pending_encounters = {} 
 
     async def send(self, message: str, immediate: bool = False):
-        """Dispatches a message either immediately or via the paced queue."""
+        """Dispatches a message either immediately or via the paced queue, applying msgtype prefs."""
+        if message.startswith("PRIVMSG "):
+            parts = message.split(' ', 2)
+            if len(parts) >= 2:
+                target = parts[1]
+                # If target is a nick (not a #channel), check preference
+                if not target.startswith('#'):
+                    pref = self.user_msgtype_cache.get(target.lower(), "PRIVMSG")
+                    if pref == "NOTICE":
+                        message = f"NOTICE {target} {parts[2]}"
+
         if immediate:
             await self.irc.send(message)
         else:
