@@ -97,9 +97,9 @@ class CommandRouter:
             # --- PHASE 6: MAP ---
             elif verb == "spectator":
                 if args and args[0] == "stats":
-                    await handlers.handle_spectator_stats(self.node, source_nick, args[1:], reply_target)
+                    asyncio.create_task(handlers.handle_spectator_stats(self.node, source_nick, args[1:], reply_target))
                 else:
-                    await handlers.handle_spectator_view(self.node, source_nick, args, reply_target)
+                    asyncio.create_task(handlers.handle_spectator_view(self.node, source_nick, args, reply_target))
             elif verb == "help":
                 if args and args[0] == "grid": await handlers.handle_grid_help(self.node, source_nick, reply_target)
                 elif args and args[0] == "spectator": await handlers.handle_spectator_help(self.node, source_nick, reply_target)
