@@ -57,11 +57,11 @@ GRID_EXPANSION = [
 ]
 
 GRID_CONNECTIONS = [
-    ("The_Grid_Uplink", "Neural_Nexus",   "north"), ("Neural_Nexus",   "The_Grid_Uplink", "south"),
+    ("UpLink", "Neural_Nexus",   "north"), ("Neural_Nexus",   "UpLink", "south"),
     ("Neural_Nexus",    "Memory_Heap",    "north"), ("Memory_Heap",    "Neural_Nexus",    "south"),
     ("Memory_Heap",     "Kernel_Deep",    "north"), ("Kernel_Deep",    "Memory_Heap",     "south"),
     ("Kernel_Deep",     "Null_Space",     "north"), ("Null_Space",     "Kernel_Deep",     "south"),
-    ("The_Grid_Uplink", "Shadow_Sector",  "west"),  ("Shadow_Sector",  "The_Grid_Uplink", "east"),
+    ("UpLink", "Shadow_Sector",  "west"),  ("Shadow_Sector",  "UpLink", "east"),
     ("Shadow_Sector",   "Void_Sector",    "west"),  ("Void_Sector",    "Shadow_Sector",   "east"),
     ("Void_Sector",     "Stack_Overflow", "west"),  ("Stack_Overflow", "Void_Sector",     "east"),
     ("The_CPU_Socket",  "Cache_Cluster",  "east"),  ("Cache_Cluster",  "The_CPU_Socket",  "west"),

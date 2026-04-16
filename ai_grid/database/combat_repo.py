@@ -112,7 +112,7 @@ class CombatRepository:
                 result["credits_lost"] = round(penalty, 2)
 
                 uplink = (await session.execute(
-                    select(GridNode).where(GridNode.name == "The_Grid_Uplink")
+                    select(GridNode).where(GridNode.name == "UpLink")
                 )).scalars().first()
                 if uplink:
                     char.node_id = uplink.id
@@ -163,7 +163,7 @@ class CombatRepository:
                 target.credits -= looted
                 attacker.credits += looted
                 
-                uplink = (await session.execute(select(GridNode).where(GridNode.name == "The_Grid_Uplink"))).scalars().first()
+                uplink = (await session.execute(select(GridNode).where(GridNode.name == "UpLink"))).scalars().first()
                 if uplink: target.node_id = uplink.id
                 target.current_hp = target.ram * 5 
                 

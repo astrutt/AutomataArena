@@ -161,7 +161,7 @@ class PlayerRepository:
                     logger.warning(f"Registration failed: Fighter '{name}' already exists.")
                     return None
             
-            stmt_node = select(GridNode).where(GridNode.name == "The_Grid_Uplink")
+            stmt_node = select(GridNode).where(GridNode.name == "UpLink")
             result = await session.execute(stmt_node)
             node = result.scalars().first()
                 

@@ -42,7 +42,7 @@ class ArenaDB:
         
         async with self.async_session() as session:
             # 1. Initialize Nodes
-            uplink = GridNode(name="The_Grid_Uplink", description="The central nexus. A safezone where new connections manifest.", node_type="safezone")
+            uplink = GridNode(name="UpLink", description="The central nexus. A safezone where new connections manifest.", node_type="safezone")
             arena_node = GridNode(name="The_Arena", description="The main fighting grounds. Blood and RAM are spilled here.", node_type="arena")
             wilderness = GridNode(name="The_CPU_Socket", description="A vast wasteland of processing power. Danger lurks.", node_type="wilderness")
             black_market = GridNode(name="Black_Market_Port", description="Shadowy merchants peddle encrypted wares here.", node_type="merchant")
@@ -121,8 +121,8 @@ class ArenaDB:
         issues = []
         async with self.async_session() as session:
             # 1. Check Uplink
-            uplink = (await session.execute(select(GridNode).where(GridNode.name == "The_Grid_Uplink"))).scalars().first()
-            if not uplink: issues.append("[CRITICAL] The_Grid_Uplink node is missing.")
+            uplink = (await session.execute(select(GridNode).where(GridNode.name == "UpLink"))).scalars().first()
+            if not uplink: issues.append("[CRITICAL] UpLink node is missing.")
             
             # 2. Check Item Templates
             items = (await session.execute(select(ItemTemplate))).scalars().all()
@@ -141,11 +141,11 @@ class ArenaDB:
         """Self-heal core data and connections."""
         logger.info("Executing database self-repair...")
         await self.seed_grid_expansion()
-        # Ensure at least The_Grid_Uplink exists
+        # Ensure at least UpLink exists
         async with self.async_session() as session:
-            uplink = (await session.execute(select(GridNode).where(GridNode.name == "The_Grid_Uplink"))).scalars().first()
+            uplink = (await session.execute(select(GridNode).where(GridNode.name == "UpLink"))).scalars().first()
             if not uplink:
-                session.add(GridNode(name="The_Grid_Uplink", description="Central nexus.", node_type="safezone"))
+                session.add(GridNode(name="UpLink", description="Central nexus.", node_type="safezone"))
                 await session.commit()
                 logger.info("Restored missing central nexus (Uplink).")
         logger.info("Repair sequence finished.")
@@ -215,6 +215,7 @@ class ArenaDB:
     async def hack_node(self, name, network): return await self.grid.hack_node(name, network)
     async def tick_grid_power(self): return await self.grid.tick_grid_power()
     async def get_grid_telemetry(self): return await self.grid.get_grid_telemetry()
+    async def rename_node(self, old, new): return await self.grid.rename_node(old, new)
 
     async def list_shop_items(self): return await self.economy.list_shop_items()
     async def award_credits_bulk(self, payouts, network): return await self.economy.award_credits_bulk(payouts, network)

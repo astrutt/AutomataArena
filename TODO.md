@@ -44,6 +44,7 @@ This document tracks active or upcoming, near-term tasks for AutomataArena.
 - [ ] **Dynamic Combat Flavor Text** via LLM
 - [ ] **Spectator item drops** / interaction
 - [ ] **Interactive Spectators** (In-IRC gambling/drops)
+- [ ] **Community Rebranding** (Players/Spectators pay credits to rename nodes)
 
 ## 🛡️ Phase 7: Spectator & Infrastructure Overhaul (Completed)
 - [x] **IdleRPG Spectator Ranks** (Ghost to Grid Sentinel)

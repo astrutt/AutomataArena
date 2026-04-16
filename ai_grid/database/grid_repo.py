@@ -435,3 +435,28 @@ class GridRepository:
                 "total_generation": total_gen,
                 "claimed_percent": (len(claimed_nodes) / total_count * 100) if total_count > 0 else 0
             }
+    async def rename_node(self, old_name: str, new_name: str) -> tuple[bool, str]:
+        """Admin-only: Renames a node. Subject to 11-char limit."""
+        if len(new_name) > 11:
+            return False, f"Name length violation: {len(new_name)}/11 characters max."
+            
+        async with self.async_session() as session:
+            # 1. Check if source exists
+            node = (await session.execute(
+                select(GridNode).where(GridNode.name == old_name)
+            )).scalars().first()
+            if not node:
+                return False, f"Target node '{old_name}' not found."
+                
+            # 2. Check for collisions
+            exists = (await session.execute(
+                select(GridNode).where(GridNode.name == new_name)
+            )).scalars().first()
+            if exists:
+                return False, f"Collision detected: Node '{new_name}' already exists."
+                
+            # 3. Rename
+            node.name = new_name
+            await session.commit()
+            logger.info(f"GRID_RENAME: {old_name} -> {new_name}")
+            return True, f"Operation successful: {old_name} rebranded to {new_name}."

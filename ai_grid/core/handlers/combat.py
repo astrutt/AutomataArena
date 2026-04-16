@@ -53,10 +53,10 @@ async def resolve_mob(node, nick: str, reply_target: str):
             await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(result['task_reward'], C_CYAN), tags=['SIGACT', nick])}")
     else:
         if machine:
-            await node.send(f"PRIVMSG {nick} :[MOB] RESULT:LOSS CRED:-{result['credits_lost']} EJECTED:The_Grid_Uplink")
+            await node.send(f"PRIVMSG {nick} :[MOB] RESULT:LOSS CRED:-{result['credits_lost']} EJECTED:UpLink")
         else:
             loss_credits = result['credits_lost']
-            msg = format_text(f"💀 {enc['mob_name']} overwhelmed you! Lost {loss_credits:.2f}c. Ejected to The_Grid_Uplink.", C_RED)
+            msg = format_text(f"💀 {enc['mob_name']} overwhelmed you! Lost {loss_credits:.2f}c. Ejected to UpLink.", C_RED)
             await node.send(f"PRIVMSG {reply_target} :{tag_msg(msg, tags=['COMBAT', nick])}")
 
 async def handle_pvp_command(node, nickname: str, reply_target: str, action: str, target_name: str):

@@ -1,7 +1,7 @@
-# handlers/admin.py - System & Admin Handlers
 import asyncio
 import logging
 import time
+import shlex
 from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 
 logger = logging.getLogger("manager")
@@ -55,6 +55,19 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
     elif verb == "broadcast":
         msg = format_text(f"[SYSADMIN OVERRIDE] {' '.join(args)}", C_YELLOW, True)
         await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(msg, tags=['SIGACT'])}")
+    elif verb == "grid":
+        # Handle !a admin grid rename <old> <new>
+        full_args = shlex.split(" ".join(args))
+        if len(full_args) >= 3 and full_args[0].lower() == "rename":
+            old_name, new_name = full_args[1], full_args[2]
+            success, feedback = await node.db.rename_node(old_name, new_name)
+            tag = "SIGINT" if success else "OSINT"
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(feedback, tags=[tag])}")
+            if success:
+                announcement = format_text(f"NODE REBRANDED: {old_name} is now known as {new_name}.", C_CYAN, True)
+                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(announcement, tags=['SIGACT'])}")
+        else:
+            await node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {node.prefix} admin grid rename <old> <new>")
     elif verb in ["shutdown", "stop"]:
         await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text('MAINFRAME SHUTDOWN INITIATED BY ADMIN.', C_RED, True), tags=['SIGACT'])}")
         if node.active_engine: node.active_engine.active = False
