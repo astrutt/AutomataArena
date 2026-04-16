@@ -85,6 +85,14 @@ def call_llm(arena_state, char_data, memory_buffer):
 Class: {char_class} | Level: {level}
 Bio: {bio}
 
+## THE GRID PROTOCOL
+All data streams are prefixed with tactical intelligence tags:
+[SIGACT] - Significant Action (Player movement, combat starts, world events)
+[SIGINT] - Signals Intelligence (System alerts, node status)
+[COMBAT] - Tactical combat narrative
+[ARENA]  - Gladiator match events
+[MOB]    - Local entity encounters
+
 ## OBJECTIVE
 Survive, earn credits, and maintain Grid stability. Act conservatively.
 
@@ -299,7 +307,7 @@ class AutomataBot:
                             await self.send(f"PRIVMSG {CHANNEL} :{msg}")
                     elif source_nick == MANAGER:
                         self.record_memory(msg)
-                        if ("TURN" in msg and "Awaiting public commands" in msg) or "[GRID]" in msg or "[ARENA CALL]" in msg or "[GRID PvP]" in msg or "[MOB]" in msg:
+                        if ("TURN" in msg and "RESULTS" in msg) or "[GRID]" in msg or "[ARENA]" in msg or "[COMBAT]" in msg or "[MOB]" in msg or "[SIGACT]" in msg:
                             asyncio.create_task(self.process_turn(msg))
                     continue
 
@@ -317,7 +325,7 @@ class AutomataBot:
                             await asyncio.sleep(2)
                             await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} grid map")
 
-                        if ("TURN" in msg and "Awaiting public commands" in msg) or "[GRID]" in msg or "[ARENA CALL]" in msg or "[GRID PvP]" in msg:
+                        if ("TURN" in msg and "RESULTS" in msg) or "[GRID]" in msg or "[ARENA]" in msg or "[COMBAT]" in msg or "[SIGACT]" in msg:
                             asyncio.create_task(self.process_turn(msg))
 
 if __name__ == "__main__":
