@@ -54,6 +54,7 @@ ICONS = {
     'SIGINT': '📡',
     'GEOINT': '🛰️',
     'HUMINT': '🕵️',
+    'AI-INT': '🤖',
     'RUMINT': '👁️',
     'OSINT': '📜',
     'COMBAT': '⚔️',
@@ -63,8 +64,24 @@ ICONS = {
     'CROSS-GRID': '🌐',
     'Default': '⚙️',
     'Item': '📦',
-    'Heal': '💉'
+    'Heal': '💉',
+    # Attribute Icons
+    'CPU': '🧮',
+    'RAM': '💾',
+    'BND': '⚡',
+    'SEC': '🛡️',
+    'ALG': '🧠',
+    # Economy & Territory
+    'POWER': '🔋',
+    'CREDITS': '💳',
+    'TERRITORY': '🏰'
 }
+
+def calculate_elo_change(winner_elo: int, loser_elo: int, k_factor: int = 32) -> int:
+    """Calculates the Elo rating change for a match."""
+    expected_winner = 1 / (1 + 10 ** ((loser_elo - winner_elo) / 400))
+    # Return rounded delta for the winner
+    return round(k_factor * (1 - expected_winner))
 
 def format_text(text: str, color_code: str = None, bold: bool = False, is_machine: bool = False) -> str:
     """

@@ -70,16 +70,26 @@ async def handle_info_view(node, nickname: str, args: list, reply_target: str):
             xn = f['level'] * 1000
             await node.send(f"PRIVMSG {nickname} :[INFO] NAME:{f['name']} RACE:{f['race']} CLASS:{f['char_class']} LVL:{f['level']} XP:{f['xp']}/{xn} ELO:{f['elo']} HP:{f.get('current_hp','?')} CRED:{f['credits']:.0f}c CPU:{f['cpu']} RAM:{f['ram']} BND:{f['bnd']} SEC:{f['sec']} ALG:{f['alg']} W:{f['wins']} L:{f['losses']}")
         else:
+            # Determine target's intel tag based on their output preference
+            target_prefs = await node.db.get_prefs(target, node.net_name)
+            intel_tag = "AI-INT" if target_prefs.get('output_mode') == 'machine' else "HUMINT"
+            
             xn = f['level'] * 1000
             hdr = f"[CHARACTER FILE] {f['name']} - {f['race']} {f['char_class']}"
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(hdr, C_CYAN, bold=True), tags=['HUMINT', f['name']], is_machine=machine)}")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(hdr, C_CYAN, bold=True), tags=[intel_tag, f['name']], is_machine=machine)}")
             cred_val = f['credits']
-            stats_msg = f"Lvl {f['level']} | XP: {f['xp']}/{xn} | Elo: {f['elo']} | Credits: {cred_val:.2f}c"
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(stats_msg, C_GREEN), tags=['HUMINT'], is_machine=machine)}")
-            attrs_msg = f"CPU:{f['cpu']} RAM:{f['ram']} BND:{f['bnd']} SEC:{f['sec']} ALG:{f['alg']}"
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(attrs_msg, C_YELLOW), tags=['HUMINT'], is_machine=machine)}")
+            stats_msg = f"Lvl {f['level']} | XP: {f['xp']}/{xn} | Elo: {f['elo']} | {ICONS['CREDITS']} {cred_val:.2f}c"
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(stats_msg, C_GREEN), tags=[intel_tag], is_machine=machine)}")
+            
+            # Territory & Mesh Power
+            mesh_msg = f"{ICONS['TERRITORY']} Territory: {f['territory_count']} | {ICONS['POWER']} Mesh Power: {f['mesh_power']:.0f} uP"
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(mesh_msg, C_CYAN), tags=[intel_tag], is_machine=machine)}")
+            
+            attrs_msg = f"{ICONS['CPU']}CPU:{f['cpu']} {ICONS['RAM']}RAM:{f['ram']} {ICONS['BND']}BND:{f['bnd']} {ICONS['SEC']}SEC:{f['sec']} {ICONS['ALG']}ALG:{f['alg']}"
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(attrs_msg, C_YELLOW), tags=[intel_tag], is_machine=machine)}")
+            
             wl_msg = f"Wins: {f['wins']} / Losses: {f['losses']}"
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(wl_msg, C_YELLOW), tags=['HUMINT'], is_machine=machine)}")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(wl_msg, C_YELLOW), tags=[intel_tag], is_machine=machine)}")
 
 async def handle_tasks_view(node, nickname: str, reply_target: str):
     tasks_json = await node.db.get_daily_tasks(nickname, node.net_name)

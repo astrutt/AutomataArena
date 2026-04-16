@@ -209,6 +209,16 @@ class PlayerRepository:
             
             result = await session.execute(stmt)
             char = result.scalars().first()
+            
+            territory_count, mesh_power = 0, 0
+            if char:
+                # Territory aggregation
+                t_stmt = select(func.count(GridNode.id), func.sum(GridNode.power_stored)).where(GridNode.owner_character_id == char.id)
+                t_res = await session.execute(t_stmt)
+                territory_count, mesh_power = t_res.first()
+                territory_count = territory_count or 0
+                mesh_power = mesh_power or 0.0
+
             if char:
                 inv = [item.template.name for item in char.inventory] if char.inventory else []
                 return {
@@ -236,7 +246,9 @@ class PlayerRepository:
                     'current_hp': char.current_hp,
                     'max_hp': char.ram * 5,
                     'data_units': char.data_units,
-                    'pending_stat_points': char.pending_stat_points
+                    'pending_stat_points': char.pending_stat_points,
+                    'territory_count': territory_count,
+                    'mesh_power': mesh_power
                 }
             return None
 

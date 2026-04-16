@@ -6,6 +6,7 @@ from sqlalchemy import func
 from models import Character, Player, NetworkAlias, GridNode, InventoryItem, ItemTemplate
 from .core import logger, MOB_ROSTER, LOOT_TABLE, CONFIG
 from .player_repo import increment_daily_task
+from grid_utils import calculate_elo_change
 
 class CombatRepository:
     def __init__(self, async_session):
@@ -26,21 +27,22 @@ class CombatRepository:
                 if c.name == winner_name: winner = c
                 if c.name == loser_name: loser = c
             
-            if winner:
+            if winner and loser:
+                delta = calculate_elo_change(winner.elo, loser.elo)
                 winner.wins += 1
-                winner.elo += 15
+                winner.elo += delta
                 winner.xp += 50
                 winner.credits += 100
+                
+                loser.losses += 1
+                loser.elo = max(0, loser.elo - delta)
+                loser.xp += 10
                 
                 xp_threshold = winner.level * 1000
                 if winner.xp >= xp_threshold:
                     winner.xp -= xp_threshold
                     winner.level += 1
                     winner.cpu += 1
-            if loser:
-                loser.losses += 1
-                loser.elo = max(0, loser.elo - 15)
-                loser.xp += 10
             
             await session.commit()
 
