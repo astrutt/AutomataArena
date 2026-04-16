@@ -1,6 +1,6 @@
 # handlers/economy.py - Economy & Marketplace Handlers
 import logging
-from grid_utils import format_text, build_banner, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from .base import is_machine_mode
 
 logger = logging.getLogger("manager")
@@ -15,22 +15,22 @@ async def handle_shop_view(node, nickname: str, reply_target: str):
         parts = " ".join(f"{i['name']}:{i['cost']}c" for i in items)
         await node.send(f"PRIVMSG {nickname} :[SHOP] ITEMS:{parts}")
         return
-    await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('[ BLACK MARKET WARES ]', C_CYAN, bold=True))}")
+    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[ BLACK MARKET WARES ]', C_CYAN, bold=True), tags=['ECONOMY'], is_machine=machine)}")
     for i in items:
         line = f"{i['name']} ({i['type']}) - {i['cost']}c"
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(line, C_GREEN))}")
-    await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'To buy, travel to a Merchant node and type {node.prefix} buy <item>.', C_YELLOW))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(line, C_GREEN), tags=['ECONOMY'], is_machine=machine)}")
+    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'To buy, travel to a Merchant node and type {node.prefix} buy <item>.', C_YELLOW), tags=['ECONOMY'], is_machine=machine)}")
 
 async def handle_merchant_tx(node, nickname: str, verb: str, item_name: str, reply_target: str):
     result, msg = await node.db.process_transaction(nickname, node.net_name, verb, item_name)
     banner = format_text(msg, C_GREEN if result else C_RED)
     if reply_target.startswith(('#', '&', '+', '!')):
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(banner)}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(banner, tags=['SIGACT', nickname])}")
     else:
         await node.send(f"PRIVMSG {reply_target} :{msg}")
     if result:
         act = "purchased" if verb == "buy" else "liquidated"
-        await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(f'[SIGACT] {nickname} {act} equipment on the Black Market.', C_CYAN))}")
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'{nickname} {act} equipment on the Black Market.', C_CYAN), tags=['SIGACT'])}")
 
 async def handle_auction(node, nick: str, args: list, reply_target: str):
     """DarkNet Auction sub-commands: list, sell, bid."""
@@ -42,7 +42,7 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
     if sub == "list":
         listings = await node.db.list_active_auctions()
         if not listings:
-            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('[DARKNET] The auction house is currently empty.', C_CYAN))}")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[DARKNET] The auction house is currently empty.', C_CYAN), tags=['ECONOMY'])}")
             return
         
         machine = await is_machine_mode(node, nick)
@@ -51,10 +51,10 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
             await node.send(f"PRIVMSG {nick} :[AUCTION] LIST:{parts}")
             return
 
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('[ GLOBAL DARKNET AUCTIONS ]', C_CYAN, True))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[ GLOBAL DARKNET AUCTIONS ]', C_CYAN, True), tags=['ECONOMY'], is_machine=machine)}")
         for l in listings:
             line = f"#{l['id']} | {l['item']} | Seller: {l['seller']} | Bid: {l['current_bid']}c | {l['high_bidder']} | Ends: {l['ends_in_min']}m"
-            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(line, C_GREEN))}")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(line, C_GREEN), tags=['ECONOMY'], is_machine=machine)}")
             
     elif sub == "sell" and len(args) >= 3:
         # !a auction sell <item> <start_bid>
@@ -63,7 +63,7 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
         except: start_bid = 100
         
         success, msg = await node.db.create_auction(nick, node.net_name, item_name, start_bid, 1440)
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(msg, C_GREEN if success else C_RED))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(msg, C_GREEN if success else C_RED), tags=['SIGACT', nick])}")
         
     elif sub == "bid" and len(args) >= 3:
         # !a auction bid <id> <amount>
@@ -75,7 +75,7 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
             return
             
         success, msg = await node.db.bid_on_auction(nick, node.net_name, aid, amt)
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(msg, C_GREEN if success else C_RED))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(msg, C_GREEN if success else C_RED), tags=['SIGACT', nick])}")
     else:
         await node.send(f"PRIVMSG {reply_target} :Invalid auction command. Try: list, sell <item> <bid>, or bid <id> <amount>.")
 
@@ -92,8 +92,8 @@ async def handle_market_view(node, nickname: str, reply_target: str):
         await node.send(f"PRIVMSG {nickname} :[MARKET] MULTS:{parts}")
         return
         
-    await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('[ GLOBAL MARKET CONDITIONS ]', C_CYAN, True))}")
+    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[ GLOBAL MARKET CONDITIONS ]', C_CYAN, True), tags=['ECONOMY'], is_machine=machine)}")
     for itype, mult in status.items():
         trend = "↑ INFLATION" if mult > 1.0 else ("↓ DEFLATION" if mult < 1.0 else "→ STABLE")
         color = C_RED if mult > 1.0 else (C_GREEN if mult < 1.0 else C_YELLOW)
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'{itype.upper()}: {mult:.2f}x | {trend}', color))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'{itype.upper()}: {mult:.2f}x | {trend}', color), tags=['ECONOMY'], is_machine=machine)}")

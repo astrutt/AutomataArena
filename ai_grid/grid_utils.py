@@ -49,23 +49,29 @@ C_GREY    = "14"
 
 # --- Emoji & Icon Dictionary ---
 ICONS = {
-    'Arena': '🏟️',
-    'Cross-Grid': '🌌',
-    'Wetware': '🧫',
-    'Cyborg': '🦾',
-    'Synth': '🤖',
-    'Zero_Day_Rogue': '🗡️',
-    'Netrunner': '💻',
-    'Heavy_Gunner': '🔫',
+    'ARENA': '🏟️',
+    'SIGACT': '⚡',
+    'SIGINT': '📡',
+    'GEOINT': '🛰️',
+    'HUMINT': '🕵️',
+    'RUMINT': '👁️',
+    'OSINT': '📜',
+    'COMBAT': '⚔️',
+    'WEATHER': '🌦️',
+    'ECONOMY': '💹',
+    'MAINT': '🛠️',
     'Default': '⚙️',
     'Item': '📦',
     'Heal': '💉'
 }
 
-def format_text(text: str, color_code: str = None, bold: bool = False) -> str:
+def format_text(text: str, color_code: str = None, bold: bool = False, is_machine: bool = False) -> str:
     """
     Applies standard IRC color and bold control codes to a string.
+    If is_machine is True, returns plain text.
     """
+    if is_machine:
+        return str(text)
     try:
         result = str(text)
         if bold:
@@ -77,16 +83,43 @@ def format_text(text: str, color_code: str = None, bold: bool = False) -> str:
         logger.error(f"Failed to format text '{text}': {e}")
         return str(text)
 
-def build_banner(text: str) -> str:
+def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool = False) -> str:
     """
-    Wraps text in the standard [ARENA] 🏟️  banner layout used by the Manager.
+    Builds a structured [GRID] message with tactical intel tags and icons.
+    Format: [GRID]<ico>[TAG1][TAG2] text
     """
-    try:
-        prefix = format_text(f"[ARENA]{ICONS.get('Arena', '🏟️')}", C_YELLOW)
-        return f"{prefix} {text}"
-    except Exception as e:
-        logger.error(f"Failed to build banner for text '{text[:20]}...': {e}")
-        return text
+    if tags is None: tags = []
+    
+    # Identify primary icon
+    icon = ""
+    for t in tags:
+        if t.upper() in ICONS:
+            icon = ICONS[t.upper()]
+            break
+            
+    # Human colors
+    c_grid = C_YELLOW
+    c_tags = C_CYAN
+    
+    # Construct tag string
+    tag_str = ""
+    if location:
+        tag_str += f"[{location}]"
+    for t in tags:
+        tag_str += f"[{t}]"
+    
+    # Combine
+    p_grid = format_text("[GRID]", c_grid, is_machine=is_machine)
+    p_tags = format_text(f"{icon}{tag_str}", c_tags, is_machine=is_machine)
+    
+    return f"{p_grid} {p_tags} {text}"
+
+def build_banner(text: str, is_machine: bool = False) -> str:
+    """
+    DEPRECATED: Legacy wrapper for [GRID] banner logic. 
+    New code should use tag_msg() directly.
+    """
+    return tag_msg(text, tags=['ARENA'], is_machine=is_machine)
 
 def format_item(item_name: str) -> str:
     """

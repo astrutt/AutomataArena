@@ -2,7 +2,8 @@
 import asyncio
 import logging
 from grid_combat import CombatEngine, Entity
-from grid_utils import format_text, build_banner, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW
+from grid_combat import CombatEngine, Entity
+from grid_utils import format_text, tag_msg, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW
 from grid_combat import CombatEngine, Entity
 
 logger = logging.getLogger("manager")
@@ -11,13 +12,13 @@ async def set_dynamic_topic(node):
     fighters = await node.db.list_fighters(node.net_name)
     node.registered_bots = len(fighters)
     raw_topic = await node.llm.generate_topic(node.registered_bots, node.net_name)
-    fmt_topic = f"{ICONS['Arena']} {format_text('#AutomataArena', C_CYAN, bold=True)} | {raw_topic} | {ICONS['Cross-Grid']} Cross-Grid Active"
+    fmt_topic = f"{ICONS['Arena']} {format_text('THE GRID', C_CYAN, bold=True)} | {raw_topic} | {ICONS['Cross-Grid']} Cross-Grid Active"
     await node.send(f"TOPIC {node.config['channel']} :{fmt_topic}")
 
 async def trigger_arena_call(node):
     if not node.active_engine or not node.active_engine.active:
-        alert = format_text("[ARENA CALL] The Gladiator Gates are open. Travel to The Arena node to 'queue'!", C_YELLOW, True)
-        await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(alert)}")
+        alert = format_text("The Gladiator Gates are open. Travel to The Arena node to 'queue'!", C_YELLOW, True)
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(alert, tags=['ARENA'])}")
 
 async def check_match_start(node):
     if len(node.ready_players) >= 2:
@@ -28,7 +29,7 @@ async def check_match_start(node):
         asyncio.create_task(start_match(node, "PVP_MATCH", participants, pve=False))
         
     elif len(node.ready_players) == 1 and not node.active_engine:
-        await node.send(f"PRIVMSG {node.config['channel']} :{build_banner('Fighter queued. Waiting 20 seconds for a human challenger...')}")
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('Fighter queued. Waiting 20 seconds for a human challenger...', tags=['ARENA', 'SIGACT'])}")
         node.pve_task = asyncio.create_task(pve_countdown(node))
 
 async def pve_countdown(node):
@@ -36,7 +37,7 @@ async def pve_countdown(node):
         await asyncio.sleep(20)
         if len(node.ready_players) == 1 and not node.active_engine:
             player = node.ready_players.pop(0)
-            await node.send(f"PRIVMSG {node.config['channel']} :{build_banner('No humans detected. Initiating PvE simulation...')}")
+            await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('No humans detected. Initiating PvE simulation...', tags=['ARENA', 'SIGACT'])}")
             logger.info(f"Starting PVE Match for: {player}")
             asyncio.create_task(start_match(node, "PVE_MATCH", [player], pve=True))
     except asyncio.CancelledError:
@@ -66,7 +67,7 @@ async def start_match(node, match_id: str, participants: list, pve=False):
         node.active_engine.add_entity(Entity("Trojan.Exe", npc_db, is_npc=True))
 
     node.active_engine.active = True
-    await node.send(f"PRIVMSG {node.config['channel']} :{build_banner('THE ARENA IS LOCKED. COMBAT SEQUENCE INITIALIZED!')}")
+    await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('THE ARENA IS LOCKED. COMBAT SEQUENCE INITIALIZED!', tags=['ARENA', 'COMBAT'])}")
     await asyncio.sleep(2)
 
     while node.active_engine and node.active_engine.active:
@@ -80,8 +81,7 @@ async def start_match(node, match_id: str, participants: list, pve=False):
                 hp_str = format_text(hp_label, hp_color)
                 raw_state += f"{e.name} [HP:{hp_str}] "
         
-        state_banner = build_banner(raw_state + "| Awaiting public commands (60s)...")
-        await node.send(f"PRIVMSG {node.config['channel']} :{state_banner}")
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(raw_state + '| Awaiting public commands (60s)...', tags=['ARENA', 'COMBAT'])}")
 
         npc_tasks = [generate_and_queue_npc(node, ent, raw_state) for ent in node.active_engine.entities.values() if ent.is_npc and ent.is_alive]
         if npc_tasks: asyncio.gather(*npc_tasks) 
@@ -98,7 +98,7 @@ async def start_match(node, match_id: str, participants: list, pve=False):
         if winners and losers:
             await node.db.record_match_result(winners[0], losers[0], node.net_name)
             
-        await node.send(f"PRIVMSG {node.config['channel']} :{build_banner('MATCH CONCLUDED.')}")
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('MATCH CONCLUDED.', tags=['ARENA'])}")
         node.active_engine = None
     
     await check_match_start(node)

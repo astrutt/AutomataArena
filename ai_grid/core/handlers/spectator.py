@@ -2,7 +2,7 @@
 import time
 import logging
 import datetime
-from grid_utils import format_text, build_banner, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from grid_utils import format_text, tag_msg, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from .base import is_machine_mode
 
 logger = logging.getLogger("manager")
@@ -25,15 +25,15 @@ async def handle_spectator_view(node, nickname: str, args: list, reply_target: s
         await node.send(f"PRIVMSG {nickname} :[SPECTATOR] SESSION_IDLE_MINS:{idle_mins:.1f} SESSION_MSGS:{chat_lines} RATIO:{chat_lines/(max(1, idle_mins/60)):.2f}")
     else:
         hdr = f"=== [SPECTATOR SESSION: {nickname}] ==="
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(hdr, C_CYAN, bold=True))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(hdr, C_CYAN, bold=True), tags=['HUMINT', nickname])}")
         
         status = "IDLING" if chat_lines == 0 else "PARTICIPATING"
         ratio = chat_lines / max(1, idle_mins / 60.0)
         
         msg = f"Status: {status} | Ratio: {ratio:.2f} msg/hr | Uplink Time: {idle_mins:.1f}m"
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(msg, C_GREEN))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(msg, C_GREEN), tags=['HUMINT', nickname])}")
         msg2 = f"Accumulated session data: {chat_lines} messages processed."
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(msg2, C_YELLOW))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(msg2, C_YELLOW), tags=['HUMINT', nickname])}")
 
 async def handle_spectator_stats(node, nickname: str, args: list, reply_target: str):
     """Shows persistent historical stats, rank, and credits."""
@@ -49,20 +49,20 @@ async def handle_spectator_stats(node, nickname: str, args: list, reply_target: 
         await node.send(f"PRIVMSG {nickname} :[STATS] NAME:{stats['name']} RANK:{stats['rank']} CRED:{stats['credits']:.2f} IDLE_HRS:{stats['idle_hours']} MSGS:{stats['chat_total']} RATIO:{stats['ratio']} SEEN:{stats['last_seen']}")
     else:
         hdr = f"[SPECTATOR ARCHIVE] {stats['name']} - {stats['rank']}"
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(hdr, C_CYAN, bold=True))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(hdr, C_CYAN, bold=True), tags=['OSINT', stats['name']])}")
         
         main_stats = f"Credits: {stats['credits']:.2f}c | Lifetime Messages: {stats['chat_total']}"
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(main_stats, C_GREEN))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(main_stats, C_GREEN), tags=['OSINT', stats['name']])}")
         
         activity = f"Total Idle Time: {stats['idle_hours']}h | Activity Ratio: {stats['ratio']} msg/hr"
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(activity, C_YELLOW))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(activity, C_YELLOW), tags=['OSINT', stats['name']])}")
         
         footer = f"Last Presence Detected: {stats['last_seen']}"
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(footer, C_WHITE))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(footer, C_WHITE), tags=['OSINT', stats['name']])}")
 
 async def handle_spectator_help(node, nickname: str, reply_target: str):
     """Documentation for spectator mechanics."""
-    await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('=== [SPECTATOR COMMANDS] ===', C_CYAN, bold=True))}")
+    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('=== [SPECTATOR COMMANDS] ===', C_CYAN, bold=True), tags=['OSINT'])}")
     help_lines = [
         f"{node.prefix} spectator        - View current session activity.",
         f"{node.prefix} spectator stats  - View persistent global stats and Rank.",
@@ -71,4 +71,4 @@ async def handle_spectator_help(node, nickname: str, reply_target: str):
         "Rewards: Earn credits and rank progress by idling. Active chatting provides large bonuses."
     ]
     for line in help_lines:
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(line, C_YELLOW))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(line, C_YELLOW), tags=['OSINT'])}")

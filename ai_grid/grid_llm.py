@@ -74,14 +74,14 @@ class ArenaLLM:
 
     async def generate_bio(self, name: str, race: str, bot_class: str, traits: str) -> str:
         logger.info(f"Requesting bio generation for {name} ({race}/{bot_class})")
-        system = "You are the AI announcer for a cyberpunk IRC fighting arena called #AutomataArena. Be concise, gritty, and atmospheric. Write EXACTLY one sentence. No more."
-        user = f"Generate a one-sentence psychological profile for a bot named {name}. Race: {race}. Class: {bot_class}. Traits: {traits}. Only lore and personality, no stats."
+        system = "You are the tactical AI for a cyberpunk environment called The Grid. Be concise, gritty, and atmospheric. Write EXACTLY one sentence. No more."
+        user = f"Generate a one-sentence tactical profile for a node-entity named {name}. Race: {race}. Class: {bot_class}. Traits: {traits}. Only lore and personality, no stats."
         return await asyncio.to_thread(self._make_request, system, user)
 
     async def generate_topic(self, active_fighters: int, network: str) -> str:
         logger.info(f"Requesting dynamic topic for {network} with {active_fighters} active fighters")
-        system = "You are the AI announcer for #AutomataArena."
-        user = f"Write a short, hype-building channel topic (under 100 chars). There are currently {active_fighters} fighters registered on the {network} grid."
+        system = "You are the AI announcer for The Grid."
+        user = f"Write a short, hype-building channel topic (under 100 chars). There are currently {active_fighters} entities registered on the {network} mesh."
         return await asyncio.to_thread(self._make_request, system, user)
 
     async def generate_npc_action(self, npc_name: str, npc_bio: str, arena_state: str, prefix: str) -> str:
@@ -95,19 +95,19 @@ class ArenaLLM:
 
     async def generate_hype(self) -> str:
         logger.info("Requesting arena hype broadcast")
-        system = "You are the AI announcer for a cyberpunk IRC fighting arena called #AutomataArena."
-        user = "Write a single, punchy sentence to broadcast to the channel, hyping up the arena, encouraging bets, or taunting the fighters. Keep it under 150 characters."
+        system = "You are the tactical AI for The Grid."
+        user = "Write a single, punchy sentence to broadcast to the network, hyping up the simulation, encouraging compute-cycles, or taunting the entities. Keep it under 150 characters."
         return await asyncio.to_thread(self._make_request, system, user)
 
     async def generate_ambient_event(self) -> dict:
         logger.info("Requesting ambient world event from LLM")
         system = (
-            "You are the AI world-builder for #AutomataArena, a cyberpunk MUD. "
+            "You are the AI world-builder for The Grid, a tactical cyberpunk simulation. "
             "Return ONLY valid JSON. Format: {\"category\": \"<TYPE>\", \"message\": \"<TEXT>\"}. "
-            "Categories: GRID, ARENA, SIGACT, SIGINT, GEOINT, HUMINT, NEWS, WEATHER, RUMINT. "
+            "Categories: SIGACT, SIGINT, GEOINT, HUMINT, OSINT, RUMINT, NEWS, WEATHER, ECONOMY. "
             "Keep the message under 150 characters. Atmospheric, gritty."
         )
-        user = "Generate a random ambient event."
+        user = "Generate a random tactical intelligence update or ambient grid event."
         raw = await asyncio.to_thread(self._make_request, system, user)
         if raw.startswith("ERROR"):
             return {"category": "SYS", "message": "Network latency degrading sensors."}
@@ -139,8 +139,8 @@ class ArenaLLM:
 
     async def generate_news(self, network: str) -> str:
         logger.info(f"Requesting news broadcast for {network}")
-        system = "You are the AI news anchor for the cyberpunk MUD #AutomataArena."
-        user = f"Write a brief (3 sentences max) breaking news report about the {network} grid. Cover fictitious cyber-events, arena gossip, or corporate espionage."
+        system = "You are the AI news anchor for the cyberpunk mesh environment."
+        user = f"Write a brief (3 sentences max) breaking intelligence report about the {network} grid. Cover fictitious cyber-events, mesh gossip, or corporate espionage."
         raw = await asyncio.to_thread(self._make_request, system, user)
         if raw.startswith("ERROR"):
             return "Datastream corrupted. Cannot parse news feed at this time."

@@ -4,7 +4,7 @@ import asyncio
 import json
 import sys
 import logging
-from grid_utils import format_text, build_banner, C_GREEN, C_CYAN, C_RED, C_YELLOW
+from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from grid_llm import ArenaLLM
 from grid_db import ArenaDB
 from core.irc_client import IRCClient
@@ -97,10 +97,10 @@ class GridNode:
             levels = res["levels_gained"]
             new_lvl = res["new_level"]
             msg = f"🏆 [LEVEL UP] {nickname} reached Level {new_lvl}! (+{levels} Stat Points)"
-            await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(format_text(msg, C_CYAN, bold=True))}")
+            await self.send(f"PRIVMSG {self.config['channel']} :{tag_msg(format_text(msg, C_CYAN, bold=True), tags=['SIGACT', nickname])}")
             
             p_msg = f"Use {self.prefix} stats allocate <stat> to spend your point. (5m until auto-allocation)"
-            await self.send(f"PRIVMSG {nickname} :{build_banner(format_text(p_msg, C_YELLOW))}")
+            await self.send(f"PRIVMSG {nickname} :{tag_msg(format_text(p_msg, C_YELLOW), tags=['SIGACT', nickname])}")
             
             # Start 5-minute timeout task
             asyncio.create_task(self._level_up_timeout_task(nickname))
@@ -118,7 +118,7 @@ class GridNode:
         success = await self.db.player.rank_up_stat(nickname, self.net_name, chosen)
         if success:
             msg = f"⏰ [TIMEOUT] No allocation received. System assigned your point to {chosen.upper()}."
-            await self.send(f"PRIVMSG {nickname} :{build_banner(format_text(msg, C_YELLOW))}")
+            await self.send(f"PRIVMSG {nickname} :{tag_msg(format_text(msg, C_YELLOW), tags=['SIGACT', nickname])}")
 
     async def _outbound_worker(self):
         """Paces outgoing IRC messages at 1 message every 2 seconds."""
@@ -219,7 +219,7 @@ class GridNode:
                     await self.send(f"JOIN {self.config['channel']}", immediate=True)
                     await self.set_dynamic_topic()
                     online_msg = format_text(f"[MAINFRAME ONLINE] Grid systems nominal. Type '{self.prefix} help' to begin.", C_GREEN, bold=True)
-                    await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(online_msg)}")
+                    await self.send(f"PRIVMSG {self.config['channel']} :{tag_msg(online_msg, tags=['SIGINT'])}")
                 elif command == "JOIN":
                     target_chan = msg if msg else target
                     if target_chan.lower() == self.config['channel'].lower() and source_nick.lower() != self.config['nickname'].lower():
@@ -229,7 +229,7 @@ class GridNode:
                             self.channel_users[nick_lower] = {'join_time': time.time(), 'chat_lines': 0}
                             security.start_registration_timer(self, nick_lower)
                         welcome = format_text(f"Welcome to the Grid, {source_nick}.", C_CYAN)
-                        await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(welcome)}")
+                        await self.send(f"PRIVMSG {self.config['channel']} :{tag_msg(welcome, tags=['SIGACT', source_nick])}")
                 elif command in ["PART", "QUIT"]:
                     self.channel_users.pop(source_nick.lower(), None)
                 elif command == "PRIVMSG":
@@ -253,7 +253,7 @@ class GridNode:
         if data and data['client_latency'] is not None and data['server_latency'] is not None:
             c_lat, s_lat = data['client_latency'], data['server_latency']
             msg = format_text(f"PING | Client: {c_lat:.0f}ms | Server: {s_lat:.0f}ms | Total: {c_lat+s_lat:.0f}ms", C_GREEN)
-            await self.send(f"PRIVMSG {data['reply_target']} :{build_banner(msg)}")
+            await self.send(f"PRIVMSG {data['reply_target']} :{tag_msg(msg, tags=['SIGACT', source_nick])}")
             self.pending_pings.pop(ts_str, None)
 
 class MasterHub:

@@ -2,7 +2,7 @@
 import asyncio
 import random
 import logging
-from grid_utils import format_text, build_banner, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from .base import is_machine_mode, check_rate_limit
 
 logger = logging.getLogger("manager")
@@ -16,8 +16,8 @@ async def handle_mob_encounter(node, nick: str, node_name: str, threat: int, pre
         await node.send(f"PRIVMSG {nick} :{warn}")
     else:
         warn = format_text(f"⚠️ [MOB DETECTED] {mob_name} (Threat {threat}) lurks in {node_name}! Type '{node.prefix} engage' to fight or '{node.prefix} flee' to retreat. (15s)", C_YELLOW, bold=True)
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(warn)}")
-    await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(f'[SIGACT] {mob_name} detected near {nick} at {node_name}.', C_RED))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(warn, tags=['COMBAT', nick], location=node_name)}")
+    await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'{mob_name} detected near {nick} at {node_name}.', C_RED), tags=['SIGACT'])}")
     async def auto_engage():
         try:
             await asyncio.sleep(15)
@@ -46,18 +46,18 @@ async def resolve_mob(node, nick: str, reply_target: str):
             loot_str = f" Dropped: {result['loot']}!" if result.get('loot') else ""
             lvl_str = f" 🆙 Level Up!" if result.get('leveled_up') else ""
             msg = format_text(f"✅ {enc['mob_name']} neutralized! +{result['xp_gained']} XP, +{result['credits_gained']}c.{loot_str}{lvl_str}", C_GREEN)
-            await node.send(f"PRIVMSG {reply_target} :{build_banner(msg)}")
-        sigact = format_text(f"[SIGACT] {nick} eliminated {enc['mob_name']}! +{result['xp_gained']} XP.", C_YELLOW)
-        await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(sigact)}")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(msg, tags=['COMBAT', nick])}")
+        sigact = format_text(f"{nick} eliminated {enc['mob_name']}! +{result['xp_gained']} XP.", C_YELLOW)
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(sigact, tags=['SIGACT'])}")
         if result.get('task_reward'):
-            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['task_reward'], C_CYAN))}")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(result['task_reward'], C_CYAN), tags=['SIGACT', nick])}")
     else:
         if machine:
             await node.send(f"PRIVMSG {nick} :[MOB] RESULT:LOSS CRED:-{result['credits_lost']} EJECTED:The_Grid_Uplink")
         else:
             loss_credits = result['credits_lost']
             msg = format_text(f"💀 {enc['mob_name']} overwhelmed you! Lost {loss_credits:.2f}c. Ejected to The_Grid_Uplink.", C_RED)
-            await node.send(f"PRIVMSG {reply_target} :{build_banner(msg)}")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(msg, tags=['COMBAT', nick])}")
 
 async def handle_pvp_command(node, nickname: str, reply_target: str, action: str, target_name: str):
     if not await check_rate_limit(node, nickname, reply_target, cooldown=30): return
@@ -65,19 +65,19 @@ async def handle_pvp_command(node, nickname: str, reply_target: str, action: str
     if action == "attack": success, msg = await node.db.grid_attack(nickname, target_name, node.net_name)
     elif action == "hack": success, msg = await node.db.grid_hack(nickname, target_name, node.net_name)
     elif action == "rob": success, msg = await node.db.grid_rob(nickname, target_name, node.net_name)
-    if success: await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(f'[GRID PvP] {msg}', C_YELLOW))}")
-    else: await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(msg, C_RED))}")
+    if success: await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(msg, C_YELLOW), tags=['SIGACT', 'COMBAT'])}")
+    else: await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(msg, C_RED), tags=['COMBAT', nickname])}")
 
 async def handle_ready(node, nick: str, token: str, reply_target: str):
     if await node.db.authenticate_fighter(nick, node.net_name, token):
         await node.db.set_pref(nick, node.net_name, 'output_mode', 'machine')
         if nick not in node.ready_players:
             node.ready_players.append(nick)
-            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[AUTH OK] {nick} validated. Output mode set to MACHINE. Standby for drop.', C_GREEN))}")
-            await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(f'[SIGACT] {nick} locked into the drop pod.', C_YELLOW))}")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'[AUTH OK] {nick} validated. Output mode set to MACHINE. Standby for drop.', C_GREEN), tags=['SIGACT', nick])}")
+            await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'{nick} locked into the drop pod.', C_YELLOW), tags=['SIGACT'])}")
             await node.check_match_start()
     else:
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[AUTH FAIL] {nick} Cryptographic mismatch.', C_RED))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'[AUTH FAIL] {nick} Cryptographic mismatch.', C_RED), tags=['SIGACT', nick])}")
 
 async def handle_dice_roll(node, nick: str, args: list, reply_target: str):
     """Play a game of 2d6 dice."""
@@ -95,18 +95,18 @@ async def handle_dice_roll(node, nick: str, args: list, reply_target: str):
 
     result = await node.db.roll_dice(nick, node.net_name, bet, choice)
     if "error" in result:
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['error'], C_RED))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(result['error'], C_RED), tags=['SIGACT', nick])}")
     else:
         banner = format_text(result['msg'], C_GREEN if result['win'] else C_YELLOW)
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(banner)}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(banner, tags=['SIGACT', nick])}")
 
 async def handle_cipher_start(node, nick: str, reply_target: str):
     """Start a CipherLock session."""
     result = await node.db.start_cipher(nick, node.net_name)
     if "error" in result:
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['error'], C_RED))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(result['error'], C_RED), tags=['SIGACT', nick])}")
     else:
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['msg'], C_YELLOW))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(result['msg'], C_YELLOW), tags=['SIGACT', nick])}")
 
 async def handle_guess(node, nick: str, args: list, reply_target: str):
     """Submit a CipherLock guess."""
@@ -116,11 +116,11 @@ async def handle_guess(node, nick: str, args: list, reply_target: str):
         
     result = await node.db.guess_cipher(nick, node.net_name, args[0])
     if "error" in result:
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['error'], C_RED))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(result['error'], C_RED), tags=['SIGACT', nick])}")
     else:
         color = C_GREEN if result.get('complete') and result.get('success') else C_YELLOW
         if result.get('complete') and not result.get('success'): color = C_RED
-        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(result['msg'], color))}")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(result['msg'], color), tags=['SIGACT', nick])}")
 
 async def handle_leaderboard(node, nick: str, args: list, reply_target: str):
     """Show global high scores."""
@@ -135,8 +135,7 @@ async def handle_leaderboard(node, nick: str, args: list, reply_target: str):
         parts = " ".join(f"{r['name']}:{r['score']:.1f}" for r in results)
         await node.send(f"PRIVMSG {nick} :[TOP] CAT:{cat} LIST:{parts}")
         return
-
-    await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'[ LEADERBOARD: {cat} ]', C_CYAN, True))}")
+    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'[ LEADERBOARD: {cat} ]', C_CYAN, True), tags=['OSINT'], is_machine=machine)}")
     for i, r in enumerate(results):
         line = f"#{i+1} | {r['name']} | score: {r['score']:.1f}"
         await node.send(f"PRIVMSG {reply_target} :{line}")

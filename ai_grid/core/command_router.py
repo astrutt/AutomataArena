@@ -3,7 +3,7 @@ import asyncio
 import logging
 import time
 from . import handlers
-from grid_utils import format_text, build_banner, C_CYAN, C_YELLOW, C_GREEN, C_RED
+from grid_utils import format_text, tag_msg, C_CYAN, C_YELLOW, C_GREEN, C_RED
 
 logger = logging.getLogger("manager")
 
@@ -122,7 +122,7 @@ class CommandRouter:
                     if machine: await self.node.send(f"PRIVMSG {source_nick} :[MOB] RESULT:FLED NODE:{prev or 'unknown'}")
                     else:
                         safe_loc = prev if prev else "safety"
-                        await self.node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'🏃 You fled back to {safe_loc}.', C_CYAN))}")
+                        await self.node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'🏃 You fled back to {safe_loc}.', C_CYAN), tags=['COMBAT', source_nick])}")
                 else: await self.node.send(f"PRIVMSG {reply_target} :[MOB] No encounter.")
 
             # 6. Arena
@@ -131,12 +131,12 @@ class CommandRouter:
                 if loc and loc['type'] == 'arena':
                     if source_nick not in self.node.match_queue:
                         self.node.match_queue.append(source_nick)
-                        sig = format_text(f"[SIGACT] {source_nick} stepped into the Gladiator Queue!", C_YELLOW)
+                        sig = format_text(f"{source_nick} stepped into the Gladiator Queue!", C_YELLOW)
                         reward = await self.node.db.player.complete_task(source_nick, self.node.net_name, "Queue in Arena")
                         if reward: sig += f"\n{reward}"
-                        await self.node.send(f"PRIVMSG {self.node.config['channel']} :{build_banner(sig)}")
-                    await self.node.send(f"PRIVMSG {reply_target} :{build_banner(f'{source_nick} queued. DM me: {prefix} ready <token>')}")
-                else: await self.node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'You must be in the Arena to queue.', C_RED))}")
+                        await self.node.send(f"PRIVMSG {self.node.config['channel']} :{tag_msg(sig, tags=['ARENA', 'SIGACT'])}")
+                    await self.node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{source_nick} queued. DM me: {prefix} ready <token>', tags=['ARENA', 'SIGACT', source_nick])}")
+                else: await self.node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'You must be in the Arena to queue.', C_RED), tags=['ARENA', 'SIGACT', source_nick])}")
             elif verb == "ready" and len(args) >= 1:
                 asyncio.create_task(handlers.handle_ready(self.node, source_nick, args[0], reply_target))
 
@@ -156,7 +156,7 @@ class CommandRouter:
                 asyncio.create_task(handlers.handle_news_view(self.node, source_nick, reply_target))
             elif verb == "version":
                 v = "[MODULES] manager: v1.5.0 | grid_db: v3.0.0 | core.handlers: v1.0.0"
-                await self.node.send(f"PRIVMSG {reply_target} :{build_banner(v)}")
+                await self.node.send(f"PRIVMSG {reply_target} :{tag_msg(v, tags=['SIGINT'])}")
             elif verb == "ping":
                 ts = str(time.time())
                 self.node.pending_pings[ts] = {'source': source_nick, 'reply_target': reply_target, 'start': float(ts), 'client_latency': None, 'server_latency': None}

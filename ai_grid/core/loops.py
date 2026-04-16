@@ -3,7 +3,7 @@ import asyncio
 import logging
 import time
 import random
-from grid_utils import format_text, build_banner, C_GREEN, C_CYAN, C_RED, C_YELLOW
+from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW
 
 logger = logging.getLogger("manager")
 
@@ -16,8 +16,7 @@ async def hype_loop(node):
             if not node.active_engine:
                 hype_msg = await node.llm.generate_hype()
                 if not hype_msg.startswith("ERROR"):
-                    alert = format_text(f"[ARENA BROADCAST] {hype_msg}", C_YELLOW, True)
-                    await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(alert)}")
+                    await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(hype_msg, C_YELLOW, True), tags=['RUMINT'])}")
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -32,9 +31,7 @@ async def ambient_event_loop(node):
                 event = await node.llm.generate_ambient_event()
                 cat = event.get('category', 'SYS').upper()
                 msg = event.get('message', '')
-                
-                alert = format_text(f"[{cat}] {msg}", C_CYAN, True)
-                await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(alert)}")
+                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(msg, C_CYAN, True), tags=[cat])}")
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -46,8 +43,8 @@ async def arena_call_loop(node):
         try:
             await asyncio.sleep(3600)  # 60 minute interval
             if not node.active_engine or not node.active_engine.active:
-                alert = format_text("[ARENA CALL] The Gladiator Gates are open. Travel to The Arena node to 'queue'!", C_YELLOW, True)
-                await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(alert)}")
+                alert = format_text("The Gladiator Gates are open. Travel to The Arena node to 'queue'!", C_YELLOW, True)
+                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(alert, tags=['ARENA'])}")
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -59,8 +56,8 @@ async def power_tick_loop(node):
         try:
             await asyncio.sleep(600)  # 10 minute interval
             await node.db.tick_grid_power()
-            msg = format_text("[GRID] Environmental Power levels restabilized based on organic loads.", C_CYAN)
-            await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(msg)}")
+            msg = format_text("Environmental Power levels restabilized based on organic loads.", C_CYAN)
+            await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(msg, tags=['MAINT'])}")
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -98,7 +95,7 @@ async def idle_payout_loop(node):
             if decayed > 0 or pruned > 0:
                 logger.info(f"Retention Policy Enforced: {decayed} decayed, {pruned} pruned.")
 
-            await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text('[ECONOMY] Hourly rewards distributed. Absence-based retention policy enforced.', C_GREEN))}")
+            await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text('Hourly rewards distributed. Absence-based retention policy enforced.', C_GREEN), tags=['ECONOMY'])}")
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -116,8 +113,7 @@ async def mainframe_loop(node):
                 # We only process notes for the current network in this loop instance
                 if note['network'].lower() == node.net_name.lower():
                     # Channel Alert
-                    alert = format_text(f"[MAINFRAME] Signal for {note['nickname']}: {note['msg']}", C_CYAN)
-                    await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(alert)}")
+                    await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(note['msg'], C_CYAN), tags=['SIGINT', note['nickname']])}")
                     
                     # MemoServ Integration (Global)
                     if CONFIG.get('mechanics', {}).get('mainframe', {}).get('memoserv_enabled', True):
@@ -142,8 +138,7 @@ async def auction_loop(node):
                 
                 # If the recipient is currently on THIS network, give them a live alert too
                 if note['network'].lower() == node.net_name.lower():
-                    alert = format_text(f"[DARKNET] {note['msg']}", C_YELLOW)
-                    await node.send(f"PRIVMSG {note['nickname']} :{build_banner(alert)}")
+                    await node.send(f"PRIVMSG {note['nickname']} :{tag_msg(format_text(note['msg'], C_YELLOW), tags=['ECONOMY', note['nickname']])}")
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -169,8 +164,7 @@ async def economic_ticker_loop(node):
             await node.db.update_market_rates(multipliers, news_text)
             
             # Broadcast news to the channel
-            banner = format_text("[MARKET TICKER] " + news_text, C_CYAN)
-            await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(banner)}")
+            await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(news_text, C_CYAN), tags=['ECONOMY'])}")
             
             await asyncio.sleep(3600)
         except asyncio.CancelledError:
@@ -205,8 +199,8 @@ async def hype_drop_loop(node):
                         
                         node.channel_users[nick]['chat_lines'] = 0 # Reset activity for this user
                     
-                    msg = format_text(f"[HYPE] The Grid resonates with your energy! Rewards dropped to: {', '.join(lucky)}", C_YELLOW, bold=True)
-                    await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(msg)}")
+                    msg = format_text(f"The Grid resonates with your energy! Rewards dropped to: {', '.join(lucky)}", C_YELLOW, bold=True)
+                    await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(msg, tags=['SIGACT'])}")
             
             node.hype_counter = 0 # Reset global counter
         except asyncio.CancelledError:

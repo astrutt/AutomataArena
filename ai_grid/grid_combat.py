@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import sys
-from grid_utils import format_text, build_banner, format_item, C_RED, C_GREEN, C_YELLOW, C_CYAN
+from grid_utils import format_text, tag_msg, format_item, C_RED, C_GREEN, C_YELLOW, C_CYAN
 
 # --- Config & Logging Setup ---
 try:
@@ -191,7 +191,7 @@ class CombatEngine:
 
             actor.command_queued = None
 
-        await self.send_callback(build_banner(f"TURN {self.turn} RESULTS:"))
+        await self.send_callback(tag_msg(f"TURN {self.turn} RESULTS:", tags=['ARENA', 'COMBAT']))
         for line in narrative_log:
             await self.send_callback(f"⚔️ {line}")
             await asyncio.sleep(0.5) 
