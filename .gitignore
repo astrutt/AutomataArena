@@ -1,4 +1,7 @@
 # .gitignore
+venv/
+node_modules/
+.venv/
 config.ini
 config.json
 character.json

@@ -1,3 +1,4 @@
-sqlalchemy[asyncio]>=2.0.0
-aiosqlite>=0.19.0
-greenlet>=3.0.0
+# Automata Arena - Core Dependencies
+sqlalchemy[asyncio]>=2.0.38
+aiosqlite>=0.20.0
+greenlet>=3.1.1
