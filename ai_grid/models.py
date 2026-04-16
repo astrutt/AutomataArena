@@ -211,9 +211,9 @@ class GlobalMarket(Base):
     __tablename__ = 'global_market'
     
     id = Column(Integer, primary_key=True)
-    category = Column(String, nullable=False)
+    item_type = Column(String, nullable=False) # junk, hack, weapon, gear
     multiplier = Column(Float, default=1.0)
-    last_news = Column(String)
+    last_event = Column(String) # For flavor news
 
 class Memo(Base):
     __tablename__ = 'memos'
@@ -229,6 +229,3 @@ class Memo(Base):
     recipient = relationship("Character", foreign_keys=[recipient_id])
     sender = relationship("Character", foreign_keys=[sender_id])
     source_node = relationship("GridNode")
-    item_type = Column(String, nullable=False) # junk, hack, weapon, gear
-    multiplier = Column(Float, default=1.0)
-    last_event = Column(String) # For flavor news
