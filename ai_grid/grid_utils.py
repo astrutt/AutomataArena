@@ -60,6 +60,7 @@ ICONS = {
     'WEATHER': '🌦️',
     'ECONOMY': '💹',
     'MAINT': '🛠️',
+    'CROSS-GRID': '🌐',
     'Default': '⚙️',
     'Item': '📦',
     'Heal': '💉'

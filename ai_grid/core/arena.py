@@ -12,7 +12,7 @@ async def set_dynamic_topic(node):
     fighters = await node.db.list_fighters(node.net_name)
     node.registered_bots = len(fighters)
     raw_topic = await node.llm.generate_topic(node.registered_bots, node.net_name)
-    fmt_topic = f"{ICONS['Arena']} {format_text('THE GRID', C_CYAN, bold=True)} | {raw_topic} | {ICONS['Cross-Grid']} Cross-Grid Active"
+    fmt_topic = f"{ICONS['ARENA']} {format_text('THE GRID', C_CYAN, bold=True)} | {raw_topic} | {ICONS['CROSS-GRID']} Cross-Grid Active"
     await node.send(f"TOPIC {node.config['channel']} :{fmt_topic}")
 
 async def trigger_arena_call(node):
