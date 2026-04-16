@@ -164,7 +164,7 @@ class CommandRouter:
                 await self.node.send(f"PING {ts}")
 
             # 8. Admin Commands
-            elif verb in ["topic", "broadcast", "shutdown", "stop", "status", "battlestop", "battlestart"]:
+            elif verb in ["admin", "topic", "broadcast", "shutdown", "status"]:
                 if is_admin: asyncio.create_task(handlers.handle_admin_command(self.node, source_nick, verb, args, reply_target))
                 else: await self.node.send(f"PRIVMSG {reply_target} :[ERR] Access Denied.")
 

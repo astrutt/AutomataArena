@@ -8,6 +8,22 @@ logger = logging.getLogger("manager")
 
 async def handle_admin_command(node, admin_nick: str, verb: str, args: list, reply_target: str):
     logger.warning(f"SYSADMIN OVERRIDE: {admin_nick} -> {verb}")
+    
+    # Handle !a admin <subcommand>
+    if verb == "admin":
+        if not args:
+            # Landing Page
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[ MAINFRAME ADMIN OVERRIDES ]', C_CYAN, True), tags=['SIGINT'])}")
+            cmds = ["status", "version", "topic", "broadcast <msg>", "grid rename <old> <new>", "battlestart/stop", "stop", "shutdown"]
+            cmd_str = ", ".join([f"{node.prefix} admin {c}" for c in cmds])
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(cmd_str, C_WHITE), tags=['SIGINT'])}")
+            return
+        
+        # Shift args
+        verb = args[0].lower()
+        args = args[1:]
+        logger.info(f"Sub-command routing: {verb} {args}")
+
     if verb == "version":
         # System Versions
         await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[ SYSTEM VERSION ARCHIVE ]', C_CYAN, True), tags=['SIGINT'])}")
