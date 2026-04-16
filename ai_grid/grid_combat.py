@@ -54,6 +54,7 @@ class Entity:
         self.zone = "The_CPU_Socket" 
         self.status = "Normal" 
         self.command_queued = None
+        self.last_attacker_name = None
         logger.debug(f"Entity '{self.name}' initialized. HP: {self.hp}, CPU: {self.cpu}, NPC: {self.is_npc}")
 
     @property
@@ -202,6 +203,16 @@ class CombatEngine:
         return is_active
 
     def _execute_attack(self, attacker: Entity, target_name: str, is_ranged: bool):
+        # --- SMART TARGETING LOGIC ---
+        if not target_name:
+            if attacker.last_attacker_name and attacker.last_attacker_name in self.entities:
+                target_name = attacker.last_attacker_name
+            else:
+                # Default to the first alive enemy
+                potential_targets = [e.name for e in self.entities.values() if e.name != attacker.name and e.is_alive]
+                if potential_targets:
+                    target_name = potential_targets[0]
+
         if not target_name or target_name not in self.entities: 
             return f"{attacker.name} swung at thin air."
         
@@ -209,11 +220,19 @@ class CombatEngine:
         if not target.is_alive: 
             return f"{attacker.name} attacks {target.name}'s offline chassis. Disrespectful."
 
-        evade_chance = target.bnd * 2
-        if target.status == "Evading": evade_chance += 40
+        # Track last attacker for retaliation / smart targeting
+        target.last_attacker_name = attacker.name
+
+        # --- REBALANCED EVASION LOGIC ---
+        # Lowered multiplier from 2.0 to 1.5 to increase hit frequency
+        evade_chance = target.bnd * 1.5
+        if target.status == "Evading": evade_chance += 30
+        
+        # Hit Rate Floor (Maximum 25% evasion for standard attacks)
+        evade_chance = min(25.0, evade_chance) if target.status != "Evading" else min(60.0, evade_chance)
         
         evade_roll = random.randint(1, 100)
-        logger.debug(f"Evade Check: {target.name} rolled {evade_roll} against required {evade_chance}%")
+        logger.debug(f"Evade Check: {target.name} rolled {evade_roll} against capped {evade_chance}%")
         
         if evade_roll <= evade_chance: 
             return f"{attacker.name}'s attack was {format_text('EVADED', C_YELLOW)} by {target.name}!"

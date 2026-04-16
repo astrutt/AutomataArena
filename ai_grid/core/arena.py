@@ -61,7 +61,8 @@ async def start_match(node, match_id: str, participants: list, pve=False):
         node.active_engine.add_entity(Entity(name, db_stats))
 
     if pve:
-        npc_db = {'cpu': 6, 'ram': 8, 'bnd': 4, 'sec': 6, 'alg': 2, 'inventory': '["Malware_Blade"]', 'alignment': -100, 'bio': 'A feral, rogue malware process.'}
+        # Normalizing NPC stats for better starter game (RAM 8->6, SEC 6->5)
+        npc_db = {'cpu': 6, 'ram': 6, 'bnd': 4, 'sec': 5, 'alg': 2, 'inventory': '["Malware_Blade"]', 'alignment': -100, 'bio': 'A feral, rogue malware process.'}
         node.active_engine.add_entity(Entity("Trojan.Exe", npc_db, is_npc=True))
 
     node.active_engine.active = True
