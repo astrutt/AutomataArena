@@ -150,6 +150,8 @@ class CommandRouter:
                 asyncio.create_task(handlers.handle_tasks_view(self.node, source_nick, reply_target))
             elif verb == "options":
                 asyncio.create_task(handlers.handle_options(self.node, source_nick, args, reply_target))
+            elif verb == "stats":
+                asyncio.create_task(handlers.handle_stats(self.node, source_nick, args, reply_target))
             elif verb == "news":
                 asyncio.create_task(handlers.handle_news_view(self.node, source_nick, reply_target))
             elif verb == "version":

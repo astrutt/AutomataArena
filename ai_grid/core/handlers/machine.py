@@ -12,6 +12,7 @@ async def handle_powergen(node, nick: str, reply_target: str):
     await node.send(f"PRIVMSG {reply_target} :{build_banner(banner)}")
     if success:
         await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(f'[SIGACT] {nick} initiated an active power generation cycle.', C_CYAN))}")
+        await node.add_xp(nick, 3, reply_target)
 
 async def handle_training(node, nick: str, reply_target: str):
     if not await check_rate_limit(node, nick, reply_target, cooldown=60): return
@@ -20,6 +21,7 @@ async def handle_training(node, nick: str, reply_target: str):
     await node.send(f"PRIVMSG {reply_target} :{build_banner(banner)}")
     if success:
         await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(f'[SIGACT] {nick} completed a structural maintenance drill.', C_CYAN))}")
+        await node.add_xp(nick, 3, reply_target)
 
 async def handle_gibson_status(node, nick: str, reply_target: str):
     """View status of Gibson mainframe tasks."""

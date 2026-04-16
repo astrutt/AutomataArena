@@ -31,20 +31,59 @@ class PlayerRepository:
     async def set_pref(self, name: str, network: str, key: str, value) -> bool:
         async with self.async_session() as session:
             name_lower = name.lower()
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                func.lower(Character.name) == name_lower,
-                func.lower(NetworkAlias.nickname) == name_lower,
-                NetworkAlias.network_name == network
-            )
-            char = (await session.execute(stmt)).scalars().first()
-            if not char:
-                return False
-            try:
-                prefs = {**DEFAULT_PREFS, **json.loads(char.prefs or '{}')}
-            except Exception:
-                prefs = dict(DEFAULT_PREFS)
+            char = await self.get_character_by_nick(name, network, session)
+            if not char: return False
+            prefs = json.loads(char.prefs)
             prefs[key] = value
             char.prefs = json.dumps(prefs)
+            await session.commit()
+            return True
+
+    async def add_experience(self, name: str, network: str, amount: int) -> dict:
+        """Awards XP and handles level-ups. Returns leveling status."""
+        async with self.async_session() as session:
+            char = await self.get_character_by_nick(name, network, session)
+            if not char: return {"error": "Character not found"}
+            
+            char.xp += amount
+            levels_gained = 0
+            
+            while True:
+                xp_threshold = char.level * 1000
+                if char.xp >= xp_threshold:
+                    char.xp -= xp_threshold
+                    char.level += 1
+                    char.pending_stat_points += 1
+                    levels_gained += 1
+                else:
+                    break
+            
+            await session.commit()
+            return {
+                "new_xp": char.xp,
+                "new_level": char.level,
+                "levels_gained": levels_gained,
+                "pending_points": char.pending_stat_points,
+                "threshold": char.level * 1000
+            }
+
+    async def rank_up_stat(self, name: str, network: str, stat_name: str) -> bool:
+        """Manually allocates a pending stat point to a character."""
+        async with self.async_session() as session:
+            char = await self.get_character_by_nick(name, network, session)
+            if not char or char.pending_stat_points <= 0: return False
+            
+            stat_name = stat_name.lower()
+            if stat_name == "cpu": char.cpu += 1
+            elif stat_name == "ram": 
+                char.ram += 1
+                char.current_hp = char.ram * 5 # Recalculate HP
+            elif stat_name == "bnd": char.bnd += 1
+            elif stat_name == "sec": char.sec += 1
+            elif stat_name == "alg": char.alg += 1
+            else: return False
+            
+            char.pending_stat_points -= 1
             await session.commit()
             return True
 

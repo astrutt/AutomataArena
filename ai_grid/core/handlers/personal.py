@@ -166,6 +166,41 @@ async def handle_options(node, nickname: str, args: list, reply_target: str):
     if machine or v == "machine": await node.send(f"PRIVMSG {nickname} :{confirm}")
     else: await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(confirm, C_GREEN))}")
 
+async def handle_stats(node, nickname: str, args: list, reply_target: str):
+    """View and allocate stat points."""
+    if not args:
+        char = await node.db.get_fighter(nickname, node.net_name)
+        if not char: return
+        
+        await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'=== [ {nickname.upper()} - ATTRIBUTES ] ===', C_CYAN, bold=True))}")
+        stats = [
+            ("CPU", char['cpu'], "Kinetic Striking"),
+            ("RAM", char['ram'], "Health/Shelling"),
+            ("BND", char['bnd'], "Speed/Evasion"),
+            ("SEC", char['sec'], "Security/Mitigation"),
+            ("ALG", char['alg'], "Logical Capability")
+        ]
+        for name, val, desc in stats:
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(f'{format_text(name, C_YELLOW)}: {val} - {format_text(desc, C_WHITE)} ')}")
+        
+        if char['pending_stat_points'] > 0:
+            pending = char['pending_stat_points']
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'PENDING POINTS: {pending}', C_GREEN, bold=True))}")
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'Use {node.prefix} stats allocate <stat> to spend.', C_YELLOW))}")
+        return
+    
+    if args[0].lower() == "allocate":
+        if len(args) < 2:
+            await node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {node.prefix} stats allocate <cpu/ram/bnd/sec/alg>")
+            return
+        
+        stat = args[1].lower()
+        success = await node.db.player.rank_up_stat(nickname, node.net_name, stat)
+        if success:
+            await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(f'✔️ Point allocated to {stat.upper()}. Upgrade successful.', C_GREEN))}")
+        else:
+            await node.send(f"PRIVMSG {reply_target} :[ERR] Allocation failed. Verify you have pending points and a valid stat name.")
+
 async def handle_news_view(node, nickname: str, reply_target: str):
     await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text('[ ESTABLISHING SECURE UPLINK TO NEWS SERVER... ]', C_YELLOW))}")
     news_text = await node.llm.generate_news(node.net_name)

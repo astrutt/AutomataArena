@@ -113,6 +113,7 @@ class Character(Base):
     # Activity & Retention (IdleRPG)
     total_chat_messages = Column(Integer, default=0)
     total_idle_seconds = Column(Float, default=0.0)
+    pending_stat_points = Column(Integer, default=0)
     last_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -88,6 +88,38 @@ class GridNode:
         else:
             self.out_queue.put_nowait(message)
 
+    async def add_xp(self, nickname: str, amount: int, reply_target: str):
+        """Standard method to award XP and handle level-up interactions."""
+        res = await self.db.player.add_experience(nickname, self.net_name, amount)
+        if "error" in res: return
+        
+        if res.get("levels_gained", 0) > 0:
+            levels = res["levels_gained"]
+            new_lvl = res["new_level"]
+            msg = f"🏆 [LEVEL UP] {nickname} reached Level {new_lvl}! (+{levels} Stat Points)"
+            await self.send(f"PRIVMSG {self.config['channel']} :{build_banner(format_text(msg, C_CYAN, bold=True))}")
+            
+            p_msg = f"Use {self.prefix} stats allocate <stat> to spend your point. (5m until auto-allocation)"
+            await self.send(f"PRIVMSG {nickname} :{build_banner(format_text(p_msg, C_YELLOW))}")
+            
+            # Start 5-minute timeout task
+            asyncio.create_task(self._level_up_timeout_task(nickname))
+
+    async def _level_up_timeout_task(self, nickname: str):
+        """Wait 5 minutes and randomly allocate any remaining points."""
+        await asyncio.sleep(300)
+        char = await self.db.player.get_fighter(nickname, self.net_name)
+        if not char or char['pending_stat_points'] <= 0: return
+
+        import random
+        stats = ["cpu", "ram", "bnd", "sec", "alg"]
+        chosen = random.choice(stats)
+        
+        success = await self.db.player.rank_up_stat(nickname, self.net_name, chosen)
+        if success:
+            msg = f"⏰ [TIMEOUT] No allocation received. System assigned your point to {chosen.upper()}."
+            await self.send(f"PRIVMSG {nickname} :{build_banner(format_text(msg, C_YELLOW))}")
+
     async def _outbound_worker(self):
         """Paces outgoing IRC messages at 1 message every 2 seconds."""
         import time

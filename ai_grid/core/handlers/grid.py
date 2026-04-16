@@ -76,6 +76,10 @@ async def handle_node_explore(node, nick: str, reply_target: str):
     banner = format_text(result['msg'], C_GREEN if result['status'] == 'success' else C_YELLOW)
     await node.send(f"PRIVMSG {reply_target} :{build_banner(banner)}")
     
+    # Award XP: 5 for success, 2 for attempt
+    xp_reward = 5 if result['status'] == 'success' else 2
+    await node.add_xp(nick, xp_reward, reply_target)
+    
     if result.get("danger") == "GRID_BUG_SPAWN":
         # Manually trigger a mob encounter with a Level 0 Grid Bug
         loc = await node.db.get_location(nick, node.net_name)
@@ -114,6 +118,11 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
     await node.send(f"PRIVMSG {reply_target} :{build_banner(format_text(msg, C_GREEN if success else C_RED))}")
     if success and action in ["claim", "upgrade", "hack", "repair", "recharge"]:
         await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(f'[SIGACT] Grid Alert: {nickname} executed a territorial {action}!', C_YELLOW))}")
+        
+        # Award XP for successful Grid actions
+        xp_map = {"claim": 25, "upgrade": 15, "hack": 10, "repair": 5, "recharge": 2}
+        if action in xp_map:
+            await node.add_xp(nickname, xp_map[action], reply_target)
 
 async def handle_grid_loot(node, nick: str, reply_target: str):
     if not await check_rate_limit(node, nick, reply_target, cooldown=60): return
@@ -124,6 +133,7 @@ async def handle_grid_loot(node, nick: str, reply_target: str):
     
     if result['success']:
         await node.send(f"PRIVMSG {node.config['channel']} :{build_banner(format_text(result['sigact'], C_YELLOW, True))}")
+        await node.add_xp(nick, 10, reply_target)
 
 async def handle_grid_network_msg(node, nick: str, args: list, reply_target: str):
     if len(args) < 3:
