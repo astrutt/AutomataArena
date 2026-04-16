@@ -30,6 +30,8 @@ class CommandRouter:
             elif verb == "grid":
                 if args and args[0].lower() == "map":
                     asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target))
+                elif args and args[0].lower() == "claimed":
+                    asyncio.create_task(handlers.handle_grid_claimed(self.node, source_nick, args, reply_target))
                 else:
                     asyncio.create_task(handlers.handle_grid_view(self.node, source_nick, reply_target))
             elif verb == "move":

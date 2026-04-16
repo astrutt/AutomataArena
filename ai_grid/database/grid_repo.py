@@ -10,6 +10,20 @@ class GridRepository:
     def __init__(self, async_session):
         self.async_session = async_session
 
+    async def get_claimed_nodes(self, name: str, network: str) -> int:
+        """Returns the count of nodes owned by a character."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.network_name == network
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char: return 0
+            
+            count_stmt = select(func.count(GridNode.id)).where(GridNode.owner_character_id == char.id)
+            res = await session.execute(count_stmt)
+            return res.scalar() or 0
+
     async def get_location(self, name: str, network: str):
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(

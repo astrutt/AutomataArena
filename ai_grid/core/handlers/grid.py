@@ -155,3 +155,14 @@ async def handle_grid_network_msg(node, nick: str, args: list, reply_target: str
         await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'Packet successfully relayed to {target_net} node.', C_GREEN), tags=['SIGINT', nick])}")
     else:
         await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'Packet transmission failed: Network {target_net} is currently unreachable.', C_RED), tags=['SIGINT', nick])}")
+
+async def handle_grid_claimed(node, nickname: str, args: list, reply_target: str):
+    target = args[1] if len(args) > 1 else nickname
+    count = await node.db.grid.get_claimed_nodes(target, node.net_name)
+    
+    machine = await is_machine_mode(node, nickname)
+    if machine:
+        await node.send(f"PRIVMSG {nickname} :[GRID] CLAIMED_NODES:{count} TARGET:{target}")
+    else:
+        msg = f"Territorial Audit: {target} currently controls {count} Grid Nodes."
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(msg, C_CYAN), tags=['GEOINT'], location=target, is_machine=machine)}")
