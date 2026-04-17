@@ -39,7 +39,7 @@ async def resolve_mob(node, nick: str, reply_target: str):
     
     result = await node.db.resolve_mob_encounter(nick, node.net_name, enc['threat'])
     if 'error' in result:
-        await node.send(f"{tactical_cmd} {tactical_target} :[ERR] {result['error']}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(result['error'], C_RED), tags=['INFO', nick], nick=nick)}")
         return
     
     if result['won']:

@@ -62,6 +62,7 @@ ICONS = {
     'ECONOMY': '💹',
     'MAINT': '🛠️',
     'CROSS-GRID': '🌐',
+    'INFO': 'ℹ️',
     'Default': '⚙️',
     'Item': '📦',
     'Heal': '💉',
@@ -135,7 +136,10 @@ def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool
     
     # Combine
     p_grid = format_text("[GRID]", c_grid, is_machine=is_machine)
-    p_tags = format_text(f"{icon}{tag_str}", c_tags, is_machine=is_machine)
+    
+    # If machine mode, omit the unicode icon to keep parsing clean
+    final_tags = f"{icon}{tag_str}" if not is_machine else tag_str
+    p_tags = format_text(final_tags, c_tags, is_machine=is_machine)
     
     return f"{p_grid} {p_tags} {text}"
 

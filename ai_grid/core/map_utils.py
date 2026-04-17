@@ -192,5 +192,5 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
             
     # Add legend
     mode_str = "MACHINE" if machine_mode else "HUMAN"
-    legend = format_text(f"Mode: {mode_str} | Intel: {intel_level} | Radius: {radius}", C_WHITE)
+    legend = format_text(f"Map: {mode_str} | Intel: {intel_level} | Radius: {radius}", C_WHITE)
     return "\n".join(output) + "\n" + legend

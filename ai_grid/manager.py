@@ -233,7 +233,12 @@ class GridNode:
                         await self.send(f"PRIVMSG {self.config['channel']} :{tag_msg(welcome, tags=['SIGACT', source_nick])}")
                 elif command in ["PART", "QUIT"]:
                     self.channel_users.pop(source_nick.lower(), None)
+                elif command == "NOTICE":
+                    if target.lower() == self.config['nickname'].lower():
+                        logger.info(f"NOTICE_RECV [{self.net_name}]: {source_nick} -> {target}: {msg}")
                 elif command == "PRIVMSG":
+                    if target.lower() == self.config['nickname'].lower():
+                        logger.info(f"PRIVMSG_RECV [{self.net_name}]: {source_nick} -> {target}: {msg}")
                     if target.lower() == self.config['channel'].lower():
                         self.hype_counter += 1
                         nick_lower = source_nick.lower()

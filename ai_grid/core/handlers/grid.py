@@ -35,7 +35,7 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
         if msg == "System offline.":
             await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
         else:
-            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_RED), tags=['SIGACT', nick], nick=nick)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_RED), tags=['INFO', nick], nick=nick)}")
         await handle_grid_view(node, nick, tactical_target)
 
 async def handle_grid_view(node, nickname: str, reply_target: str):
@@ -125,7 +125,8 @@ async def handle_grid_map(node, nick: str, reply_target: str):
         machine, tactical_cmd = await is_machine_mode(node, nick), (await node.db.get_prefs(nick, node.net_name)).get('msg_type', 'privmsg').upper()
         map_text = await generate_ascii_map(session, char, machine_mode=machine)
         
-        await node.send(f"{tactical_cmd} {reply_target} :{tag_msg(format_text('[ TERMINAL NODAL TOPOLOGY ]', C_CYAN, True), tags=['GEOINT'], is_machine=machine, nick=nick)}")
+        banner = f"[{node.net_name}]"
+        await node.send(f"{tactical_cmd} {reply_target} :{tag_msg(format_text(banner, C_CYAN, True), tags=['GEOINT'], is_machine=machine, nick=nick)}")
         for line in map_text.split("\n"):
             await node.send(f"{tactical_cmd} {reply_target} :{tag_msg(line, tags=['GEOINT'], is_machine=machine, nick=nick)}")
 
@@ -326,3 +327,22 @@ async def handle_grid_claimed(node, nickname: str, args: list, reply_target: str
     else:
         msg = f"Territorial Audit: {target} currently controls {count} Grid Nodes."
         await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_CYAN), tags=['GEOINT'], location=target, is_machine=machine, nick=nickname)}")
+
+async def handle_grid_help(node, nick: str, reply_target: str):
+    """DeepNet briefing on Nodal Navigation and Topology."""
+    tactical_target, _, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
+    
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ GRID NAVIGATION BRIEFING ]', C_CYAN, True), tags=['OSINT'])}")
+    
+    cmds = {
+        "move <d>": "Hops character to a new node in the specified direction.",
+        "explore": "Scans the current Sector for hidden architecture or fragments.",
+        "map": "Generates topological visualization. Coverage scales with SEC+ALG.",
+        "claim": "Establish command over an Unclaimed node. (50u Power)",
+        "probe": "Deep architectural diagnostic of the local node."
+    }
+    
+    for cmd, desc in cmds.items():
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'{node.prefix} {cmd}', C_GREEN) + ' - ' + format_text(desc, C_WHITE), tags=['OSINT'])}")
+        
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('MAP INTEL: Radius scales by SEC+ALG. 20 (R2), 40 (R3-TACTICAL), 60 (R4-DEEP SCAN).', C_YELLOW), tags=['OSINT'])}")

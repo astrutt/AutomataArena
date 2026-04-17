@@ -60,6 +60,13 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
             await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('DESCRIPTION: ', C_YELLOW) + format_text(info['desc'], C_WHITE), tags=['OSINT'])}")
             syntax_str = f"{node.prefix} {info['syntax']}"
             await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('SYNTAX: ', C_YELLOW) + format_text(syntax_str, C_GREEN), tags=['OSINT'])}")
+            
+            if verb == "map":
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('INTEL SCALING: Radius scales with SEC+ALG stats.', C_YELLOW), tags=['OSINT'])}")
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(' - Radius 1: < 20 | Radius 2: 20-39', C_WHITE), tags=['OSINT'])}")
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(' - Radius 3 (TACTICAL): 40-59', C_WHITE), tags=['OSINT'])}")
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(' - Radius 4 (DEEP SCAN): 60+', C_WHITE), tags=['OSINT'])}")
+
             if 'cost' in info:
                 await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('COST: ', C_YELLOW) + format_text(info['cost'], C_RED), tags=['OSINT'])}")
             return

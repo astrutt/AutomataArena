@@ -121,7 +121,7 @@ class CommandRouter:
             elif verb == "engage":
                 if source_nick in self.node.pending_encounters:
                     asyncio.create_task(handlers.resolve_mob(self.node, source_nick, reply_target))
-                else: await self.node.send(f"PRIVMSG {reply_target} :[MOB] No active encounter.")
+                else: await self.node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('No enemy to engage.', C_RED), tags=['INFO', source_nick], nick=source_nick)}")
             elif verb == "flee":
                 enc = self.node.pending_encounters.pop(source_nick, None)
                 if enc:
@@ -133,7 +133,7 @@ class CommandRouter:
                     else:
                         safe_loc = prev if prev else "safety"
                         await self.node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'🏃 You fled back to {safe_loc}.', C_CYAN), tags=['COMBAT', source_nick])}")
-                else: await self.node.send(f"PRIVMSG {reply_target} :[MOB] No encounter.")
+                else: await self.node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('No active encounter to flee from.', C_RED), tags=['INFO', source_nick], nick=source_nick)}")
 
             # 6. Arena
             elif verb == "queue":

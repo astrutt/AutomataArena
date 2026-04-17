@@ -20,7 +20,8 @@ from .grid import (
     handle_grid_map,
     handle_grid_command,
     handle_grid_loot,
-    handle_grid_network_msg
+    handle_grid_network_msg,
+    handle_grid_help
 )
 from .economy import (
     handle_shop_view,
@@ -62,5 +63,6 @@ __all__ = [
     'handle_shop_view', 'handle_merchant_tx', 'handle_auction', 'handle_market_view',
     'handle_powergen', 'handle_training', 'handle_gibson_status', 'handle_gibson_compile', 'handle_gibson_assemble', 'handle_item_use',
     'handle_mob_encounter', 'resolve_mob', 'handle_pvp_command', 'handle_ready', 'handle_dice_roll', 'handle_cipher_start', 'handle_guess', 'handle_leaderboard',
-    'handle_admin_command', 'handle_spectator_view', 'handle_spectator_stats', 'handle_spectator_help'
+    'handle_admin_command', 'handle_spectator_view', 'handle_spectator_stats', 'handle_spectator_help',
+    'handle_grid_help'
 ]

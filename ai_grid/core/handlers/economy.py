@@ -31,7 +31,8 @@ async def handle_merchant_tx(node, nickname: str, verb: str, item_name: str, rep
         return
     banner = format_text(msg, C_GREEN if result else C_RED)
     if reply_target.startswith(('#', '&', '+', '!')):
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['SIGACT', nickname], nick=nickname)}")
+        tag = 'ECONOMY' if result else 'INFO'
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=[tag, nickname], nick=nickname)}")
     else:
         await node.send(f"{tactical_cmd} {tactical_target} :{msg}")
     

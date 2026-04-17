@@ -74,12 +74,12 @@ async def handle_gibson_compile(node, nick: str, args: list, reply_target: str):
     
     result = await node.db.start_compilation(nick, node.net_name, amount)
     if "error" in result:
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(result['error'], C_RED), tags=['SIGACT', nick])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(result['error'], C_RED), tags=['INFO', nick], nick=nick)}")
     else:
         banner = format_text(result['msg'], C_GREEN)
         await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['SIGACT', nick], nick=nick)}")
         usage = f"Power Consumed: {result['node_used']:.1f} (Node) | {result['char_used']:.1f} (Char)"
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(usage, C_YELLOW), tags=['SIGACT'], is_machine=False)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(usage, C_YELLOW), tags=['INFO', nick], is_machine=False, nick=nick)}")
         
         if machine:
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} initiated a data compilation sequence.', C_CYAN), tags=['SIGACT', nick], nick=nick)}")
@@ -90,12 +90,12 @@ async def handle_gibson_assemble(node, nick: str, reply_target: str):
     
     result = await node.db.start_assembly(nick, node.net_name)
     if "error" in result:
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(result['error'], C_RED), tags=['SIGACT', nick])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(result['error'], C_RED), tags=['INFO', nick], nick=nick)}")
     else:
         banner = format_text(result['msg'], C_GREEN)
         await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['SIGACT', nick], nick=nick)}")
         usage = f"Power Consumed: {result['node_used']:.1f} (Node) | {result['char_used']:.1f} (Char)"
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(usage, C_YELLOW), tags=['SIGACT'], is_machine=False)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(usage, C_YELLOW), tags=['INFO', nick], is_machine=False, nick=nick)}")
         
         if machine:
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} initiated a vulnerability assembly process.', C_CYAN), tags=['SIGACT', nick], nick=nick)}")
@@ -111,7 +111,7 @@ async def handle_item_use(node, nick: str, args: list, reply_target: str):
     
     result, msg = await node.db.use_item(nick, node.net_name, item_name)
     banner = format_text(msg, C_GREEN if result else C_RED)
-    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['SIGACT', nick], nick=nick)}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['INFO', nick], nick=nick)}")
     
     if result and machine:
         await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} executed an inventory payload: {item_name}.', C_CYAN), tags=['SIGACT', nick], nick=nick)}")

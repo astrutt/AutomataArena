@@ -286,10 +286,12 @@ class AutomataBot:
                 continue
 
             if command == "NOTICE" and target.lower() == NICK.lower():
+                logger.info(f"NOTICE_RECV: {source_nick} -> {target}: {msg}")
                 if source_nick == MANAGER:
                     if msg.startswith("[SYS_PAYLOAD]"):
                         payload_json = msg.replace("[SYS_PAYLOAD]", "").strip()
-                        logger.debug(f"Received Manager Payload: {payload_json}")
+                        logger.info(f"NOTICE_RECV: {source_nick} -> {target} [SYS_PAYLOAD]")
+                        logger.debug(f"Payload Content: {payload_json}")
                         try:
                             self.char_data = json.loads(payload_json)
                             save_character(self.char_data)
@@ -300,7 +302,10 @@ class AutomataBot:
                 continue
 
             if command == "PRIVMSG":
-                logger.debug(f"MSG_RECV: {source_nick} -> {target}: {msg}")
+                if target.lower() == NICK.lower():
+                    logger.info(f"PRIVMSG_RECV: {source_nick} -> {target}: {msg}")
+                else:
+                    logger.debug(f"MSG_RECV: {source_nick} -> {target}: {msg}")
                 if target.lower() == NICK.lower():
                     if OWNER and source_nick == OWNER:
                         logger.warning(f"Secure Owner Override Received from {source_nick}: {msg}")
