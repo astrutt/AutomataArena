@@ -50,14 +50,31 @@ async def generate_and_queue_npc(node, npc: Entity, state_msg: str):
         node.active_engine.queue_command(npc.name, action)
 
 async def start_match(node, match_id: str, participants: list, pve=False):
-    async def combat_channel_send(msg: str):
+    # Detect participant preferences for mirroring
+    machine_participants = []
+    for p in participants:
+        prefs = await node.db.get_prefs(p, node.net_name)
+        if prefs.get('output_mode') == 'machine':
+            machine_participants.append({
+                'nick': p,
+                'cmd': prefs.get('msg_type', 'PRIVMSG').upper()
+            })
+
+    async def combat_broadcast(msg: str):
+        # 1. Always send to Public Channel
         await node.send(f"PRIVMSG {node.config['channel']} :{msg}")
+        
+        # 2. Mirror to Machine-Mode Participants
+        for mp in machine_participants:
+            # We strip formatting/tags for the machine version if necessary, 
+            # but usually the callback msg already has tags.
+            await node.send(f"{mp['cmd']} {mp['nick']} :{msg}")
 
     for p in participants:
         if p in node.match_queue:
             node.match_queue.remove(p)
 
-    node.active_engine = CombatEngine(match_id, node.prefix, combat_channel_send)
+    node.active_engine = CombatEngine(match_id, node.prefix, combat_broadcast)
     for name in participants:
         db_stats = await node.db.get_fighter(name, node.net_name)
         node.active_engine.add_entity(Entity(name, db_stats))

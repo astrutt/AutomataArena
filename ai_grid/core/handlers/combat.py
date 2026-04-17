@@ -43,25 +43,31 @@ async def resolve_mob(node, nick: str, reply_target: str):
         return
     
     if result['won']:
+        loot_str = f" Dropped: {result['loot']}!" if result.get('loot') else ""
+        lvl_str = f" 🆙 Level Up!" if result.get('leveled_up') else ""
+        
         if machine:
+            # Tactical (PM/Notice)
             parts = f"[MOB] RESULT:WIN XP:{result['xp_gained']} CRED:+{result['credits_gained']}"
             if result.get('loot'): parts += f" LOOT:{result['loot']}"
             if result.get('leveled_up'): parts += " LEVELUP:true"
             await node.send(f"{tactical_cmd} {tactical_target} :{parts}")
+            
+            # Narrative (Channel)
+            narrative = format_text(f"{nick} neutralized {enc['mob_name']}! +{result['xp_gained']} XP, +{result['credits_gained']}c.{loot_str}{lvl_str}", C_YELLOW)
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(narrative, tags=['SIGACT'])}")
         else:
-            loot_str = f" Dropped: {result['loot']}!" if result.get('loot') else ""
-            lvl_str = f" 🆙 Level Up!" if result.get('leveled_up') else ""
+            # Human Mode: Standard aesthetic delivery
             msg = format_text(f"✅ {enc['mob_name']} neutralized! +{result['xp_gained']} XP, +{result['credits_gained']}c.{loot_str}{lvl_str}", C_GREEN)
             await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(msg, tags=['COMBAT', nick])}")
-        
-        sigact = format_text(f"{nick} eliminated {enc['mob_name']}! +{result['xp_gained']} XP.", C_YELLOW)
-        await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(sigact, tags=['SIGACT'])}")
         
         if result.get('task_reward'):
             await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(result['task_reward'], C_CYAN), tags=['SIGACT', nick])}")
     else:
         if machine:
             await node.send(f"{tactical_cmd} {tactical_target} :[MOB] RESULT:LOSS CRED:-{result['credits_lost']} EJECTED:UpLink")
+            narrative = format_text(f"{nick} was overwhelmed by {enc['mob_name']} and ejected to UpLink.", C_RED)
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(narrative, tags=['SIGACT'])}")
         else:
             loss_credits = result['credits_lost']
             msg = format_text(f"💀 {enc['mob_name']} overwhelmed you! Lost {loss_credits:.2f}c. Ejected to UpLink.", C_RED)
@@ -78,14 +84,25 @@ async def handle_pvp_command(node, nickname: str, reply_target: str, action: str
     elif action == "rob": success, msg, reward = await node.db.grid_rob(nickname, target_name, node.net_name)
     
     if success: 
-        await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(msg, C_YELLOW), tags=['SIGACT', 'COMBAT'])}")
+        if machine:
+            # Tactical (PM/Notice)
+            pvp_parts = f"[PVP] ACTION:{action.upper()} TARGET:{target_name} RESULT:SUCCESS MSG:{msg}"
+            await node.send(f"{tactical_cmd} {tactical_target} :{pvp_parts}")
+            # Narrative (Channel)
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(msg, C_YELLOW), tags=['SIGACT', 'COMBAT'])}")
+        else:
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_YELLOW), tags=['SIGACT', 'COMBAT'])}")
+            
         if reward:
             await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(reward, C_CYAN), tags=['SIGACT', nickname])}")
     else: 
         if msg == "System offline.":
             await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nickname} - not a registered player - msg ignored")
         else:
-            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_RED), tags=['COMBAT', nickname])}")
+            if machine:
+                await node.send(f"{tactical_cmd} {tactical_target} :[PVP] ACTION:{action.upper()} TARGET:{target_name} RESULT:FAIL MSG:{msg}")
+            else:
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_RED), tags=['COMBAT', nickname])}")
 
 async def handle_ready(node, nick: str, token: str, reply_target: str):
     if await node.db.authenticate_fighter(nick, node.net_name, token):
