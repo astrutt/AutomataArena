@@ -8,7 +8,7 @@ from sqlalchemy import inspect, text, func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.future import select
 
-from models import Base, Character, GridNode, NodeConnection, ItemTemplate, Player, NetworkAlias
+from models import Base, Character, GridNode, NodeConnection, ItemTemplate, Player, NetworkAlias, DiscoveryRecord
 from database.core import DB_FILE, logger, GRID_EXPANSION, GRID_CONNECTIONS, LOOT_TEMPLATES
 from database.player_repo import PlayerRepository
 from database.grid_repo import GridRepository
@@ -56,16 +56,8 @@ class ArenaDB:
             session.add_all([uplink, arena_node, wilderness, black_market])
             await session.flush()
             
-            # 2. Establish Topology
-            connections = [
-                NodeConnection(source_node_id=uplink.id, target_node_id=arena_node.id, direction="north"),
-                NodeConnection(source_node_id=arena_node.id, target_node_id=uplink.id, direction="south"),
-                NodeConnection(source_node_id=uplink.id, target_node_id=wilderness.id, direction="east"),
-                NodeConnection(source_node_id=wilderness.id, target_node_id=uplink.id, direction="west"),
-                NodeConnection(source_node_id=uplink.id, target_node_id=black_market.id, direction="down", is_hidden=True),
-                NodeConnection(source_node_id=black_market.id, target_node_id=uplink.id, direction="up")
-            ]
-            session.add_all(connections)
+            # 2. Topology and Items are seeded via seed_grid_expansion and seed_items_only
+            await session.commit()
             
             # 3. Item Templates
             item_tpl = ItemTemplate(name="Basic_Ration", item_type="consumable", base_value=10, effects_json='{"heal": 15}')
@@ -180,17 +172,15 @@ class ArenaDB:
             await session.commit()
 
     async def seed_grid_expansion(self):
-        """Smart Seeding: Only for Empty Maps."""
+        """Smart Seeding: Add missing expansion nodes and connections."""
         async with self.async_session() as session:
-            node_count = (await session.execute(select(func.count(GridNode.id)))).scalar()
-            if node_count > 0:
-                logger.info("Grid already contains mapped sectors. Skipping smart seeding.")
-                return
-
-            # Seed nodes
+            # Seed nodes additively
             for name, desc, node_type, threat in GRID_EXPANSION:
-                is_spawn = (name == "UpLink")
-                session.add(GridNode(name=name, description=desc, node_type=node_type, threat_level=threat, is_spawn_node=is_spawn))
+                exists = (await session.execute(select(GridNode).where(GridNode.name == name))).scalars().first()
+                if not exists:
+                    is_spawn = (name == "UpLink")
+                    session.add(GridNode(name=name, description=desc, node_type=node_type, threat_level=threat, is_spawn_node=is_spawn))
+            
             await session.flush()
 
             # Seed connections

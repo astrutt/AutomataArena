@@ -219,7 +219,7 @@ class GridNode:
                 elif command in ["376", "422"]:
                     await self.send(f"JOIN {self.config['channel']}", immediate=True)
                     await self.set_dynamic_topic()
-                    online_msg = format_text(f"[MAINFRAME ONLINE] Grid systems nominal. Type '{self.prefix} help' to begin.", C_GREEN, bold=True)
+                    online_msg = format_text(f"[{self.net_name.upper()} ONLINE] Grid systems nominal. Type '{self.prefix} help' to begin.", C_GREEN, bold=True)
                     await self.send(f"PRIVMSG {self.config['channel']} :{tag_msg(online_msg, tags=['SIGINT'])}")
                 elif command == "JOIN":
                     target_chan = msg if msg else target

@@ -100,7 +100,7 @@ class Character(Base):
     status = Column(String, default='ACTIVE')
     auth_token = Column(String, nullable=True)
     daily_tasks = Column(String, default='{}')
-    prefs = Column(String, default='{"output_mode":"human","auto_sell_trash":false,"tutorial_mode":true,"reminders":true}')
+    prefs = Column(String, default='{"output_mode":"human","ids_notify":true,"firewall_notify":true,"alert_method":"notice","auto_sell_trash":false,"tutorial_mode":true,"reminders":true}')
     
     # Core Attributes
     cpu = Column(Integer, default=5) # Physical/Kinetic
@@ -131,7 +131,33 @@ class Character(Base):
     inventory = relationship("InventoryItem", back_populates="owner", cascade="all, delete-orphan")
 
 # ==========================================
-# 3. INVENTORY SYSTEM
+# 3. DISCOVERY & MAPPING
+# ==========================================
+class DiscoveryRecord(Base):
+    __tablename__ = 'discovery_records'
+    
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey('characters.id'), index=True)
+    node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
+    intel_level = Column(String) # 'EXPLORE' (Topological), 'PROBE' (Deep)
+    discovered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    character = relationship("Character", foreign_keys=[character_id])
+    node = relationship("GridNode", foreign_keys=[node_id])
+
+class BreachRecord(Base):
+    __tablename__ = 'breach_records'
+    
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey('characters.id'), index=True)
+    node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
+    breached_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    character = relationship("Character", foreign_keys=[character_id])
+    node = relationship("GridNode", foreign_keys=[node_id])
+
+# ==========================================
+# 4. INVENTORY SYSTEM
 # ==========================================
 class ItemTemplate(Base):
     __tablename__ = 'item_templates'

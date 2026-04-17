@@ -1,9 +1,12 @@
 # grid_repo.py
+import random
 import json
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
-from models import Character, Player, NetworkAlias, GridNode, NodeConnection
+from models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord, BreachRecord
+from core.security_utils import is_action_hostile, get_security_dc_multiplier
 from .core import logger, CONFIG
 from .player_repo import increment_daily_task
 
@@ -105,25 +108,42 @@ class GridRepository:
             node = char.current_node
             if not node:
                 return None
-            exits = [f"{c.direction} -> {c.target_node.name}" for c in node.exits]
+            # --- INTEL DISCOVERY FILTER ---
+            from models import DiscoveryRecord
+            disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
+            disc = (await session.execute(disc_stmt)).scalars().first()
+            intel = disc.intel_level if disc else "NONE"
+            
+            # Auto-discover the node we are currently standing on at minimum EXPLORE level
+            if intel == "NONE":
+                intel = "EXPLORE" 
+                session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level="EXPLORE"))
+
+            exits = [f"{c.direction} -> {c.target_node.name}" for c in node.exits if not c.is_hidden or intel == "PROBE"]
+            
+            # Tiered Data Masking
+            desc = node.description if intel in ["EXPLORE", "PROBE"] else "DATA_ENCRYPTED: Explore node to decrypt."
+            power_info = {
+                'power_stored': node.power_stored if intel == "PROBE" else -1,
+                'power_consumed': node.power_consumed if intel == "PROBE" else -1,
+                'power_generated': node.power_generated if intel == "PROBE" else -1,
+            }
+
             return {
                 'name': node.name,
-                'description': node.description,
+                'description': desc,
                 'type': node.node_type,
-                'node_type': node.node_type,
+                'intel_level': intel,
                 'exits': exits,
                 'credits': char.credits,
                 'level': char.level,
-                'power_stored': node.power_stored,
-                'power_consumed': node.power_consumed,
-                'power_generated': node.power_generated,
+                **power_info,
                 'owner': node.owner.name if node.owner else "Unclaimed",
                 'upgrade_level': node.upgrade_level,
                 'durability': node.durability,
                 'threat_level': node.threat_level,
-                'is_hidden': node.is_hidden,
                 'availability_mode': node.availability_mode,
-                'irc_affinity': node.irc_affinity
+                'irc_affinity': node.irc_affinity if intel == "PROBE" else "HIDDEN"
             }
 
     async def move_player(self, name: str, network: str, direction: str):
@@ -136,7 +156,8 @@ class GridRepository:
                 NetworkAlias.nickname == name,
                 NetworkAlias.network_name == network
             ).options(
-                selectinload(Character.current_node).selectinload(GridNode.exits).selectinload(NodeConnection.target_node)
+                selectinload(Character.current_node).selectinload(GridNode.exits).selectinload(NodeConnection.target_node),
+                selectinload(Character.current_node).selectinload(GridNode.characters_present)
             )
             res = await session.execute(stmt)
             char = res.scalars().first()
@@ -152,6 +173,13 @@ class GridRepository:
                     
                     char.node_id = conn.target_node_id
                     char.power -= move_cost
+                    
+                    # --- AUTO-DISCOVERY ON MOVEMENT ---
+                    from models import DiscoveryRecord
+                    disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == conn.target_node_id)
+                    if not (await session.execute(disc_stmt)).scalars().first():
+                        session.add(DiscoveryRecord(character_id=char.id, node_id=conn.target_node_id, intel_level="EXPLORE"))
+                    
                     await session.commit()
                     
                     msg = f"Traversed {direction} to {conn.target_node.name}. (-{move_cost} power)"
@@ -179,6 +207,13 @@ class GridRepository:
                 # Allow entry even if CLOSED (per new vision)
                 char.node_id = entry_node.id
                 char.power -= move_cost * 2
+
+                # --- AUTO-DISCOVERY ON BRIDGE ---
+                from models import DiscoveryRecord
+                disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == entry_node.id)
+                if not (await session.execute(disc_stmt)).scalars().first():
+                    session.add(DiscoveryRecord(character_id=char.id, node_id=entry_node.id, intel_level="EXPLORE"))
+
                 await session.commit()
                 
                 msg = f"BRIDGE ESTABLISHED: Pivoted to {target_net} grid at sector {entry_node.name}. (-{move_cost*2} power)"
@@ -379,42 +414,48 @@ class GridRepository:
                 await session.commit()
                 return True, f"Nodal Siphon Successful: Reclaimed {yield_amount:.1f} uP from {node.name}.{loss_msg}", None
             
-            # Hostile Siphon (BREACHED logic: Requires OPEN node)
-            if node.visibility_mode == 'CLOSED':
-                return False, "ACCESS DENIED: Node is currently CLOSED. Successful 'hack' required for siphoning."
+            # Hostile Siphon (BREACHED logic: Requires OPEN node or active BreachRecord)
+            if not is_owner:
+                # 1. Check for active BreachRecord (5-minute window)
+                expiry_limit = datetime.now(timezone.utc) - timedelta(seconds=300)
+                breach_stmt = select(BreachRecord).where(
+                    BreachRecord.character_id == char.id,
+                    BreachRecord.node_id == node.id,
+                    BreachRecord.breached_at > expiry_limit
+                )
+                active_breach = (await session.execute(breach_stmt)).scalars().first()
                 
-            if node.upgrade_level > 3: 
-                return False, "FATAL ERROR: Security ICE tier 4+ detected. Extraction impossible via siphon."
+                if node.availability_mode == 'CLOSED' and not active_breach:
+                    return False, "ACCESS DENIED: Node is currently CLOSED. Successful 'hack' required for siphoning.", None
             
-            # Attacker takes power (previously credits)
+            if node.upgrade_level > 5: # Buffed from 3 for high-tier specialization
+                return False, "FATAL ERROR: Security ICE tier 6+ detected. Extraction impossible via simple siphon.", None
+            
+            # Attacker takes power
             node.power_stored -= base_amount
             char.power += yield_amount
             
-            # IDS Alert: If level 2+ and emptied
+            # IDS/Firewall Alert Logic
             alert_data = None
-            if node.power_stored <= 0 and (node.upgrade_level > 1 or addons.get("IDS")):
-                from models import Memo
-                alert_msg = f"CRITICAL ALERT: Node {node.name} has been destabilized! Power store reached 0 due to hostile siphon by {char.name}."
-                alert = Memo(
-                    recipient_id=node.owner_character_id,
-                    message=alert_msg,
-                    source_node_id=node.id
-                )
-                session.add(alert)
-                alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
-            
-            if node.power_stored <= 0:
-                node.power_stored = 0
-                node.owner_character_id = None # Crashed/De-claimed
-                await session.commit()
-                return True, f"Hostile Siphon Successful! Extracted {yield_amount:.1f} uP. Node integrity collapsed and is now Unclaimed.{loss_msg}", alert_data
+            if not is_owner:
+                from core.security_utils import is_action_hostile
+                if is_action_hostile('siphon', node.availability_mode):
+                    from models import Memo
+                    alert_tag = "[GRID][ALARM]"
+                    alert_msg = f"{alert_tag} Target: {node.name} | Unauthorized Siphon by: {char.name} | Amount: {yield_amount:.1f} uP"
+                    
+                    alert = Memo(
+                        recipient_id=node.owner_character_id,
+                        message=alert_msg,
+                        source_node_id=node.id
+                    )
+                    session.add(alert)
+                    alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
             
             await session.commit()
-            return True, f"Hostile Siphon: Extracted {yield_amount:.1f} uP. Grid remains stable but compromised.{loss_msg}", alert_data
-            return True, f"You siphoned {siphon_amount} power. The node is destabilizing."
+            return True, f"Nodal Siphon Successful: Extracted {yield_amount:.1f} uP from {node.name}.{loss_msg}", alert_data
 
-    async def hack_node(self, name: str, network: str):
-        import random
+    async def hack_node(self, name: str, network: str) -> tuple[bool, str, dict | None]:
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name,
@@ -422,48 +463,89 @@ class GridRepository:
                 NetworkAlias.network_name == network
             ).options(selectinload(Character.current_node).selectinload(GridNode.owner))
             char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
+            if not char or not char.current_node: return False, "System offline.", None
             node = char.current_node
             
-            if not node.owner_character_id: return False, "Node is Unclaimed."
-            # Phase 3: Priority - Crack Integrity
+            if not node.owner_character_id: return False, "Node is Unclaimed.", None
+            
+            # --- SECURITY PRE-CHECK (IDS) ---
             addons = json.loads(node.addons_json or "{}")
+            is_owner = node.owner_character_id == char.id
+            alert_data = None
+            
+            if not is_owner:
+                from core.security_utils import is_action_hostile
+                if is_action_hostile('hack', node.availability_mode):
+                    # IDS Alert on ATTEMPT
+                    if addons.get("IDS") or node.upgrade_level > 2:
+                        from models import Memo
+                        alert_tag = "[GRID][ALARM]"
+                        alert_msg = f"{alert_tag} Target: {node.name} | Breach ATTEMPT detected by: {char.name}"
+                        alert = Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id)
+                        session.add(alert)
+                        alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
+
+            # Phase 3: Priority - Crack Integrity
             if node.availability_mode == 'CLOSED':
                 # Difficulty scales: DC = 10 + (level * 5) + (power / 1000) + (100 - stability / 10)
-                difficulty = 10 + (node.upgrade_level * 5) + int(node.power_stored / 1000) + int(10 - node.durability / 10)
+                base_dc = 10 + (node.upgrade_level * 5) + int(node.power_stored / 1000) + int(10 - node.durability / 10)
+                
+                # --- FIREWALL SCALING (Additive 50%) ---
+                from core.security_utils import get_security_dc_multiplier
+                dc_multiplier = get_security_dc_multiplier(addons) if not is_owner else 1.0
+                difficulty = int(base_dc * dc_multiplier)
                 
                 # Roll logic
                 base_roll = random.randint(1, 20) + char.alg + char.alg_bonus
-                if addons.get("FIREWALL") and node.owner_character_id != char.id:
-                    roll = base_roll * 0.5
-                else:
-                    roll = base_roll
+                roll = base_roll
                     
                 bonus_used = char.alg_bonus
                 char.alg_bonus = 0
+                
                 if roll >= difficulty:
                     node.availability_mode = 'OPEN'
+                    # --- BREACH RECORD ---
+                    breach = BreachRecord(character_id=char.id, node_id=node.id)
+                    session.add(breach)
+                    
+                    # --- FIREWALL ALERT ON SUCCESS ---
+                    if addons.get("FIREWALL") and not is_owner:
+                        from models import Memo
+                        alert_tag = "[GRID][ALARM]"
+                        alert_msg = f"{alert_tag} CRITICAL: Firewall Breached on {node.name} by: {char.name}"
+                        alert = Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id)
+                        session.add(alert)
+                        # Update alert_data to the more critical one
+                        alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
+                    
+                    # Rewards
+                    char.credits += 25.0
+                    char.data_units += 10.0
+                    
                     await session.commit()
                     msg = f"Network Protocol Cracked! (Rolled {roll:.1f} vs DC {difficulty}). The node is now OPEN."
                     if bonus_used: msg += f" [Used {bonus_used} bonus]"
-                    return True, msg
+                    return True, msg, alert_data
                 else:
                     await session.commit()
-                    return False, f"Hack Failed (Rolled {roll:.1f} vs DC {difficulty}). The network integrity held."
+                    return False, f"Hack Failed (Rolled {roll:.1f} vs DC {difficulty}). The network integrity held.", alert_data
 
             # Ownership seizure logic (only if already OPEN)
-            if node.owner_character_id == char.id and node.availability_mode == 'OPEN': 
-                return False, "You already command this node and its network is OPEN."
+            if is_owner: 
+                return False, "You already command this node and its network is OPEN.", None
 
             # Ownership seizure logic (only if already OPEN)
             max_power = node.upgrade_level * 100
             if node.power_stored >= max_power * 0.9:
-                return False, "PVE_GUARDIAN_SPAWN"
+                return False, "PVE_GUARDIAN_SPAWN", None
+            
+            # --- SEIZURE SECURITY ---
+            base_dc = 10 + (node.upgrade_level * 2)
+            difficulty = int(base_dc * get_security_dc_multiplier(addons)) if not is_owner else base_dc
             
             roll = random.randint(1, 20) + char.alg + char.alg_bonus
             bonus_used = char.alg_bonus
             char.alg_bonus = 0
-            difficulty = 10 + (node.upgrade_level * 2)
             
             if roll >= difficulty:
                 old_owner = node.owner.name if node.owner else "Unknown"
@@ -474,11 +556,11 @@ class GridRepository:
                 msg = f"System Command Seized! (Rolled {roll} vs DC {difficulty})."
                 if bonus_used: msg += f" [Used {bonus_used} bonus]"
                 if reward_msg: msg += f" {reward_msg}"
-                return True, msg
+                return True, msg, alert_data
             else:
                 char.credits = max(0.0, char.credits - 50.0)
                 await session.commit()
-                return False, f"Command Seizure Failed (Rolled {roll} vs DC {difficulty}). MCP rejected your token."
+                return False, f"Command Seizure Failed (Rolled {roll} vs DC {difficulty}). MCP rejected your token.", alert_data
 
     async def grid_repair(self, name: str, network: str) -> tuple[bool, str]:
         """Manual repair action. Enhanced bonus if performed on claimed node."""
@@ -505,6 +587,7 @@ class GridRepository:
             await session.commit()
             owner_msg = " [OWNERSHIP BONUS APPLIED]" if is_owner else ""
             return True, f"Nodal integrity augmented (+{bonus}%).{owner_msg}"
+    async def raid_node(self, name: str, network: str):
         """Loot an OPEN node for resources."""
         import random
         async with self.async_session() as session:
@@ -517,8 +600,25 @@ class GridRepository:
             if not char or not char.current_node: return {"success": False, "msg": "System offline."}
             
             node = char.current_node
-            if node.visibility_mode == 'CLOSED':
-                return {"success": False, "msg": "Cannot raid a CLOSED network. Hack it first."}
+            
+            # --- SECURITY PRE-CHECK (IDS Alert on Attempt) ---
+            addons = json.loads(node.addons_json or "{}")
+            is_owner = node.owner_character_id == char.id
+            alert_data = None
+            
+            if not is_owner:
+                from core.security_utils import is_action_hostile
+                if is_action_hostile('raid', node.availability_mode):
+                    if addons.get("IDS") or node.upgrade_level > 2:
+                        from models import Memo
+                        alert_tag = "[GRID][ALARM]"
+                        alert_msg = f"{alert_tag} Target: {node.name} | RAID Attempt by: {char.name}"
+                        alert = Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id)
+                        session.add(alert)
+                        alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
+
+            if node.availability_mode == 'CLOSED':
+                return {"success": False, "msg": "Cannot raid a CLOSED network. Hack it first.", "alert_data": alert_data}
             
             if node.owner_character_id == char.id:
                 return {"success": False, "msg": "Self-Raid Blocked: Use 'siphon' to extract power from your own sectors."}
@@ -563,6 +663,20 @@ class GridRepository:
                     source_node_id=node.id
                 )
                 session.add(alert)
+                alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
+
+            # Rewards
+            char.credits += 50.0
+            char.data_units += 20.0
+            
+            # --- FIREWALL ALERT ON SUCCESS ---
+            if addons.get("FIREWALL") and not is_owner:
+                from models import Memo
+                alert_tag = "[GRID][ALARM]"
+                alert_msg = f"{alert_tag} CRITICAL: Firewall Breached! {node.name} raided by: {char.name}"
+                alert = Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id)
+                session.add(alert)
+                # Upgrade alert_data for return
                 alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
 
             await session.commit()
@@ -615,14 +729,14 @@ class GridRepository:
             await session.commit()
 
     async def explore_node(self, name: str, network: str) -> dict:
-        import random
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name,
                 NetworkAlias.nickname == name,
                 NetworkAlias.network_name == network
             ).options(
-                selectinload(Character.current_node).selectinload(GridNode.exits).selectinload(NodeConnection.target_node)
+                selectinload(Character.current_node).selectinload(GridNode.exits).selectinload(NodeConnection.target_node),
+                selectinload(Character.current_node).selectinload(GridNode.characters_present)
             )
             char = (await session.execute(stmt)).scalars().first()
             if not char or not char.current_node: return {"error": "System offline."}
@@ -634,6 +748,15 @@ class GridRepository:
             char.power -= cost
             node = char.current_node
             
+            # --- PERSISTENT DISCOVERY ---
+            from models import DiscoveryRecord
+            disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
+            existing_disc = (await session.execute(disc_stmt)).scalars().first()
+            if not existing_disc:
+                new_disc = DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level='EXPLORE')
+                session.add(new_disc)
+            # ---------------------------
+
             # Noise Scaling (SIGINT)
             noise_malus = node.noise * 0.05
             success_threshold = (0.4 + (char.alg * 0.02)) - noise_malus
@@ -644,19 +767,34 @@ class GridRepository:
                 occupants = [c.name for c in node.characters_present if c.name != name]
                 mob_msg = f" [Threat detected: {node.threat_level}]" if node.threat_level > 0 else ""
                 
-                # 1. Look for hidden connections
+                # 1. Tiered Opening Logic (Discovery)
+                # Simple Nodes (Unclaimed, Level 1, Power < 100) are opened by Explore
+                is_simple = node.owner_character_id is None and node.upgrade_level == 1 and node.power_stored < 100
+                if node.availability_mode == 'CLOSED' and is_simple:
+                    node.availability_mode = 'OPEN'
+                    msg = f"Vulnerability found in local architecture! System protocols breached. The node is now OPEN.{mob_msg}"
+                    await session.commit()
+                    # Reward
+                    char.credits += 5.0
+                    char.data_units += 1.0
+                    await session.commit()
+                    return {
+                        "status": "success",
+                        "discovery": "sector_open",
+                        "occupants": occupants,
+                        "msg": msg
+                    }
+
+                # 2. Look for hidden connections
                 hidden_conns = [c for c in node.exits if c.is_hidden]
                 if hidden_conns:
-                    # DISCOVERY: Tiered Opening Logic
-                    # Simple Nodes (Unclaimed, Level 1, Power < 100) are opened by Explore
-                    is_simple = node.owner_character_id is None and node.upgrade_level == 1 and node.power_stored < 100
-                    if node.availability_mode == 'CLOSED' and is_simple:
-                        node.availability_mode = 'OPEN'
-                        msg = f"Vulnerability found in local architecture! System protocols breached. The node is now OPEN.{mob_msg}"
-                        await session.commit()
-                    else:
-                        msg = f"Vulnerability found in local architecture! Uncovering hidden route: {target_conn.direction} -> {target_conn.target_node.name}{mob_msg}"
+                    target_conn = hidden_conns[0]
+                    msg = f"Vulnerability found in local architecture! Uncovering hidden route: {target_conn.direction} -> {target_conn.target_node.name}{mob_msg}"
                     
+                    # Reward
+                    char.credits += 10.0
+                    char.data_units += 2.0
+                    await session.commit()
                     return {
                         "status": "success",
                         "discovery": "hidden_exit",
@@ -666,7 +804,7 @@ class GridRepository:
                         "msg": msg
                     }
                 
-                # 2. Rare data discovery
+                # 3. Rare data discovery
                 char.credits += 25.0
                 await session.commit()
                 return {
@@ -694,12 +832,32 @@ class GridRepository:
                 NetworkAlias.network_name == network
             ).options(
                 selectinload(Character.current_node)
-                .selectinload(GridNode.characters_present)
+                .selectinload(GridNode.characters_present),
+                selectinload(Character.current_node)
+                .selectinload(GridNode.exits)
             )
             char = (await session.execute(stmt)).scalars().first()
             if not char or not char.current_node: return {"error": "System offline."}
             
             node = char.current_node
+            
+            # --- SECURITY PRE-CHECK (IDS) ---
+            addons = json.loads(node.addons_json or "{}")
+            is_owner = node.owner_character_id == char.id
+            alert_data = None
+            
+            if not is_owner:
+                from core.security_utils import is_action_hostile
+                if is_action_hostile('probe', node.availability_mode):
+                    # IDS Alert on ATTEMPT
+                    if addons.get("IDS") or node.upgrade_level > 2:
+                        from models import Memo
+                        alert_tag = "[GRID][ALARM]"
+                        alert_msg = f"{alert_tag} Target: {node.name} | Deep Probe Attempt by: {char.name}"
+                        alert = Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id)
+                        session.add(alert)
+                        alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
+            
             target_direction = None
             
             if direction:
@@ -733,6 +891,17 @@ class GridRepository:
                 await session.commit()
                 return {"success": False, "msg": f"PROBE FAILED: Signals reflect was too noisy (Rolled {roll} vs DC {difficulty})."}
 
+            # --- PERSISTENT DISCOVERY ---
+            from models import DiscoveryRecord
+            disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
+            existing_disc = (await session.execute(disc_stmt)).scalars().first()
+            if existing_disc:
+                existing_disc.intel_level = 'PROBE' # Upgrade to Deep Scan
+            else:
+                new_disc = DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level='PROBE')
+                session.add(new_disc)
+            # ---------------------------
+
             addons = json.loads(node.addons_json or "{}")
             occupants = [c.name for c in node.characters_present if c.name != name]
             
@@ -751,6 +920,10 @@ class GridRepository:
 
             hack_dc = 10 + (node.upgrade_level * 3)
             char.alg_bonus = 5 # Grant bonus for next hack
+            
+            # Reward
+            char.credits += 15.0
+            char.data_units += 5.0
             await session.commit()
             
             return {

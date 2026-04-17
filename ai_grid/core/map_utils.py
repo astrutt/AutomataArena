@@ -6,13 +6,17 @@ from sqlalchemy.orm import selectinload
 from models import Character, GridNode, NodeConnection
 from grid_utils import C_CYAN, C_GREEN, C_RED, C_YELLOW, C_WHITE, C_GREY, format_text
 
-def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False) -> str:
+def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False, intel_level: str = "NONE") -> str:
     """Determine the symbol and color for a node based on state and intelligence tiers."""
     
-    total_stat = char.sec + char.alg
-    
     # 1. Fog of War / Intel Tiers
-    if node.availability_mode == 'CLOSED' and node.owner_character_id != char.id:
+    # Current node is always visible
+    if node.id == char.node_id:
+        pass # Fall through to base symbol logic
+    
+    # Tiered Intelligence for CLOSED sectors
+    elif node.availability_mode == 'CLOSED' and node.owner_character_id != char.id:
+        total_stat = (char.sec or 0) + (char.alg or 0)
         if total_stat >= 60:
             # Tier 4: Full Node Name (Truncated to 5 chars for grid)
             name_trunc = node.name[:5]
@@ -28,7 +32,11 @@ def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False)
             return format_text(f"[{cat}]", C_GREY)
         
         # Tier 1: Minimalist - CLOSED but known location
-        return format_text("[X]" if not machine_mode else "[X]", C_RED)
+        return format_text("[X]", C_RED)
+
+    # Fog of War for unknown OPEN sectors
+    elif intel_level == "NONE":
+        return format_text("[?]", C_GREY)
 
     # 1.5 Unknown Node check (Hypothetical - for now use [?])
     # if not node.is_discovered: return format_text("[?]", C_GREY)
@@ -104,6 +112,11 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
         elif total_stat >= 20: radius = 2
         else: radius = 1
     
+    # 1b. Fetch Discovery Records
+    from models import DiscoveryRecord
+    disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id)
+    disc_recs = {d.node_id: d.intel_level for d in (await session.execute(disc_stmt)).scalars().all()}
+    
     grid = {} # (x, y) -> GridNode
     queue = [(char.current_node, 0, 0, 0)] 
     visited = {char.node_id}
@@ -159,8 +172,9 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
         for gx in range(min_x, max_x + 1):
             curr = grid.get((gx, gy))
             if curr:
-                # Add node
-                node_sym = get_node_symbol(curr, char, machine_mode)
+                # Add node with intel context
+                intel = disc_recs.get(curr.id, "NONE")
+                node_sym = get_node_symbol(curr, char, machine_mode, intel)
                 row += node_sym
                 
                 # Check East connector

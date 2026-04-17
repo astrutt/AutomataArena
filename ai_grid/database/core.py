@@ -70,6 +70,9 @@ GRID_CONNECTIONS = [
     ("Black_Market_Port",   "Dark_Web_Exchange", "south"), ("Dark_Web_Exchange", "Black_Market_Port",   "north"),
     ("Dark_Web_Exchange",   "Logic_Gate",        "south"), ("Logic_Gate",        "Dark_Web_Exchange",   "north"),
     ("The_Arena",      "Gladiator_Pit",  "east"),  ("Gladiator_Pit",  "The_Arena",       "west"),
+    ("UpLink", "The_Arena", "north-east"), ("The_Arena", "UpLink", "south-west"),
+    ("UpLink", "The_CPU_Socket", "south-east"), ("The_CPU_Socket", "UpLink", "north-west"),
+    ("UpLink", "Black_Market_Port", "down"), ("Black_Market_Port", "UpLink", "up"),
 ]
 
 LOOT_TEMPLATES = [
