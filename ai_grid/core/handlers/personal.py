@@ -167,18 +167,17 @@ async def handle_options(node, nickname: str, args: list, reply_target: str):
     # Recalculate routing for confirmation
     tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nickname, reply_target)
     
+    # Consolidated confirmation response using the new routing standards
+    msg = f"{s} set to {v}."
     if machine:
-        await node.send(f"{tactical_cmd} {tactical_target} :[OK] OPTION:{s} VAL:{v}")
+        await node.send(f"{tactical_cmd} {tactical_target} :[OPTIONS] {msg.upper()}")
     else:
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'Option {s} updated to {v}.', C_GREEN), tags=['SIGACT', nickname], nick=nickname)}")
+        # User requested format: [GRID][RDNt][OPTIONS]
+        # We achieve this by setting location to the nick and tags to the module.
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_GREEN), location=nickname, tags=['OPTIONS'], nick=nickname)}")
+
     if s == "msgtype":
         node.user_msgtype_cache[nickname.lower()] = saved_val
-
-    confirm = f"[OPTIONS] {s} set to {v}."
-    if machine or v == "machine": 
-        await node.send(f"PRIVMSG {nickname} :{confirm}")
-    else: 
-        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(confirm, C_GREEN), tags=['SIGACT'], nick=nickname)}")
 
 async def handle_stats(node, nickname: str, args: list, reply_target: str):
     """View and allocate stat points."""

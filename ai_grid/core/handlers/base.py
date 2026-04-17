@@ -133,17 +133,14 @@ async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 2
 async def get_action_routing(node, nickname: str, current_target: str):
     """
     Returns (tactical_target, broadcast_channel, is_machine, tactical_cmd).
-    Diverts tactical_target to the player's nickname if they are in machine mode.
-    tactical_cmd is determined by character preference (PRIVMSG or NOTICE).
+    Diverts tactical_target to the player's nickname to maintain a clean channel 
+    narrative while delivering detailed technical feedback via the user's preferred 
+    method (PRIVMSG or NOTICE).
     """
     prefs = await node.db.get_prefs(nickname, node.net_name)
     is_machine = prefs.get('output_mode', 'human') == 'machine'
     msg_type = prefs.get('msg_type', 'privmsg').upper() # PRIVMSG or NOTICE
     channel = node.config['channel']
     
-    if is_machine:
-        return nickname, channel, True, msg_type
-    else:
-        # If human, tactical target is the original target (usually the channel)
-        # However, if target is a nick (PM), we respect the original intent
-        return current_target, channel, False, "PRIVMSG"
+    # Standard: Tactical (personalized) output goes to the user directly
+    return nickname, channel, is_machine, msg_type
