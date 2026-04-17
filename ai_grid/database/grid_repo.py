@@ -602,6 +602,7 @@ class GridRepository:
             noise_malus = node.noise * 0.05
             success_threshold = (0.4 + (char.alg * 0.02)) - noise_malus
             
+            roll = random.random()
             if roll < success_threshold:
                 # Discovered occupants (mobs and players)
                 occupants = [c.name for c in node.characters_present if c.name != name]
