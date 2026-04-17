@@ -81,7 +81,7 @@ async def handle_node_explore(node, nick: str, reply_target: str):
     from .combat import handle_mob_encounter
     if not await check_rate_limit(node, nick, reply_target, cooldown=45): return
     
-    tactical_target, broadcast_chan, machine = await get_action_routing(node, nick, reply_target)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
     
     result = await node.db.explore_node(nick, node.net_name)
     
@@ -89,13 +89,13 @@ async def handle_node_explore(node, nick: str, reply_target: str):
         if result["error"] == "System offline.":
             await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
         else:
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(result['error'], C_RED), tags=['ERR', nick])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(result['error'], C_RED), tags=['ERR', nick])}")
         return
 
     banner = format_text(result.get('msg', 'Scanning nodal architecture...'), C_GREEN if result.get('status') == 'success' else C_YELLOW)
     loc = await node.db.get_location(nick, node.net_name)
     loc_name = loc['name'] if loc else None
-    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(banner, tags=['GEOINT', nick], location=loc_name)}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['GEOINT', nick], location=loc_name)}")
     
     if machine:
         # Public narrative
@@ -263,7 +263,7 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
 async def handle_grid_loot(node, nick: str, reply_target: str):
     if not await check_rate_limit(node, nick, reply_target, cooldown=60): return
     
-    tactical_target, broadcast_chan, machine = await get_action_routing(node, nick, reply_target)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
     
     result = await node.db.raid_node(nick, node.net_name)
     
@@ -271,7 +271,7 @@ async def handle_grid_loot(node, nick: str, reply_target: str):
         await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
         return
     banner = format_text(result['msg'], C_GREEN if result['success'] else C_RED)
-    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(banner, tags=['SIGACT', nick])}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['SIGACT', nick])}")
     
     if result['success']:
         if machine:
@@ -320,9 +320,9 @@ async def handle_grid_claimed(node, nickname: str, args: list, reply_target: str
     target = args[1] if len(args) > 1 else nickname
     count = await node.db.grid.get_claimed_nodes(target, node.net_name)
     
-    machine = await is_machine_mode(node, nickname)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nickname, reply_target)
     if machine:
-        await node.send(f"PRIVMSG {nickname} :[GRID] CLAIMED_NODES:{count} TARGET:{target}")
+        await node.send(f"{tactical_cmd} {tactical_target} :[GRID] CLAIMED_NODES:{count} TARGET:{target}")
     else:
         msg = f"Territorial Audit: {target} currently controls {count} Grid Nodes."
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(msg, C_CYAN), tags=['GEOINT'], location=target, is_machine=machine)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_CYAN), tags=['GEOINT'], location=target, is_machine=machine)}")

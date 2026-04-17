@@ -35,33 +35,33 @@ async def handle_registration(node, nick: str, args: list, reply_target: str):
 async def handle_info_view(node, nickname: str, args: list, reply_target: str):
     target = args[0].lower() if args else nickname.lower()
     
-    tactical_target, broadcast_chan, machine = await get_action_routing(node, nickname, reply_target)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nickname, reply_target)
     
     if target == "grid":
         loc = await node.db.get_location(nickname, node.net_name)
         if loc:
             if machine:
                 exits = ",".join(loc['exits']) if loc['exits'] else "none"
-                await node.send(f"PRIVMSG {tactical_target} :[INFO] NODE:{loc['name']} TYPE:{loc['type']} OWNER:{loc.get('owner','none')} LVL:{loc['upgrade_level']} EXITS:{exits} POWER:{loc['power_stored']}/{loc['upgrade_level']*100} DUR:{loc.get('durability',100):.0f}")
+                await node.send(f"{tactical_cmd} {tactical_target} :[INFO] NODE:{loc['name']} TYPE:{loc['type']} OWNER:{loc.get('owner','none')} LVL:{loc['upgrade_level']} EXITS:{exits} POWER:{loc['power_stored']}/{loc['upgrade_level']*100} DUR:{loc.get('durability',100):.0f}")
             else:
                 msg = f"[GRID INFO] {loc['name']}"
-                await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(msg, C_CYAN, bold=True), tags=['GEOINT'], location=loc['name'], is_machine=machine)}")
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_CYAN, bold=True), tags=['GEOINT'], location=loc['name'], is_machine=machine)}")
                 node_meta = f"Type: {loc['type'].upper()} | Owner: {loc['owner']} | Security Lvl: {loc['upgrade_level']}"
-                await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(node_meta, C_YELLOW), tags=['GEOINT'], is_machine=machine)}")
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(node_meta, C_YELLOW), tags=['GEOINT'], is_machine=machine)}")
                 power_meta = f"Power Generated: {loc['power_generated']} | Consumed: {loc['power_consumed']} | Stored: {loc['power_stored']}"
-                await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(power_meta, C_GREEN), tags=['GEOINT'], is_machine=machine)}")
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(power_meta, C_GREEN), tags=['GEOINT'], is_machine=machine)}")
         else: await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nickname} - you must be on the grid - msg ignored")
     elif target == "arena":
         q_len, r_len = len(node.match_queue), len(node.ready_players)
         b_stat = f"ACTIVE (Turn {node.active_engine.turn})" if node.active_engine and node.active_engine.active else "STANDBY"
-        if machine: await node.send(f"PRIVMSG {tactical_target} :[INFO] ARENA_STATUS:{b_stat} QUEUE:{q_len} READY:{r_len}")
+        if machine: await node.send(f"{tactical_cmd} {tactical_target} :[INFO] ARENA_STATUS:{b_stat} QUEUE:{q_len} READY:{r_len}")
         else:
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('[ARENA INFO]', C_CYAN, bold=True), tags=['ARENA'], is_machine=machine)}")
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(f'Status: {b_stat} | Fighters in Queue: {q_len} | Drop Pods Ready: {r_len}', C_YELLOW), tags=['ARENA'], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ARENA INFO]', C_CYAN, bold=True), tags=['ARENA'], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'Status: {b_stat} | Fighters in Queue: {q_len} | Drop Pods Ready: {r_len}', C_YELLOW), tags=['ARENA'], is_machine=machine)}")
     else:
         f = await node.db.get_fighter(target, node.net_name)
         if not f:
-            await node.send(f"PRIVMSG {tactical_target} :[GRID][MCP][ERR] {nickname} - character '{target}' not found - msg ignored")
+            await node.send(f"{tactical_cmd} {tactical_target} :[GRID][MCP][ERR] {nickname} - character '{target}' not found - msg ignored")
             return
             
         if f.get('race') == "Spectator":
@@ -70,7 +70,7 @@ async def handle_info_view(node, nickname: str, args: list, reply_target: str):
 
         if machine:
             xn = f['level'] * 1000
-            await node.send(f"PRIVMSG {tactical_target} :[INFO] NAME:{f['name']} RACE:{f['race']} CLASS:{f['char_class']} LVL:{f['level']} XP:{f['xp']}/{xn} ELO:{f['elo']} HP:{f.get('current_hp','?')} CRED:{f['credits']:.0f}c CPU:{f['cpu']} RAM:{f['ram']} BND:{f['bnd']} SEC:{f['sec']} ALG:{f['alg']} W:{f['wins']} L:{f['losses']}")
+            await node.send(f"{tactical_cmd} {tactical_target} :[INFO] NAME:{f['name']} RACE:{f['race']} CLASS:{f['char_class']} LVL:{f['level']} XP:{f['xp']}/{xn} ELO:{f['elo']} HP:{f.get('current_hp','?')} CRED:{f['credits']:.0f}c CPU:{f['cpu']} RAM:{f['ram']} BND:{f['bnd']} SEC:{f['sec']} ALG:{f['alg']} W:{f['wins']} L:{f['losses']}")
         else:
             # Determine target's intel tag based on their output preference
             target_prefs = await node.db.get_prefs(target, node.net_name)
@@ -78,36 +78,36 @@ async def handle_info_view(node, nickname: str, args: list, reply_target: str):
             
             xn = f['level'] * 1000
             hdr = f"[CHARACTER FILE] {f['name']} - {f['race']} {f['char_class']}"
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(hdr, C_CYAN, bold=True), tags=[intel_tag, f['name']], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(hdr, C_CYAN, bold=True), tags=[intel_tag, f['name']], is_machine=machine)}")
             cred_val = f['credits']
             stats_msg = f"Lvl {f['level']} | XP: {f['xp']}/{xn} | Elo: {f['elo']} | {ICONS.get('CREDITS', '$')} {cred_val:.2f}c"
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(stats_msg, C_GREEN), tags=[intel_tag], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(stats_msg, C_GREEN), tags=[intel_tag], is_machine=machine)}")
             
             # Territory & Mesh Power
             mesh_msg = f"{ICONS.get('TERRITORY', '[T]')} Territory: {f['territory_count']} | {ICONS.get('POWER', '[P]')} Mesh Power: {f['mesh_power']:.0f} uP"
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(mesh_msg, C_CYAN), tags=[intel_tag], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(mesh_msg, C_CYAN), tags=[intel_tag], is_machine=machine)}")
             
             attrs_msg = f"{ICONS.get('CPU','C')}CPU:{f['cpu']} {ICONS.get('RAM','R')}RAM:{f['ram']} {ICONS.get('BND','B')}BND:{f['bnd']} {ICONS.get('SEC','S')}SEC:{f['sec']} {ICONS.get('ALG','A')}ALG:{f['alg']}"
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(attrs_msg, C_YELLOW), tags=[intel_tag], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(attrs_msg, C_YELLOW), tags=[intel_tag], is_machine=machine)}")
             
             wl_msg = f"Wins: {f['wins']} / Losses: {f['losses']}"
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(wl_msg, C_YELLOW), tags=[intel_tag], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(wl_msg, C_YELLOW), tags=[intel_tag], is_machine=machine)}")
 
 async def handle_tasks_view(node, nickname: str, reply_target: str):
     tasks_json = await node.db.get_daily_tasks(nickname, node.net_name)
     tasks = json.loads(tasks_json)
     
-    tactical_target, broadcast_chan, machine = await get_action_routing(node, nickname, reply_target)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nickname, reply_target)
     
     if machine:
         parts = " ".join(f"[{k}:{v}]" for k, v in tasks.items() if k not in ["date", "completed"])
-        await node.send(f"PRIVMSG {tactical_target} :[TASKS] {parts} DONE:{'true' if tasks.get('completed') else 'false'}")
+        await node.send(f"{tactical_cmd} {tactical_target} :[TASKS] {parts} DONE:{'true' if tasks.get('completed') else 'false'}")
         return
-    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('=== [DAILY TASKS] ===', C_CYAN), tags=['HUMINT', nickname], is_machine=machine)}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('=== [DAILY TASKS] ===', C_CYAN), tags=['HUMINT', nickname], is_machine=machine)}")
     for k, v in tasks.items():
         if k in ["date", "completed"]: continue
-        await node.send(f"PRIVMSG {tactical_target} :{'[x]' if v >= 1 else '[ ]'} {k}")
-    if tasks.get("completed"): await node.send(f"PRIVMSG {tactical_target} :🏆 " + format_text("All Tasks Completed! Bonus Paid.", C_YELLOW))
+        await node.send(f"{tactical_cmd} {tactical_target} :{'[x]' if v >= 1 else '[ ]'} {k}")
+    if tasks.get("completed"): await node.send(f"{tactical_cmd} {tactical_target} :🏆 " + format_text("All Tasks Completed! Bonus Paid.", C_YELLOW))
 
 async def handle_options(node, nickname: str, args: list, reply_target: str):
     VALID = {
@@ -182,13 +182,13 @@ async def handle_options(node, nickname: str, args: list, reply_target: str):
 
 async def handle_stats(node, nickname: str, args: list, reply_target: str):
     """View and allocate stat points."""
-    tactical_target, broadcast_chan, machine = await get_action_routing(node, nickname, reply_target)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nickname, reply_target)
     
     if not args:
         char = await node.db.get_fighter(nickname, node.net_name)
         if not char: return
         
-        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(f'=== [ {nickname.upper()} - ATTRIBUTES ] ===', C_CYAN, bold=True), tags=['HUMINT', nickname], is_machine=machine)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'=== [ {nickname.upper()} - ATTRIBUTES ] ===', C_CYAN, bold=True), tags=['HUMINT', nickname], is_machine=machine)}")
         stats = [
             (ICONS.get('CPU','C'), "CPU", char['cpu'], "Kinetic Attack/Compute"),
             (ICONS.get('RAM','R'), "RAM", char['ram'], "Storage/Compute"),
@@ -197,12 +197,12 @@ async def handle_stats(node, nickname: str, args: list, reply_target: str):
             (ICONS.get('ALG','A'), "ALG", char['alg'], "Logic Capability")
         ]
         for ico, name, val, desc in stats:
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(f'{ico} {format_text(name, C_YELLOW, is_machine=machine)}: {val} - {format_text(desc, C_WHITE, is_machine=machine)} ', tags=['HUMINT'], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(f'{ico} {format_text(name, C_YELLOW, is_machine=machine)}: {val} - {format_text(desc, C_WHITE, is_machine=machine)} ', tags=['HUMINT'], is_machine=machine)}")
         
         if char['pending_stat_points'] > 0:
             pending = char['pending_stat_points']
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(f'PENDING POINTS: {pending}', C_GREEN, bold=True, is_machine=machine), tags=['HUMINT'], is_machine=machine)}")
-            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(f'Use {node.prefix} stats allocate <stat> to spend.', C_YELLOW, is_machine=machine), tags=['HUMINT'], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'PENDING POINTS: {pending}', C_GREEN, bold=True, is_machine=machine), tags=['HUMINT'], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'Use {node.prefix} stats allocate <stat> to spend.', C_YELLOW, is_machine=machine), tags=['HUMINT'], is_machine=machine)}")
         return
     
     if args[0].lower() == "allocate":
@@ -229,27 +229,27 @@ async def handle_news_view(node, nickname: str, reply_target: str):
 
 async def handle_memos(node, nick: str, args: list, reply_target: str):
     """Retrieves and manages character memos."""
-    tactical_target, broadcast_chan, machine = await get_action_routing(node, nick, reply_target)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
     
     if args and args[0].lower() == "clear":
         count = await node.db.player.mark_memos_read(nick, node.net_name)
-        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(f'Purged {count} tactical memos from local cache.', C_GREEN), tags=['SIGINT', nick])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'Purged {count} tactical memos from local cache.', C_GREEN), tags=['SIGINT', nick])}")
         return
 
     memos = await node.db.player.get_memos(nick, node.net_name, only_unread=True)
     if not memos:
-        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('No active tactical alerts in the buffer.', C_WHITE), tags=['SIGINT', nick])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('No active tactical alerts in the buffer.', C_WHITE), tags=['SIGINT', nick])}")
         return
 
     hdr = f"[ MEMO BUFFER: {len(memos)} ACTIVE ALERTS ]"
-    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(hdr, C_CYAN, True), tags=['SIGINT'], is_machine=machine)}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(hdr, C_CYAN, True), tags=['SIGINT'], is_machine=machine)}")
     
     for m in memos[:5]: # Limit to last 5
         ts = m['timestamp'].strftime("%H:%M:%S")
         origin = f" [{m['node']}]" if m['node'] else ""
         text = f"{ts} FROM:{m['sender']}{origin} | {m['message']}"
-        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(text, C_YELLOW), tags=['SIGINT'], is_machine=machine)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(text, C_YELLOW), tags=['SIGINT'], is_machine=machine)}")
     
     if len(memos) > 5:
         more_msg = f"... and {len(memos)-5} more alerts. Use '!a memos clear' to purge."
-        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(more_msg, C_WHITE), tags=['SIGINT'], is_machine=machine)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(more_msg, C_WHITE), tags=['SIGINT'], is_machine=machine)}")

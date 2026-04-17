@@ -100,20 +100,20 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
 
 async def handle_market_view(node, nickname: str, reply_target: str):
     """View current global market multipliers."""
-    tactical_target, broadcast_chan, machine = await get_action_routing(node, nickname, reply_target)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nickname, reply_target)
     
     status = await node.db.get_market_status()
     if not status:
-        await node.send(f"PRIVMSG {tactical_target} :[MARKET] Market is currently stable (1.0x baseline).")
+        await node.send(f"{tactical_cmd} {tactical_target} :[MARKET] Market is currently stable (1.0x baseline).")
         return
     
     if machine:
         parts = " ".join(f"{k}:{v:.2f}" for k, v in status.items())
-        await node.send(f"PRIVMSG {tactical_target} :[MARKET] MULTS:{parts}")
+        await node.send(f"{tactical_cmd} {tactical_target} :[MARKET] MULTS:{parts}")
         return
         
-    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('[ GLOBAL MARKET CONDITIONS ]', C_CYAN, True), tags=['ECONOMY'], is_machine=machine)}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ GLOBAL MARKET CONDITIONS ]', C_CYAN, True), tags=['ECONOMY'], is_machine=machine)}")
     for itype, mult in status.items():
         trend = "↑ INFLATION" if mult > 1.0 else ("↓ DEFLATION" if mult < 1.0 else "→ STABLE")
         color = C_RED if mult > 1.0 else (C_GREEN if mult < 1.0 else C_YELLOW)
-        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(f'{itype.upper()}: {mult:.2f}x | {trend}', color), tags=['ECONOMY'], is_machine=machine)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'{itype.upper()}: {mult:.2f}x | {trend}', color), tags=['ECONOMY'], is_machine=machine)}")

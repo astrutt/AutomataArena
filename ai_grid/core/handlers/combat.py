@@ -100,10 +100,10 @@ async def handle_ready(node, nick: str, token: str, reply_target: str):
 
 async def handle_dice_roll(node, nick: str, args: list, reply_target: str):
     """Play a game of 2d6 dice."""
-    tactical_target, broadcast_chan, machine = await get_action_routing(node, nick, reply_target)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
     
     if len(args) < 2:
-        await node.send(f"PRIVMSG {tactical_target} :Usage: {node.prefix} dice <bet> <high|low|seven>")
+        await node.send(f"{tactical_cmd} {tactical_target} :Usage: {node.prefix} dice <bet> <high|low|seven>")
         return
     
     try: bet = int(args[0])
@@ -111,15 +111,15 @@ async def handle_dice_roll(node, nick: str, args: list, reply_target: str):
     choice = args[1].lower()
     
     if choice not in ["high", "low", "seven"]:
-        await node.send(f"PRIVMSG {tactical_target} :Choice must be high (8-12), low (2-6), or seven.")
+        await node.send(f"{tactical_cmd} {tactical_target} :Choice must be high (8-12), low (2-6), or seven.")
         return
 
     result = await node.db.roll_dice(nick, node.net_name, bet, choice)
     if "error" in result:
-        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(result['error'], C_RED), tags=['SIGACT', nick])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(result['error'], C_RED), tags=['SIGACT', nick])}")
     else:
         banner = format_text(result['msg'], C_GREEN if result['win'] else C_YELLOW)
-        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(banner, tags=['SIGACT', nick])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['SIGACT', nick])}")
         if machine and result['win']:
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} won {bet*2}c in a high stakes dice game!', C_CYAN), tags=['SIGACT'])}")
 
@@ -147,18 +147,18 @@ async def handle_guess(node, nick: str, args: list, reply_target: str):
 
 async def handle_leaderboard(node, nick: str, args: list, reply_target: str):
     """Show global high scores."""
-    tactical_target, broadcast_chan, machine = await get_action_routing(node, nick, reply_target)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
     cat = args[0].upper() if args else "DICE"
     results = await node.db.get_leaderboard(cat)
     if not results:
-        await node.send(f"PRIVMSG {tactical_target} :[GRID] No records found for category: {cat}")
+        await node.send(f"{tactical_cmd} {tactical_target} :[GRID] No records found for category: {cat}")
         return
     
     if machine:
         parts = " ".join(f"{r['name']}:{r['score']:.1f}" for r in results)
-        await node.send(f"PRIVMSG {tactical_target} :[TOP] CAT:{cat} LIST:{parts}")
+        await node.send(f"{tactical_cmd} {tactical_target} :[TOP] CAT:{cat} LIST:{parts}")
         return
-    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(f'[ LEADERBOARD: {cat} ]', C_CYAN, True), tags=['OSINT'], is_machine=machine)}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'[ LEADERBOARD: {cat} ]', C_CYAN, True), tags=['OSINT'], is_machine=machine)}")
     for i, r in enumerate(results):
         line = f"#{i+1} | {r['name']} | score: {r['score']:.1f}"
-        await node.send(f"PRIVMSG {tactical_target} :{line}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{line}")

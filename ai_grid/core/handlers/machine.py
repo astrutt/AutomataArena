@@ -107,11 +107,11 @@ async def handle_item_use(node, nick: str, args: list, reply_target: str):
         return
     
     item_name = " ".join(args)
-    tactical_target, broadcast_chan, machine = await get_action_routing(node, nick, reply_target)
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
     
     result, msg = await node.db.use_item(nick, node.net_name, item_name)
     banner = format_text(msg, C_GREEN if result else C_RED)
-    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(banner, tags=['SIGACT', nick])}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['SIGACT', nick])}")
     
     if result and machine:
         await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} executed an inventory payload: {item_name}.', C_CYAN), tags=['SIGACT', nick])}")
