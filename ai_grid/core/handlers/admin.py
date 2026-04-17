@@ -9,14 +9,16 @@ logger = logging.getLogger("manager")
 async def handle_admin_command(node, admin_nick: str, verb: str, args: list, reply_target: str):
     logger.warning(f"SYSADMIN OVERRIDE: {admin_nick} -> {verb}")
     
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, admin_nick, reply_target)
+    
     # Handle !a admin <subcommand>
     if verb == "admin":
         if not args:
             # Landing Page
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[ MAINFRAME ADMIN OVERRIDES ]', C_CYAN, True), tags=['SIGINT'])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ MAINFRAME ADMIN OVERRIDES ]', C_CYAN, True), tags=['SIGINT'])}")
             cmds = ["status", "version", "topic", "broadcast <msg>", "grid <rename|chgdesc|seed|spawn>", "battlestart/stop", "restart", "stop", "shutdown"]
             cmd_str = ", ".join([f"{node.prefix} admin {c}" for c in cmds])
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(cmd_str, C_WHITE), tags=['SIGINT'])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(cmd_str, C_WHITE), tags=['SIGINT'])}")
             return
         
         # Shift args
@@ -26,10 +28,10 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
 
     if verb == "version":
         # System Versions
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[ SYSTEM VERSION ARCHIVE ]', C_CYAN, True), tags=['SIGINT'])}")
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('Mainframe Core: v1.5.0-STABLE', C_WHITE), tags=['SIGINT'])}")
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('DB Orchestrator: v1.5.0 | Repositories: v1.5.0', C_GREEN), tags=['SIGINT'])}")
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('Command Router: v1.5.0 | AI Bot Client: v1.5.0', C_YELLOW), tags=['SIGINT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ SYSTEM VERSION ARCHIVE ]', C_CYAN, True), tags=['SIGINT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('Mainframe Core: v1.5.0-STABLE', C_WHITE), tags=['SIGINT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('DB Orchestrator: v1.5.0 | Repositories: v1.5.0', C_GREEN), tags=['SIGINT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('Command Router: v1.5.0 | AI Bot Client: v1.5.0', C_YELLOW), tags=['SIGINT'])}")
     elif verb == "status":
         # 1. Base Population & Systems
         fighters = await node.db.list_fighters(node.net_name)
@@ -45,26 +47,26 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
         uptime = f"{h}h {m}m"
 
         # 4. Multi-line Report
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[ MAINFRAME TELEMETRY ]', C_CYAN, True), tags=['SIGINT'])}")
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'UPTIME: {uptime} | STATUS: {b_stat} | BOTS: {len(fighters)}', C_WHITE), tags=['SIGINT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ MAINFRAME TELEMETRY ]', C_CYAN, True), tags=['SIGINT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'UPTIME: {uptime} | STATUS: {b_stat} | BOTS: {len(fighters)}', C_WHITE), tags=['SIGINT'])}")
         
         grid_msg = f"GRID: {grid['claimed_nodes']}/{grid['total_nodes']} nodes ({grid['claimed_percent']:.1f}%) | MESH: {grid['total_power']:.0f}uP"
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(grid_msg, C_GREEN), tags=['SIGINT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(grid_msg, C_GREEN), tags=['SIGINT'])}")
         
         econ_msg = f"ECON: {econ['total_credits']:.0f}c Total Liquidity | {econ['total_data_units']:.1f}u Total Data"
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(econ_msg, C_YELLOW), tags=['SIGINT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(econ_msg, C_YELLOW), tags=['SIGINT'])}")
         
         queue_msg = f"QUEUE: {len(node.match_queue)} in line | {len(node.ready_players)} ready to drop"
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(queue_msg, C_CYAN), tags=['SIGINT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(queue_msg, C_CYAN), tags=['SIGINT'])}")
     elif verb == "battlestop":
         if node.active_engine and node.active_engine.active:
             node.active_engine.active = False
             node.active_engine = None
             await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text('ADMIN OVERRIDE: ACTIVE COMBAT SEQUENCE HALTED.', C_RED, True), tags=['SIGACT'])}")
-            await node.send(f"PRIVMSG {reply_target} :[SYS] Match aborted.")
-        else: await node.send(f"PRIVMSG {reply_target} :[SYS] No active battle.")
+            await node.send(f"{tactical_cmd} {reply_target} :[SYS] Match aborted.")
+        else: await node.send(f"{tactical_cmd} {reply_target} :[SYS] No active battle.")
     elif verb == "battlestart":
-        if node.active_engine and node.active_engine.active: await node.send(f"PRIVMSG {reply_target} :[SYS] Arena locked.")
+        if node.active_engine and node.active_engine.active: await node.send(f"{tactical_cmd} {reply_target} :[SYS] Arena locked.")
         elif len(node.ready_players) > 0: await node.check_match_start()
         else: await node.trigger_arena_call()
     elif verb == "topic": await node.set_dynamic_topic()
@@ -78,15 +80,15 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
             old_name, new_name = full_args[1], full_args[2]
             success, feedback = await node.db.rename_node(old_name, new_name)
             tag = "SIGINT" if success else "OSINT"
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(feedback, tags=[tag])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(feedback, tags=[tag])}")
             if success:
                 announcement = format_text(f"NODE REBRANDED: {old_name} is now known as {new_name}.", C_CYAN, True)
-                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(announcement, tags=['SIGACT'])}")
+                await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(announcement, tags=['SIGACT'])}")
         elif len(full_args) >= 2 and full_args[0].lower() == "seed":
             try: count = int(full_args[1])
             except: count = 1
             if count > 5: count = 5 # Limit per operation
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'Initiating procedural grid expansion ({count} nodes)...', C_YELLOW), tags=['SIGINT'])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'Initiating procedural grid expansion ({count} nodes)...', C_YELLOW), tags=['SIGINT'])}")
             
             new_nodes = await node.llm.generate_grid_nodes(count)
             added_count = 0
@@ -107,26 +109,26 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                         added_count += 1
             
             feedback = f"Expansion complete. Synced {added_count} new sectors to the mesh."
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(feedback, C_GREEN), tags=['SIGINT'])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(feedback, C_GREEN), tags=['SIGINT'])}")
         elif len(full_args) >= 3 and full_args[0].lower() == "chgdesc":
-            target_node, new_desc = full_args[1], full_args[2]
+            target_node, new_desc = full_args[1], " ".join(full_args[2:])
             success, feedback = await node.db.grid.update_node_description(target_node, new_desc)
             tag = "SIGINT" if success else "OSINT"
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(feedback, tags=[tag])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(feedback, tags=[tag])}")
             if success:
                 announcement = format_text(f"NODE ARCHITECTURE REDEFINED: {target_node} sensors updated.", C_CYAN, True)
-                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(announcement, tags=['SIGACT'])}")
+                await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(announcement, tags=['SIGACT'])}")
         elif full_args[0].lower() == "spawn":
             if len(full_args) >= 2:
                 target_node = full_args[1]
                 success, feedback = await node.db.grid.set_spawn_node(target_node)
                 tag = "SIGINT" if success else "OSINT"
-                await node.send(f"PRIVMSG {reply_target} :{tag_msg(feedback, tags=[tag])}")
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(feedback, tags=[tag])}")
             else:
                 current_spawn = await node.db.grid.get_spawn_node_name()
-                await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'Current Grid Nexus: {current_spawn}', C_CYAN), tags=['SIGINT'])}")
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'Current Grid Nexus: {current_spawn}', C_CYAN), tags=['SIGINT'])}")
         else:
-            await node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {node.prefix} admin grid <rename|seed|spawn> [args]")
+            await node.send(f"{tactical_cmd} {tactical_target} :[ERR] Syntax: {node.prefix} admin grid <rename|seed|spawn> [args]")
     elif verb == "restart":
         msg = tag_msg(format_text('MAINFRAME RESTART INITIATED BY ADMIN.', C_YELLOW, True), tags=['SIGACT'])
         await node.send(f"PRIVMSG {node.config['channel']} :{msg}", immediate=True)

@@ -3,21 +3,24 @@ import asyncio
 import random
 import logging
 from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
-from .base import is_machine_mode, check_rate_limit
+from .base import is_machine_mode, check_rate_limit, get_action_routing
 
 logger = logging.getLogger("manager")
 
 async def handle_mob_encounter(node, nick: str, node_name: str, threat: int, prev_node: str, reply_target: str):
     mob = node.db.combat.MOB_ROSTER.get(threat, node.db.combat.MOB_ROSTER[1])
     mob_name = mob['name']
-    machine = await is_machine_mode(node, nick)
+    
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
+    
     if machine:
         warn = f"[MOB] THREAT:{threat} NAME:{mob_name} NODE:{node_name} ENGAGE:{node.prefix} engage FLEE:{node.prefix} flee TIMEOUT:15"
-        await node.send(f"PRIVMSG {nick} :{warn}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{warn}")
     else:
         warn = format_text(f"⚠️ [MOB DETECTED] {mob_name} (Threat {threat}) lurks in {node_name}! Type '{node.prefix} engage' to fight or '{node.prefix} flee' to retreat. (15s)", C_YELLOW, bold=True)
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(warn, tags=['COMBAT', nick], location=node_name)}")
-    await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'{mob_name} detected near {nick} at {node_name}.', C_RED), tags=['SIGACT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(warn, tags=['COMBAT', nick], location=node_name)}")
+    
+    await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{mob_name} detected near {nick} at {node_name}.', C_RED), tags=['SIGACT'])}")
     async def auto_engage():
         try:
             await asyncio.sleep(15)
@@ -31,50 +34,58 @@ async def resolve_mob(node, nick: str, reply_target: str):
     enc = node.pending_encounters.pop(nick, None)
     if not enc: return
     enc['timer'].cancel()
+    
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
+    
     result = await node.db.resolve_mob_encounter(nick, node.net_name, enc['threat'])
     if 'error' in result:
-        await node.send(f"PRIVMSG {reply_target} :[ERR] {result['error']}")
+        await node.send(f"{tactical_cmd} {tactical_target} :[ERR] {result['error']}")
         return
-    machine = await is_machine_mode(node, nick)
+    
     if result['won']:
         if machine:
             parts = f"[MOB] RESULT:WIN XP:{result['xp_gained']} CRED:+{result['credits_gained']}"
             if result.get('loot'): parts += f" LOOT:{result['loot']}"
             if result.get('leveled_up'): parts += " LEVELUP:true"
-            await node.send(f"PRIVMSG {nick} :{parts}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{parts}")
         else:
             loot_str = f" Dropped: {result['loot']}!" if result.get('loot') else ""
             lvl_str = f" 🆙 Level Up!" if result.get('leveled_up') else ""
             msg = format_text(f"✅ {enc['mob_name']} neutralized! +{result['xp_gained']} XP, +{result['credits_gained']}c.{loot_str}{lvl_str}", C_GREEN)
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(msg, tags=['COMBAT', nick])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(msg, tags=['COMBAT', nick])}")
+        
         sigact = format_text(f"{nick} eliminated {enc['mob_name']}! +{result['xp_gained']} XP.", C_YELLOW)
-        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(sigact, tags=['SIGACT'])}")
+        await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(sigact, tags=['SIGACT'])}")
+        
         if result.get('task_reward'):
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(result['task_reward'], C_CYAN), tags=['SIGACT', nick])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(result['task_reward'], C_CYAN), tags=['SIGACT', nick])}")
     else:
         if machine:
-            await node.send(f"PRIVMSG {nick} :[MOB] RESULT:LOSS CRED:-{result['credits_lost']} EJECTED:UpLink")
+            await node.send(f"{tactical_cmd} {tactical_target} :[MOB] RESULT:LOSS CRED:-{result['credits_lost']} EJECTED:UpLink")
         else:
             loss_credits = result['credits_lost']
             msg = format_text(f"💀 {enc['mob_name']} overwhelmed you! Lost {loss_credits:.2f}c. Ejected to UpLink.", C_RED)
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(msg, tags=['COMBAT', nick])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(msg, tags=['COMBAT', nick])}")
 
 async def handle_pvp_command(node, nickname: str, reply_target: str, action: str, target_name: str):
     if not await check_rate_limit(node, nickname, reply_target, cooldown=30): return
     success, msg, reward = False, "", None
+    
+    tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nickname, reply_target)
+    
     if action == "attack": success, msg, reward = await node.db.grid_attack(nickname, target_name, node.net_name)
     elif action == "hack": success, msg, reward = await node.db.grid_hack(nickname, target_name, node.net_name)
     elif action == "rob": success, msg, reward = await node.db.grid_rob(nickname, target_name, node.net_name)
     
     if success: 
-        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(msg, C_YELLOW), tags=['SIGACT', 'COMBAT'])}")
+        await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(msg, C_YELLOW), tags=['SIGACT', 'COMBAT'])}")
         if reward:
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(reward, C_CYAN), tags=['SIGACT', nickname])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(reward, C_CYAN), tags=['SIGACT', nickname])}")
     else: 
         if msg == "System offline.":
             await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nickname} - not a registered player - msg ignored")
         else:
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(msg, C_RED), tags=['COMBAT', nickname])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_RED), tags=['COMBAT', nickname])}")
 
 async def handle_ready(node, nick: str, token: str, reply_target: str):
     if await node.db.authenticate_fighter(nick, node.net_name, token):
@@ -89,8 +100,10 @@ async def handle_ready(node, nick: str, token: str, reply_target: str):
 
 async def handle_dice_roll(node, nick: str, args: list, reply_target: str):
     """Play a game of 2d6 dice."""
+    tactical_target, broadcast_chan, machine = await get_action_routing(node, nick, reply_target)
+    
     if len(args) < 2:
-        await node.send(f"PRIVMSG {reply_target} :Usage: {node.prefix} dice <bet> <high|low|seven>")
+        await node.send(f"PRIVMSG {tactical_target} :Usage: {node.prefix} dice <bet> <high|low|seven>")
         return
     
     try: bet = int(args[0])
@@ -98,15 +111,17 @@ async def handle_dice_roll(node, nick: str, args: list, reply_target: str):
     choice = args[1].lower()
     
     if choice not in ["high", "low", "seven"]:
-        await node.send(f"PRIVMSG {reply_target} :Choice must be high (8-12), low (2-6), or seven.")
+        await node.send(f"PRIVMSG {tactical_target} :Choice must be high (8-12), low (2-6), or seven.")
         return
 
     result = await node.db.roll_dice(nick, node.net_name, bet, choice)
     if "error" in result:
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(result['error'], C_RED), tags=['SIGACT', nick])}")
+        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(result['error'], C_RED), tags=['SIGACT', nick])}")
     else:
         banner = format_text(result['msg'], C_GREEN if result['win'] else C_YELLOW)
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(banner, tags=['SIGACT', nick])}")
+        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(banner, tags=['SIGACT', nick])}")
+        if machine and result['win']:
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} won {bet*2}c in a high stakes dice game!', C_CYAN), tags=['SIGACT'])}")
 
 async def handle_cipher_start(node, nick: str, reply_target: str):
     """Start a CipherLock session."""
@@ -132,18 +147,18 @@ async def handle_guess(node, nick: str, args: list, reply_target: str):
 
 async def handle_leaderboard(node, nick: str, args: list, reply_target: str):
     """Show global high scores."""
+    tactical_target, broadcast_chan, machine = await get_action_routing(node, nick, reply_target)
     cat = args[0].upper() if args else "DICE"
     results = await node.db.get_leaderboard(cat)
     if not results:
-        await node.send(f"PRIVMSG {reply_target} :[GRID] No records found for category: {cat}")
+        await node.send(f"PRIVMSG {tactical_target} :[GRID] No records found for category: {cat}")
         return
     
-    machine = await is_machine_mode(node, nick)
     if machine:
         parts = " ".join(f"{r['name']}:{r['score']:.1f}" for r in results)
-        await node.send(f"PRIVMSG {nick} :[TOP] CAT:{cat} LIST:{parts}")
+        await node.send(f"PRIVMSG {tactical_target} :[TOP] CAT:{cat} LIST:{parts}")
         return
-    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'[ LEADERBOARD: {cat} ]', C_CYAN, True), tags=['OSINT'], is_machine=machine)}")
+    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(f'[ LEADERBOARD: {cat} ]', C_CYAN, True), tags=['OSINT'], is_machine=machine)}")
     for i, r in enumerate(results):
         line = f"#{i+1} | {r['name']} | score: {r['score']:.1f}"
-        await node.send(f"PRIVMSG {reply_target} :{line}")
+        await node.send(f"PRIVMSG {tactical_target} :{line}")

@@ -21,27 +21,28 @@ async def trigger_arena_call(node):
         await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(alert, tags=['ARENA'])}")
 
 async def check_match_start(node):
-    if len(node.ready_players) >= 2:
-        if node.pve_task: node.pve_task.cancel()
-        participants = node.ready_players[:2]
-        node.ready_players = node.ready_players[2:]
-        logger.info(f"Starting PVP Match with: {participants}")
-        asyncio.create_task(start_match(node, "PVP_MATCH", participants, pve=False))
-        
-    elif len(node.ready_players) == 1 and not node.active_engine:
-        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('Fighter queued. Waiting 20 seconds for a human challenger...', tags=['ARENA', 'SIGACT'])}")
+    if len(node.ready_players) > 0 and not node.active_engine and not node.pve_task:
+        # A 1-minute grace period begins as soon as the first fighter readies
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('Match initialization sequence started. 60 seconds until combat drop...', tags=['ARENA', 'SIGACT'])}")
         node.pve_task = asyncio.create_task(pve_countdown(node))
 
 async def pve_countdown(node):
     try:
-        await asyncio.sleep(20)
-        if len(node.ready_players) == 1 and not node.active_engine:
+        await asyncio.sleep(60) # Standard 1-minute grace period
+        if len(node.ready_players) >= 2:
+            participants = node.ready_players[:2]
+            node.ready_players = node.ready_players[2:]
+            logger.info(f"Starting PVP Match after 1m wait: {participants}")
+            asyncio.create_task(start_match(node, "PVP_MATCH", participants, pve=False))
+        elif len(node.ready_players) == 1:
             player = node.ready_players.pop(0)
-            await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('No humans detected. Initiating PvE simulation...', tags=['ARENA', 'SIGACT'])}")
+            await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('No human challengers manifested. Dropping PvE obstacle.', tags=['ARENA', 'SIGACT'])}")
             logger.info(f"Starting PVE Match for: {player}")
             asyncio.create_task(start_match(node, "PVE_MATCH", [player], pve=True))
+        
+        node.pve_task = None
     except asyncio.CancelledError:
-        pass 
+        node.pve_task = None
 
 async def generate_and_queue_npc(node, npc: Entity, state_msg: str):
     action = await node.llm.generate_npc_action(npc.name, npc.bio, state_msg, node.prefix)

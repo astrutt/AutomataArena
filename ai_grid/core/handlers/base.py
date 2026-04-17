@@ -6,6 +6,8 @@ from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C
 async def handle_help(node, nick: str, args: list, reply_target: str):
     """Displays a comprehensive list of all v1.6.0 commands or details for a specific verb."""
     
+    tactical_target, broadcast_chan, machine = await get_action_routing(node, nick, reply_target)
+    
     # Detailed Command Registry
     registry = {
         "register": {"desc": "Found your digital persona.", "syntax": "register <Name> <Race> <Class> <Traits>"},
@@ -54,15 +56,16 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         verb = args[0].lower()
         if verb in registry:
             info = registry[verb]
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'[ COMMAND: {verb.upper()} ]', C_CYAN, True), tags=['OSINT'])}")
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('DESCRIPTION: ', C_YELLOW) + format_text(info['desc'], C_WHITE), tags=['OSINT'])}")
+            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(f'[ COMMAND: {verb.upper()} ]', C_CYAN, True), tags=['OSINT'])}")
+            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('DESCRIPTION: ', C_YELLOW) + format_text(info['desc'], C_WHITE), tags=['OSINT'])}")
             syntax_str = f"{node.prefix} {info['syntax']}"
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('SYNTAX: ', C_YELLOW) + format_text(syntax_str, C_GREEN), tags=['OSINT'])}")
+            await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('SYNTAX: ', C_YELLOW) + format_text(syntax_str, C_GREEN), tags=['OSINT'])}")
             if 'cost' in info:
-                await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('COST: ', C_YELLOW) + format_text(info['cost'], C_RED), tags=['OSINT'])}")
+                await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('COST: ', C_YELLOW) + format_text(info['cost'], C_RED), tags=['OSINT'])}")
             return
         else:
-            await node.send(f"PRIVMSG {reply_target} :[ERR] Command '{verb}' not found in registry.")
+            await node.send(f"PRIVMSG {tactical_target} :[ERR] Command '{verb}' not found in registry.")
+        return
 
     # Generic Categorical Help
     help_categories = {
@@ -74,12 +77,12 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "🎮 GAMES": ["cipher/guess", "dice", "top", "attack/rob", "queue/ready", "engage"]
     }
 
-    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[ THE GRID v1.6.0 - COMMAND INTERFACE ]', C_CYAN, bold=True), tags=['OSINT'])}")
+    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('[ THE GRID v1.6.0 - COMMAND INTERFACE ]', C_CYAN, bold=True), tags=['OSINT'])}")
     for cat, cmds in help_categories.items():
         cmd_str = ", ".join([f"{node.prefix} {c}" for c in cmds])
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(cat, C_YELLOW) + ': ' + format_text(cmd_str, C_WHITE), tags=['OSINT'])}")
+        await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(cat, C_YELLOW) + ': ' + format_text(cmd_str, C_WHITE), tags=['OSINT'])}")
 
-    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'Type {node.prefix} help <command> for detailed syntax.', C_CYAN), tags=['OSINT'])}")
+    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(f'Type {node.prefix} help <command> for detailed syntax.', C_CYAN), tags=['OSINT'])}")
 
 async def is_machine_mode(node, nick: str) -> bool:
     prefs = await node.db.get_prefs(nick, node.net_name)
@@ -96,10 +99,29 @@ async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 2
     if elapsed < cooldown:
         if not record['warned']:
             record['warned'] = True
+            tactical_target, broadcast_chan, machine = await get_action_routing(node, nick, reply_target)
             msg = format_text(f"Anti-flood MCP triggered. Please wait {cooldown:.1f}s between commands.", C_RED)
-            asyncio.create_task(node.send(f"PRIVMSG {reply_target} :{tag_msg(msg, tags=['SIGACT', nick])}"))
+            asyncio.create_task(node.send(f"PRIVMSG {tactical_target} :{tag_msg(msg, tags=['SIGACT', nick])}"))
         return False
         
     record['last_action'] = now
     record['warned'] = False # Reset on success
     return True
+
+async def get_action_routing(node, nickname: str, current_target: str):
+    """
+    Returns (tactical_target, broadcast_channel, is_machine, tactical_cmd).
+    Diverts tactical_target to the player's nickname if they are in machine mode.
+    tactical_cmd is determined by character preference (PRIVMSG or NOTICE).
+    """
+    prefs = await node.db.get_prefs(nickname, node.net_name)
+    is_machine = prefs.get('output_mode', 'human') == 'machine'
+    msg_type = prefs.get('msg_type', 'privmsg').upper() # PRIVMSG or NOTICE
+    channel = node.config['channel']
+    
+    if is_machine:
+        return nickname, channel, True, msg_type
+    else:
+        # If human, tactical target is the original target (usually the channel)
+        # However, if target is a nick (PM), we respect the original intent
+        return current_target, channel, False, "PRIVMSG"
