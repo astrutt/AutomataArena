@@ -101,10 +101,10 @@ def format_text(text: str, color_code: str = None, bold: bool = False, is_machin
         logger.error(f"Failed to format text '{text}': {e}")
         return str(text)
 
-def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool = False) -> str:
+def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool = False, nick: str = None) -> str:
     """
     Builds a structured [GRID] message with tactical intel tags and icons.
-    Format: [GRID]<ico>[TAG1][TAG2] text
+    Format: [GRID]<ico>[TAG1][TAG2][nick] text
     """
     if tags is None: tags = []
     
@@ -124,7 +124,14 @@ def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool
     if location:
         tag_str += f"[{location}]"
     for t in tags:
-        tag_str += f"[{t}]"
+        # Don't duplicate the icon tag in the text part if it's already the icon
+        if t.upper() in ICONS and ICONS[t.upper()] == icon:
+            tag_str += f"[{t}]"
+        elif t.upper() not in ICONS:
+            tag_str += f"[{t}]"
+            
+    if nick:
+        tag_str += f"[{nick}]"
     
     # Combine
     p_grid = format_text("[GRID]", c_grid, is_machine=is_machine)

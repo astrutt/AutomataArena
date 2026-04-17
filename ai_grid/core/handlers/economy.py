@@ -16,11 +16,11 @@ async def handle_shop_view(node, nickname: str, reply_target: str):
         parts = " ".join(f"{i['name']}:{i['cost']}c" for i in items)
         await node.send(f"{tactical_cmd} {tactical_target} :[SHOP] ITEMS:{parts}")
         return
-    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ BLACK MARKET WARES ]', C_CYAN, bold=True), tags=['ECONOMY'], is_machine=machine)}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ BLACK MARKET WARES ]', C_CYAN, bold=True), tags=['ECONOMY'], is_machine=machine, nick=nickname)}")
     for i in items:
         line = f"{i['name']} ({i['type']}) - {i['cost']}c"
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(line, C_GREEN), tags=['ECONOMY'], is_machine=machine)}")
-    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'To buy, travel to a Merchant node and type {node.prefix} buy <item>.', C_YELLOW), tags=['ECONOMY'], is_machine=machine)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(line, C_GREEN), tags=['ECONOMY'], is_machine=machine, nick=nickname)}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'To buy, travel to a Merchant node and type {node.prefix} buy <item>.', C_YELLOW), tags=['ECONOMY'], is_machine=machine, nick=nickname)}")
 
 async def handle_merchant_tx(node, nickname: str, verb: str, item_name: str, reply_target: str):
     result, msg = await node.db.process_transaction(nickname, node.net_name, verb, item_name)
@@ -31,7 +31,7 @@ async def handle_merchant_tx(node, nickname: str, verb: str, item_name: str, rep
         return
     banner = format_text(msg, C_GREEN if result else C_RED)
     if reply_target.startswith(('#', '&', '+', '!')):
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['SIGACT', nickname])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(banner, tags=['SIGACT', nickname], nick=nickname)}")
     else:
         await node.send(f"{tactical_cmd} {tactical_target} :{msg}")
     
@@ -40,9 +40,9 @@ async def handle_merchant_tx(node, nickname: str, verb: str, item_name: str, rep
         if machine:
             # Public narrative
             narrative = f"{nickname} acquired hardware on the Black Market." if verb == "buy" else f"{nickname} liquidated hardware on the Black Market."
-            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(narrative, C_CYAN), tags=['SIGACT'])}")
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(narrative, C_CYAN), tags=['SIGACT'], nick=nickname)}")
         
-        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'{nickname} {act} equipment on the Black Market.', C_CYAN), tags=['SIGACT'])}")
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'{nickname} {act} equipment on the Black Market.', C_CYAN), tags=['SIGACT'], nick=nickname)}")
 
 async def handle_auction(node, nick: str, args: list, reply_target: str):
     """DarkNet Auction sub-commands: list, sell, bid."""
@@ -56,7 +56,7 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
     if sub == "list":
         listings = await node.db.list_active_auctions()
         if not listings:
-            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[DARKNET] The auction house is currently empty.', C_CYAN), tags=['ECONOMY'])}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[DARKNET] The auction house is currently empty.', C_CYAN), tags=['ECONOMY'], nick=nick)}")
             return
         
         if machine:
@@ -64,10 +64,10 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
             await node.send(f"{tactical_cmd} {tactical_target} :[AUCTION] LIST:{parts}")
             return
 
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ GLOBAL DARKNET AUCTIONS ]', C_CYAN, True), tags=['ECONOMY'], is_machine=machine)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ GLOBAL DARKNET AUCTIONS ]', C_CYAN, True), tags=['ECONOMY'], is_machine=machine, nick=nick)}")
         for l in listings:
             line = f"#{l['id']} | {l['item']} | Seller: {l['seller']} | Bid: {l['current_bid']}c | {l['high_bidder']} | Ends: {l['ends_in_min']}m"
-            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(line, C_GREEN), tags=['ECONOMY'], is_machine=machine)}")
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(line, C_GREEN), tags=['ECONOMY'], is_machine=machine, nick=nick)}")
             
     elif sub == "sell" and len(args) >= 3:
         # !a auction sell <item> <start_bid>
@@ -79,7 +79,7 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
         if not success and msg == "Character offline.":
             await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
             return
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_GREEN if success else C_RED), tags=['SIGACT', nick])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_GREEN if success else C_RED), tags=['SIGACT', nick], nick=nick)}")
         
     elif sub == "bid" and len(args) >= 3:
         # !a auction bid <id> <amount>
@@ -94,7 +94,7 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
         if not success and msg == "Character offline.":
             await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
             return
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_GREEN if success else C_RED), tags=['SIGACT', nick])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_GREEN if success else C_RED), tags=['SIGACT', nick], nick=nick)}")
     else:
         await node.send(f"PRIVMSG {reply_target} :Invalid auction command. Try: list, sell <item> <bid>, or bid <id> <amount>.")
 
@@ -112,8 +112,8 @@ async def handle_market_view(node, nickname: str, reply_target: str):
         await node.send(f"{tactical_cmd} {tactical_target} :[MARKET] MULTS:{parts}")
         return
         
-    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ GLOBAL MARKET CONDITIONS ]', C_CYAN, True), tags=['ECONOMY'], is_machine=machine)}")
+    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ GLOBAL MARKET CONDITIONS ]', C_CYAN, True), tags=['ECONOMY'], is_machine=machine, nick=nickname)}")
     for itype, mult in status.items():
         trend = "↑ INFLATION" if mult > 1.0 else ("↓ DEFLATION" if mult < 1.0 else "→ STABLE")
         color = C_RED if mult > 1.0 else (C_GREEN if mult < 1.0 else C_YELLOW)
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'{itype.upper()}: {mult:.2f}x | {trend}', color), tags=['ECONOMY'], is_machine=machine)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'{itype.upper()}: {mult:.2f}x | {trend}', color), tags=['ECONOMY'], is_machine=machine, nick=nickname)}")
