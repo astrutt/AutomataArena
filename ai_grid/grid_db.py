@@ -10,16 +10,16 @@ from sqlalchemy.future import select
 
 from models import Base, Character, GridNode, NodeConnection, ItemTemplate, Player, NetworkAlias, DiscoveryRecord
 from database.core import DB_FILE, logger, GRID_EXPANSION, GRID_CONNECTIONS, LOOT_TEMPLATES
-from database.player_repo import PlayerRepository
-from database.economy_repo import EconomyRepository
-from database.mainframe_repo import MainframeRepository
-from database.minigame_repo import MiniGameRepository
-from database.combat_repo import CombatRepository
-from database.navigation_repo import NavigationRepository
-from database.territory_repo import TerritoryRepository
-from database.discovery_repo import DiscoveryRepository
-from database.infiltration_repo import InfiltrationRepository
-from database.maintenance_repo import MaintenanceRepository
+from database.repositories.navigation_repo import NavigationRepository
+from database.repositories.territory_repo import TerritoryRepository
+from database.repositories.discovery_repo import DiscoveryRepository
+from database.repositories.infiltration_repo import InfiltrationRepository
+from database.repositories.maintenance_repo import MaintenanceRepository
+from database.repositories.player_repo import PlayerRepository
+from database.repositories.economy_repo import EconomyRepository
+from database.repositories.mainframe_repo import MainframeRepository
+from database.repositories.minigame_repo import MiniGameRepository
+from database.repositories.combat_repo import CombatRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):

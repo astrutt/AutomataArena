@@ -3,8 +3,8 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord
-from .core import CONFIG
-from .base_repo import BaseRepository
+from ..core import CONFIG
+from ..base_repo import BaseRepository
 
 class NavigationRepository(BaseRepository):
     async def get_spawn_node_name(self) -> str:

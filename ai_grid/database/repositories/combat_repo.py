@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from models import Character, Player, NetworkAlias, GridNode, InventoryItem, ItemTemplate
-from .core import logger, MOB_ROSTER, LOOT_TABLE, CONFIG, increment_daily_task
+from ..core import logger, MOB_ROSTER, LOOT_TABLE, CONFIG, increment_daily_task
 from grid_utils import calculate_elo_change
 
 class CombatRepository:

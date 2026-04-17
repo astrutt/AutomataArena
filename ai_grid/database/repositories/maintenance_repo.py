@@ -4,8 +4,8 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from models import GridNode
-from .core import logger
-from .base_repo import BaseRepository
+from ..core import logger
+from ..base_repo import BaseRepository
 
 class MaintenanceRepository(BaseRepository):
     async def tick_grid_power(self):

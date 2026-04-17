@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from models import Character, Player, NetworkAlias, MainframeTask, GridNode, InventoryItem, ItemTemplate
-from .core import logger, CONFIG
+from ..core import logger, CONFIG
 
 class MainframeRepository:
     def __init__(self, async_session):

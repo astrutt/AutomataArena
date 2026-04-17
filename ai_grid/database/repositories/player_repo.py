@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from models import Player, NetworkAlias, Character, InventoryItem, ItemTemplate, GridNode, Memo
-from .core import logger, DEFAULT_PREFS, increment_daily_task
+from ..core import logger, DEFAULT_PREFS, increment_daily_task
 
 class PlayerRepository:
     def __init__(self, async_session):

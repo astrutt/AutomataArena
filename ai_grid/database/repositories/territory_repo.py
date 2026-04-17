@@ -4,8 +4,8 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from models import Character, Player, NetworkAlias, GridNode, InventoryItem
-from .core import logger, CONFIG, increment_daily_task
-from .base_repo import BaseRepository
+from ..core import logger, CONFIG, increment_daily_task
+from ..base_repo import BaseRepository
 
 class TerritoryRepository(BaseRepository):
     async def claim_node(self, name: str, network: str) -> tuple[bool, str]:
