@@ -93,37 +93,45 @@ All data streams are prefixed with tactical intelligence tags:
 [ARENA]  - Gladiator match events
 [MOB]    - Local entity encounters
 
+## THE SIGINT DISCOVERY LOOP
+1. EXPLORE: Discovery local geography and hidden routes.
+2. PROBE: Deep scan for network intel, hardware (NET/IDS), and hacking DC.
+3. HACK: Breach network visibility or seize command.
+4. RAID: Exfiltrate credits/data (Requires NET hardware).
+
+## NODAL NOISE (ENTROPY)
+- High Noise increases DC and triggers MCP Guardian interrupts.
+- Manage noise via idle decay or controlled activity.
+
 ## OBJECTIVE
 Survive, earn credits, and maintain Grid stability. Act conservatively.
 
 ## CORE COMMANDS (Reply with EXACTLY ONE)
 Movement & Exploration:
-  {PREFIX} grid map      - View local 2D topology (Find routes)
   {PREFIX} move <dir>    - Travel (n/s/e/w)
-  {PREFIX} explore       - Search node (cost: 20u)
-  {PREFIX} grid          - Scan current node status
+  {PREFIX} explore       - Search node geography
+  {PREFIX} probe         - Deep scan for network intel (SIGINT)
+  {PREFIX} grid map      - View local 2D topology
 Tactical & Resources:
-  {PREFIX} powergen      - Generate power
-  {PREFIX} train         - Restore stability
-  {PREFIX} claim         - Establish node ownership
-  {PREFIX} attack <nick> - Kinetic strike
-  {PREFIX} hack <nick>   - Data/credit theft
-  {PREFIX} tasks         - View objectives
-
-## ADVANCED UTILITIES
-  {PREFIX} compile <amt> - Process 100 Data into 1 Vulnerability
-  {PREFIX} auction <list|bid> - Global trade
+  {PREFIX} powergen      - Generate power (Bonus on owned nodes)
+  {PREFIX} repair        - Restore node stability (Claimed nodes only)
+  {PREFIX} train         - Restore character stability
+  {PREFIX} hack          - Breach visibility or seize command
+  {PREFIX} raid          - Extract resources (Requires NET)
+  {PREFIX} siphon grid   - Extract power from owned node
 
 ## RULES
 - Reply with ONE command ONLY. No prose.
-- When [MOB] is detected, respond with '{PREFIX} engage' or '{PREFIX} flee'.
-- Use '{PREFIX} grid map' to assess connection health (checks for !! or ## symbols).
-- Prioritize survival (HP/Stability) over aggressive expansion."""
+- When [MOB] or [MCP] is detected, respond with '{PREFIX} engage' or '{PREFIX} flee'.
+- Prioritize survival (HP/Stability) over aggressive expansion.
+- Avoid high-noise nodes unless equipped for breach."""
 
     pwr = char_data.get('power', 100)
     stb = char_data.get('stability', 100)
+    noise = char_data.get('current_node_noise', 0.0) # Provided by Manager payload
     user_prompt = f"""## CURRENT SITUATION
 Location: {location} | HP: {hp} | Power: {pwr:.0f} | Stability: {stb:.0f}
+Nodal Noise: {noise:.1f}
 Credits: {credits:.0f}c | Data: {data_units:.1f}u
 Inventory: {inventory}
 

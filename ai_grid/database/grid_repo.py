@@ -442,9 +442,33 @@ class GridRepository:
             else:
                 char.credits = max(0.0, char.credits - 50.0)
                 await session.commit()
-                return False, f"Command Seizure Failed (Rolled {roll} vs DC {difficulty}). ICE rejected your token."
+                return False, f"Command Seizure Failed (Rolled {roll} vs DC {difficulty}). MCP rejected your token."
 
-    async def raid_node(self, name: str, network: str) -> dict:
+    async def grid_repair(self, name: str, network: str) -> tuple[bool, str]:
+        """Manual repair action. Enhanced bonus if performed on claimed node."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.current_node))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return False, "System offline."
+            
+            node = char.current_node
+            is_owner = node.owner_character_id == char.id
+            
+            cost = 25.0
+            if char.power < cost: return False, f"Insufficient uP. Repair requires {cost} power."
+            
+            char.power -= cost
+            # Boost: 20% repair on own node, 10% otherwise
+            bonus = 20.0 if is_owner else 10.0
+            node.durability = min(100.0, node.durability + bonus)
+            
+            await session.commit()
+            owner_msg = " [OWNERSHIP BONUS APPLIED]" if is_owner else ""
+            return True, f"Nodal integrity augmented (+{bonus}%).{owner_msg}"
         """Loot an OPEN node for resources."""
         import random
         async with self.async_session() as session:
@@ -463,29 +487,32 @@ class GridRepository:
             if node.owner_character_id == char.id:
                 return {"success": False, "msg": "Self-Raid Blocked: Use 'siphon' to extract power from your own sectors."}
 
-            # Raid Cost (Extreme)
-            cost = CONFIG.get('mechanics', {}).get('action_costs', {}).get('raid', 100.0)
-            if char.power < cost:
-                return {"success": False, "msg": f"Insufficient POWER. Raid requires {cost} uP."}
-            
-            # Firewall Penalty
+            # Requirement Check: NET Device
             addons = json.loads(node.addons_json or "{}")
-            if addons.get("FIREWALL") and node.owner_character_id != char.id:
-                if random.random() < 0.4: # 40% chance for firewall to block raid entirely
-                    char.power -= cost * 0.5
-                    return {"success": False, "msg": "RAID FAILED: FIREWALL integrity blocked the exfiltration attempt. 50 uP lost in the static."}
+            if not addons.get("NET"):
+                return {"success": False, "msg": "RAID ABORTED: Node lacks a synchronized Network bridge (NET addon required)."}
+
+            # MCP Guardian Spawn (20%)
+            if random.random() < 0.20:
+                return {"success": False, "msg": "MCP_GUARDIAN_INTERRUPT", "detail": "Master Control Program has deployed a Vector Guard. RAID sequence suspended!"}
 
             char.power -= cost
             
             # Yield based on node power/level
-            c_gain = random.randint(50, 200) * node.upgrade_level
-            d_gain = random.uniform(20.0, 50.0) * node.upgrade_level
-            char.credits += c_gain
-            char.data_units += d_gain
-            loot_msg = f"Exfiltrated {c_gain}c and {d_gain:.1f} data units."
+            total_c_gain = random.randint(100, 300) * node.upgrade_level
+            total_d_gain = random.uniform(30.0, 60.0) * node.upgrade_level
             
-            if random.random() < 0.3:
-                loot_msg += " Found 1x [Data_Shard]."
+            participants = [c for c in node.characters_present if not c.player.is_autonomous] # Real players or registered bots
+            if not participants: participants = [char]
+            
+            c_per_person = total_c_gain / len(participants)
+            d_per_person = total_d_gain / len(participants)
+            
+            for p in participants:
+                p.credits += c_per_person
+                p.data_units += d_per_person
+
+            loot_msg = f"Extracted {total_c_gain}c and {total_d_gain:.1f} data units. Split among {len(participants)} participants."
                 
             node.durability = max(0.0, node.durability - 25.0)
             
@@ -518,25 +545,36 @@ class GridRepository:
             nodes = (await session.execute(stmt)).scalars().all()
             for node in nodes:
                 occupants = len(node.characters_present)
+                # 1. Noise Decay (SIGINT theme)
+                if node.noise > 0:
+                    node.noise = max(0.0, node.noise - 0.5) # Decay per tick
+
+                # 2. Power and Stability (Claimed Node persistence)
                 if node.owner_character_id:
                     # AMP Support
                     addons = json.loads(node.addons_json or "{}")
                     multiplier = 2.0 if addons.get("AMP") else 1.0
                     
+                    # Passive generation based on occupancy or just presence
                     if occupants > 0:
-                        generated = occupants * 5.0 * multiplier
-                        node.power_generated += generated
-                        node.power_stored += generated
+                        reward = occupants * 5.0 * multiplier
+                        node.power_generated += reward
+                        node.power_stored += reward
+                        # Increase stability faster when occupied
                         node.durability = min(100.0, node.durability + (occupants * 2.0))
                     else:
-                        node.durability -= 5.0
-                        if node.durability <= 0:
-                            if node.upgrade_level > 1:
-                                node.upgrade_level -= 1
-                                node.durability = 100.0
-                            else:
-                                node.owner_character_id = None
-                                node.upgrade_level = 1
+                        # Baseline persistence for claimed nodes
+                        node.power_stored += 1.0 * multiplier
+                        node.durability = min(100.0, node.durability + 1.0)
+                else:
+                    # Unclaimed node decay
+                    node.durability -= 5.0
+                    if node.durability <= 0:
+                        if node.upgrade_level > 1:
+                            node.upgrade_level -= 1
+                            node.durability = 100.0
+                        else:
+                            node.upgrade_level = 1
                 node.durability = min(100.0, node.durability) # Safety
             await session.commit()
 
@@ -552,8 +590,7 @@ class GridRepository:
             )
             char = (await session.execute(stmt)).scalars().first()
             if not char or not char.current_node: return {"error": "System offline."}
-            
-            # Phase 3 Exploration Cost
+            # SIGINT Exploration Cost
             cost = CONFIG.get('mechanics', {}).get('action_costs', {}).get('explore', 5.0)
             if char.power < cost:
                 return {"error": f"Insufficient POWER. Explore requires {cost} uP."}
@@ -561,8 +598,9 @@ class GridRepository:
             char.power -= cost
             node = char.current_node
             
-            roll = random.random()
-            success_threshold = 0.4 + (char.alg * 0.02) # Higher Alg helps discovery
+            # Noise Scaling (SIGINT)
+            noise_malus = node.noise * 0.05
+            success_threshold = (0.4 + (char.alg * 0.02)) - noise_malus
             
             if roll < success_threshold:
                 # Discovered occupants (mobs and players)
@@ -584,17 +622,7 @@ class GridRepository:
                         "msg": f"Vulnerability found in local architecture! Uncovering hidden route: {target_conn.direction} -> {target_conn.target_node.name}{mob_msg}"
                     }
                 
-                # 2. Look for Foreign Hub affinity
-                if node.irc_affinity:
-                    return {
-                        "status": "success",
-                        "discovery": "irc_bridge",
-                        "affinity": node.irc_affinity,
-                        "occupants": occupants,
-                        "msg": f"Foreign signal detected... This node appears to be a bridge to {node.irc_affinity}.{mob_msg}"
-                    }
-                
-                # 3. Rare data discovery
+                # 2. Rare data discovery
                 char.credits += 25.0
                 await session.commit()
                 return {
@@ -604,9 +632,11 @@ class GridRepository:
                     "msg": f"Found a discarded encrypted data packet. Extracted 25.0c.{mob_msg}"
                 }
             else:
-                # Failure logic
-                if random.random() < 0.25: # 25% chance of Grid Bug
-                    return {"status": "failure", "danger": "GRID_BUG_SPAWN", "msg": "Sensors detected structural corruption... A Grid Bug has spawned!"}
+                # Failure logic: Increment Noise
+                node.noise += 1.0
+                if random.random() < 0.25: # 25% chance of Guardian BUG
+                    await session.commit()
+                    return {"status": "failure", "danger": "GUARDIAN_BUG_SPAWN", "msg": "Sensors detected structural corruption... A Guardian BUG has spawned!"}
                 
                 await session.commit()
                 return {"status": "failure", "msg": "The exploration sequence yielded no actionable data."}
@@ -630,15 +660,28 @@ class GridRepository:
             if char.power < cost:
                 return {"error": f"Insufficient POWER. Probe requires {cost} uP."}
             
-            char.power -= cost
-            node = char.current_node
+            # Noise Scaling (SIGINT)
+            difficulty = (12 + (node.upgrade_level * 2)) + (node.noise * 0.5)
+            roll = random.randint(1, 20) + char.alg
             
+            if roll < difficulty:
+                node.noise += 2.0 # Deep scan is loud
+                if random.random() < 0.35: # 35% chance of Alert/Ejection if failure is bad
+                    return {"success": False, "msg": "PROBE FAILED: MCP sensors traced your burst transmission. Structural integrity compromised."}
+                await session.commit()
+                return {"success": False, "msg": f"PROBE FAILED: Signals reflect was too noisy (Rolled {roll} vs DC {difficulty})."}
+
             addons = json.loads(node.addons_json or "{}")
             occupants = [c.name for c in node.characters_present if c.name != name]
             
-            # Phase 4 Refinement: Develop Probe vs Explore
+            # Visibility Detection (Now separated from Explore)
+            visibility_gate = "OPEN" if node.visibility_mode == "OPEN" else "CLOSED [BREACH REQUIRED]"
+            
+            # Bridge Affinity
+            bridge = f"Bridge to {node.irc_affinity}" if node.irc_affinity else "No Cross-Network affinity detected."
+
             hack_dc = 10 + (node.upgrade_level * 3)
-            char.alg_bonus = 3 # Grant bonus for next hack
+            char.alg_bonus = 5 # Grant bonus for next hack
             await session.commit()
             
             return {
@@ -647,11 +690,13 @@ class GridRepository:
                 "level": node.upgrade_level,
                 "durability": node.durability,
                 "threat": node.threat_level,
+                "noise": node.noise,
                 "addons": [k for k, v in addons.items() if v],
                 "occupants": occupants,
-                "visibility": node.visibility_mode,
+                "visibility": visibility_gate,
+                "bridge": bridge,
                 "hack_dc": hack_dc,
-                "bonus_granted": 3
+                "bonus_granted": 5
             }
 
     async def install_node_addon(self, name: str, network: str, item_name: str) -> dict:

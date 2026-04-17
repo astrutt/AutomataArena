@@ -187,7 +187,7 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
     elif action == "hack":
         success, msg = await node.db.hack_node(nickname, node.net_name)
         if not success and msg == "PVE_GUARDIAN_SPAWN":
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[WARNING] Primary ICE activated. PvE Guardian routine detected.', C_RED), tags=['SIGACT', nickname])}")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[WARNING] Primary MCP activated. PvE Guardian routine detected.', C_RED), tags=['SIGACT', nickname])}")
             return
     else:
         return # Unknown activity

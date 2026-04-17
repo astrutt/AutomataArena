@@ -23,6 +23,7 @@ class GridNode(Base):
     durability = Column(Float, default=100.0)
     threat_level = Column(Integer, default=0)  # 0=safe, 1-3=wilderness mob tier
     is_spawn_node = Column(Boolean, default=False, index=True)
+    noise = Column(Float, default=0.0) # SIGINT failure tracking (Heat)
     
     # Discovery & Network Mapping
     is_hidden = Column(Boolean, default=False)

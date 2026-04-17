@@ -13,6 +13,17 @@ class CombatRepository:
         self.async_session = async_session
         self.MOB_ROSTER = MOB_ROSTER
 
+    async def _eject_character(self, session, char):
+        """Relocates a character to the Grid Nexus (Spawn)."""
+        uplink = (await session.execute(
+            select(GridNode).where(GridNode.is_spawn_node == True)
+        )).scalars().first()
+        if uplink:
+            char.node_id = uplink.id
+            char.current_hp = char.ram * 5
+            return True
+        return False
+
     async def record_match_result(self, winner_name: str, loser_name: str, network: str):
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
@@ -121,12 +132,8 @@ class CombatRepository:
                 char.credits = max(0.0, char.credits - penalty)
                 result["credits_lost"] = round(penalty, 2)
 
-                uplink = (await session.execute(
-                    select(GridNode).where(GridNode.is_spawn_node == True)
-                )).scalars().first()
-                if uplink:
-                    char.node_id = uplink.id
-                    result["respawned"] = True
+                # Unified Ejection Logic
+                result["respawned"] = await self._eject_character(session, char)
 
             await session.commit()
             return result
@@ -173,12 +180,11 @@ class CombatRepository:
                 target.credits -= looted
                 attacker.credits += looted
                 
-                uplink = (await session.execute(select(GridNode).where(GridNode.is_spawn_node == True))).scalars().first()
-                if uplink: target.node_id = uplink.id
-                target.current_hp = target.ram * 5 
+                # Unified Ejection Logic
+                await self._eject_character(session, target)
                 
                 await session.commit()
-                return True, f"{attacker.name} struck {target.name} for {final_dmg} DMG! {target.name} flatlines... {attacker.name} loots {looted:.2f}c.", None
+                return True, f"{attacker.name} struck {target.name} for {final_dmg} DMG! {target.name} flatlines... Ejected to Spawn.", None
                 
             await session.commit()
             return True, f"{attacker.name} struck {target.name} for {final_dmg} DMG! ({target.current_hp}/{target.ram*5} HP)", None
@@ -198,13 +204,13 @@ class CombatRepository:
                 
             if not attacker or not target: return False, "Target not found."
             if attacker.node_id != target.node_id: return False, "Target is not in your current sector."
-            if target.current_node and target.current_node.node_type == "safezone": return False, "ICE prevents hacking in safezones."
+            if target.current_node and target.current_node.node_type == "safezone": return False, "MCP prevents hacking in safezones."
             if attacker.id == target.id: return "..."
             
             # Phase 2: Power Consumption
             cost = CONFIG.get('mechanics', {}).get('action_costs', {}).get('hack', 3.0)
             if attacker.power < cost:
-                return False, f"ICE trace active. You need {cost:.1f} power to safely breach."
+                return False, f"MCP trace active. You need {cost:.1f} power to safely breach."
             attacker.power -= cost
             
             roll = random.randint(1, 20) + attacker.alg
@@ -220,7 +226,7 @@ class CombatRepository:
             else:
                 attacker.credits = max(0.0, attacker.credits - 50.0)
                 await session.commit()
-                return False, f"Hack Failed. {target.name}'s ICE traced the intrusion. {attacker.name} is fined 50c!", None
+                return False, f"Hack Failed. {target.name}'s MCP traced the intrusion. {attacker.name} is fined 50c!", None
 
     async def grid_rob(self, attacker_name, target_name, network):
         async with self.async_session() as session:

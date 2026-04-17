@@ -23,4 +23,11 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
-
+# Agentic Workflow
+.agents/
+archive/
+AGENT_BOARD.md
+SNAGS.md
+PROJECT_ROADMAP.md
+A_API_REFERENCE.md
+ARCHITECTURE.md

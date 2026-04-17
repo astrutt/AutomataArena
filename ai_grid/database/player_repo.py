@@ -447,23 +447,24 @@ class PlayerRepository:
             return decay_applied, pruned_count
 
     async def active_powergen(self, name: str, network: str) -> tuple:
+        """Manual power harvesting. Enhanced if performed on claimed node."""
         async with self.async_session() as session:
-            name_lower = name.lower()
-            stmt = select(Character).join(Player).join(NetworkAlias).where(
-                func.lower(Character.name) == name_lower,
-                func.lower(NetworkAlias.nickname) == name_lower,
-                NetworkAlias.network_name == network
-            )
-            char = (await session.execute(stmt)).scalars().first()
+            char = await self.get_character_by_nick(name, network, session)
             if not char: return False, "System offline."
             
-            p_gain = 10.0
-            if p_gain > 0:
-                char.power += p_gain
+            node = char.current_node
+            is_owner = node and node.owner_character_id == char.id
+            
+            p_gain = 15.0 if is_owner else 10.0
+            char.power += p_gain
+            
+            if is_owner:
+                node.power_stored += 10.0 # Node also benefits
                 await increment_daily_task(session, char, "Claim a Node") 
                 
             await session.commit()
-            return True, f"Manual power generation complete. (+{p_gain} uP)"
+            owner_msg = " [OWNERSHIP BONUS: +5 uP | Node Capacitors +10 uP]" if is_owner else ""
+            return True, f"Manual power generation complete (+{p_gain} uP).{owner_msg}"
 
     async def active_training(self, name: str, network: str) -> tuple:
         async with self.async_session() as session:
@@ -552,4 +553,3 @@ async def increment_daily_task(session, char, task_key):
                         char.stability = min(100.0, char.stability + 0.5)
             
             await session.commit()
-
