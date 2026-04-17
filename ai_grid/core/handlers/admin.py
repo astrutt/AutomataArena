@@ -8,7 +8,17 @@ from .base import get_action_routing
 logger = logging.getLogger("manager")
 
 async def handle_admin_command(node, admin_nick: str, verb: str, args: list, reply_target: str):
-    logger.warning(f"SYSADMIN OVERRIDE: {admin_nick} -> {verb}")
+    # Logging Redaction Utility
+    def mask_args(v, a):
+        if v in ["nickregister", "nickidentify"] and len(a) > 0:
+            return ["********"] + a[1:]
+        if v == "nickconfirm" and len(a) > 0:
+            return ["****"] + a[1:]
+        return a
+
+    # Redacted log for INFO, full for DEBUG
+    logger.info(f"SYSADMIN OVERRIDE: {admin_nick} -> {verb} {mask_args(verb, args)}")
+    logger.debug(f"SYSADMIN TRACE: {admin_nick} -> {verb} {args}")
     
     tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, admin_nick, reply_target)
     
@@ -17,7 +27,7 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
         if not args:
             # Landing Page
             await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ MAINFRAME ADMIN OVERRIDES ]', C_CYAN, True), tags=['SIGINT'], nick=admin_nick)}")
-            cmds = ["status", "version", "topic", "broadcast <msg>", "grid <rename|chgdesc|seed|spawn>", "battlestart/stop", "restart", "stop", "shutdown"]
+            cmds = ["status", "version", "topic", "broadcast <msg>", "nickregister", "nickconfirm", "nickidentify", "grid <rename|chgdesc|seed|spawn>", "battlestart/stop", "restart", "stop", "shutdown"]
             cmd_str = ", ".join([f"{node.prefix} admin {c}" for c in cmds])
             await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(cmd_str, C_WHITE), tags=['SIGINT'], nick=admin_nick)}")
             return
@@ -130,6 +140,50 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                 await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'Current Grid Nexus: {current_spawn}', C_CYAN), tags=['SIGINT'], nick=admin_nick)}")
         else:
             await node.send(f"{tactical_cmd} {tactical_target} :[ERR] Syntax: {node.prefix} admin grid <rename|seed|spawn> [args]")
+    elif verb in ["nickregister", "nickconfirm", "nickidentify"]:
+        # SECURITY GATE: Force PM for auth commands
+        if reply_target.lower() == node.config['channel'].lower():
+            await node.send(f"PRIVMSG {admin_nick} :{tag_msg(format_text('[SITREP] SENSITIVE AUTH: Authentication commands must be executed via Private Message.', C_RED, True), tags=['ALARM'])}")
+            return
+
+        if verb == "nickregister":
+            # Report current +r status
+            is_r = admin_nick.lower() in node.nickserv_verified if admin_nick.lower() == node.config['nickname'].lower() else (node.config['nickname'].lower() in node.nickserv_verified)
+            # Actually we want the BOT's status
+            bot_nick = node.config['nickname'].lower()
+            bot_verified = bot_nick in node.nickserv_verified
+            status_str = format_text("ALREADY +r (REGISTERED)", C_GREEN) if bot_verified else format_text("NOT REGISTERED", C_RED)
+            await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'Current Identity Status: {status_str}', tags=['SIGINT'])}")
+            
+            if len(args) >= 2:
+                password, email = args[0], args[1]
+                await node.send(f"PRIVMSG NickServ :REGISTER {password} {email}", immediate=True)
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg('Registration command emitted to NickServ.', tags=['SIGINT'])}")
+            else:
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] Syntax: {node.prefix} admin nickregister <password> <email>', tags=['OSINT'])}")
+        
+        elif verb == "nickconfirm":
+            if args:
+                code = args[0]
+                await node.send(f"PRIVMSG NickServ :CONFIRM {code}", immediate=True)
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg('Confirmation code emitted to NickServ.', tags=['SIGINT'])}")
+            else:
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] Syntax: {node.prefix} admin nickconfirm <code>', tags=['OSINT'])}")
+        
+        elif verb == "nickidentify":
+            if args:
+                password = args[0]
+                await node.send(f"PRIVMSG NickServ :IDENTIFY {password}", immediate=True)
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg('Manual identification emitted to NickServ. Verification WHOIS pending...', tags=['SIGINT'])}")
+                # Trigger a verification WHOIS after a short delay
+                async def delayed_check():
+                    await asyncio.sleep(5)
+                    from core.security import request_nickserv_check
+                    await request_nickserv_check(node, node.config['nickname'])
+                asyncio.create_task(delayed_check())
+            else:
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] Syntax: {node.prefix} admin nickidentify <password>', tags=['OSINT'])}")
+                
     elif verb == "restart":
         msg = tag_msg(format_text('MAINFRAME RESTART INITIATED BY ADMIN.', C_YELLOW, True), tags=['SIGACT'], nick=admin_nick)
         await node.send(f"PRIVMSG {node.config['channel']} :{msg}", immediate=True)

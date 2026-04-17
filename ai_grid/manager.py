@@ -14,6 +14,7 @@ import core.loops as loops
 import core.handlers as handlers
 import core.arena as arena
 import core.security as security
+from core.security import request_nickserv_check
 
 # --- Config Load ---
 try:
@@ -158,6 +159,22 @@ class GridNode:
         await self.db.seed_grid_expansion()
         await self.listen_loop()
 
+    async def auto_identify_routine(self):
+        """Wait 30s after connect, then attempt to identify and verify status."""
+        try:
+            await asyncio.sleep(30)
+            password = self.config.get('password')
+            if password:
+                logger.info(f"[{self.net_name}] Emitting scheduled IDENTIFY sequence to NickServ.")
+                await self.send(f"PRIVMSG NickServ :IDENTIFY {password}", immediate=True)
+                # Give it a moment to process before checking
+                await asyncio.sleep(5)
+                await request_nickserv_check(self, self.config['nickname'])
+            else:
+                logger.debug(f"[{self.net_name}] Auto-identify skipped: No password in config.")
+        except Exception as e:
+            logger.error(f"[{self.net_name}] Auto-identify routine error: {e}")
+
     # --- Delegated Methods (Core Logic) ---
     async def set_dynamic_topic(self):
         await arena.set_dynamic_topic(self)
@@ -207,6 +224,19 @@ class GridNode:
                             who_nick = parts[3].lower()
                             self.nickserv_verified.add(who_nick)
                             logger.debug(f"[{self.net_name}] Verified {who_nick} via WHOIS mode (+r)")
+                elif command == "318":
+                    # 318: RPL_ENDOFWHOIS
+                    parts = line.split()
+                    if len(parts) >= 4:
+                        who_nick = parts[3].lower()
+                        if who_nick == self.config['nickname'].lower():
+                            if who_nick in self.nickserv_verified:
+                                logger.info(f"[{self.net_name}] HUB IDENTITY VERIFIED: {who_nick} is +r (Registered).")
+                            else:
+                                logger.warning(f"[{self.net_name}] HUB IDENTITY FAILURE: {who_nick} is NOT +r. Manual identification required.")
+                                # Alert admins via PM
+                                for admin in self.admins:
+                                    asyncio.create_task(self.send(f"NOTICE {admin} :[GRID][ALARM] HUB IDENTITY FAILURE: I am not identified as +r on {self.net_name}. Use '!a admin nickidentify' or NickServ directly."))
                 elif command == "353":
                     nicks = msg.replace('@', '').replace('+', '').split()
                     import time
@@ -217,6 +247,9 @@ class GridNode:
                             self.channel_users[clean_nick] = {'join_time': now, 'chat_lines': 0}
                             security.start_registration_timer(self, clean_nick)
                 elif command in ["376", "422"]:
+                    # Trigger delayed auto-identify
+                    asyncio.create_task(self.auto_identify_routine())
+                    
                     await self.send(f"JOIN {self.config['channel']}", immediate=True)
                     await self.set_dynamic_topic()
                     online_msg = format_text(f"[{self.net_name.upper()} ONLINE] Grid systems nominal. Type '{self.prefix} help' to begin.", C_GREEN, bold=True)
