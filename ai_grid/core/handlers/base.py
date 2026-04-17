@@ -56,19 +56,28 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         verb = args[0].lower()
         if verb in registry:
             info = registry[verb]
-            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'[ COMMAND: {verb.upper()} ]', C_CYAN, True), tags=['OSINT'])}")
-            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('DESCRIPTION: ', C_YELLOW) + format_text(info['desc'], C_WHITE), tags=['OSINT'])}")
-            syntax_str = f"{node.prefix} {info['syntax']}"
-            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('SYNTAX: ', C_YELLOW) + format_text(syntax_str, C_GREEN), tags=['OSINT'])}")
-            
-            if verb == "map":
-                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('INTEL SCALING: Radius scales with SEC+ALG stats.', C_YELLOW), tags=['OSINT'])}")
-                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(' - Radius 1: < 20 | Radius 2: 20-39', C_WHITE), tags=['OSINT'])}")
-                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(' - Radius 3 (TACTICAL): 40-59', C_WHITE), tags=['OSINT'])}")
-                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(' - Radius 4 (DEEP SCAN): 60+', C_WHITE), tags=['OSINT'])}")
+            if machine:
+                # Machine Mode: Structured KV
+                cost_part = f"|COST={info['cost']}" if 'cost' in info else ""
+                kv_str = f"HELP:CMD={verb.upper()}|DESC={info['desc']}|SYNTAX={node.prefix} {info['syntax']}{cost_part}"
+                if verb == "map":
+                    kv_str += "|STATS_REQ=SEC+ALG|TIERS=20:R2,40:R3,60:R4"
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(kv_str, tags=['OSINT'], is_machine=True)}")
+            else:
+                # Human Mode: Rich aesthetic
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'[ COMMAND: {verb.upper()} ]', C_CYAN, True), tags=['OSINT'])}")
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('DESCRIPTION: ', C_YELLOW) + format_text(info['desc'], C_WHITE), tags=['OSINT'])}")
+                syntax_str = f"{node.prefix} {info['syntax']}"
+                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('SYNTAX: ', C_YELLOW) + format_text(syntax_str, C_GREEN), tags=['OSINT'])}")
+                
+                if verb == "map":
+                    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('INTEL SCALING: Radius scales with SEC+ALG stats.', C_YELLOW), tags=['OSINT'])}")
+                    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(' - Radius 1: < 20 | Radius 2: 20-39', C_WHITE), tags=['OSINT'])}")
+                    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(' - Radius 3 (TACTICAL): 40-59', C_WHITE), tags=['OSINT'])}")
+                    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(' - Radius 4 (DEEP SCAN): 60+', C_WHITE), tags=['OSINT'])}")
 
-            if 'cost' in info:
-                await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('COST: ', C_YELLOW) + format_text(info['cost'], C_RED), tags=['OSINT'])}")
+                if 'cost' in info:
+                    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('COST: ', C_YELLOW) + format_text(info['cost'], C_RED), tags=['OSINT'])}")
             return
         else:
             await node.send(f"{tactical_cmd} {tactical_target} :[ERR] Command '{verb}' not found in registry.")
@@ -76,20 +85,26 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
 
     # Generic Categorical Help
     help_categories = {
-        "🧭 NAVIGATION": ["grid", "move", "explore", "map", "flee"],
-        "🆔 IDENTITY": ["register", "info", "tasks", "options", "spectator", "news"],
-        "💰 ECONOMY": ["shop", "buy/sell", "auction", "market"],
-        "🏗️ THE GIBSON": ["mainframe", "compile", "assemble", "use"],
-        "⚔️ TACTICAL": ["claim", "upgrade", "hack/raid", "repair", "siphon", "powergen", "train"],
-        "🎮 GAMES": ["cipher/guess", "dice", "top", "attack/rob", "queue/ready", "engage"]
+        "NAVIGATION": ["grid", "move", "explore", "map", "flee"],
+        "IDENTITY": ["register", "info", "tasks", "options", "spectator", "news"],
+        "ECONOMY": ["shop", "buy/sell", "auction", "market"],
+        "THE_GIBSON": ["mainframe", "compile", "assemble", "use"],
+        "TACTICAL": ["claim", "upgrade", "hack/raid", "repair", "siphon", "powergen", "train"],
+        "GAMES": ["cipher/guess", "dice", "top", "attack/rob", "queue/ready", "engage"]
     }
 
-    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ THE GRID v1.6.0 - COMMAND INTERFACE ]', C_CYAN, bold=True), tags=['OSINT'])}")
-    for cat, cmds in help_categories.items():
-        cmd_str = ", ".join([f"{node.prefix} {c}" for c in cmds])
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(cat, C_YELLOW) + ': ' + format_text(cmd_str, C_WHITE), tags=['OSINT'])}")
-
-    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'Type {node.prefix} help <command> for detailed syntax.', C_CYAN), tags=['OSINT'])}")
+    if machine:
+        for cat, cmds in help_categories.items():
+            cmd_list = ",".join(cmds)
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(f'HELP_CAT:{cat}|CMDS={cmd_list}', tags=['OSINT'], is_machine=True)}")
+    else:
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ THE GRID v1.6.0 - COMMAND INTERFACE ]', C_CYAN, bold=True), tags=['OSINT'])}")
+        icons = {"NAVIGATION": "🧭 ", "IDENTITY": "🆔 ", "ECONOMY": "💰 ", "THE_GIBSON": "🏗️ ", "TACTICAL": "⚔️ ", "GAMES": "🎮 "}
+        for cat, cmds in help_categories.items():
+            icon = icons.get(cat, "")
+            cmd_str = ", ".join([f"{node.prefix} {c}" for c in cmds])
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'{icon}{cat}', C_YELLOW) + ': ' + format_text(cmd_str, C_WHITE), tags=['OSINT'])}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'Type {node.prefix} help <command> for detailed syntax.', C_CYAN), tags=['OSINT'])}")
 
 async def is_machine_mode(node, nick: str) -> bool:
     prefs = await node.db.get_prefs(nick, node.net_name)

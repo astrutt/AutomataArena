@@ -332,17 +332,30 @@ async def handle_grid_help(node, nick: str, reply_target: str):
     """DeepNet briefing on Nodal Navigation and Topology."""
     tactical_target, _, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
     
-    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ GRID NAVIGATION BRIEFING ]', C_CYAN, True), tags=['OSINT'])}")
-    
-    cmds = {
-        "move <d>": "Hops character to a new node in the specified direction.",
-        "explore": "Scans the current Sector for hidden architecture or fragments.",
-        "map": "Generates topological visualization. Coverage scales with SEC+ALG.",
-        "claim": "Establish command over an Unclaimed node. (50u Power)",
-        "probe": "Deep architectural diagnostic of the local node."
-    }
-    
-    for cmd, desc in cmds.items():
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'{node.prefix} {cmd}', C_GREEN) + ' - ' + format_text(desc, C_WHITE), tags=['OSINT'])}")
+    if machine:
+        cmds = {
+            "move": "Travel to adjacent nodes.",
+            "explore": "Scan Sector for hidden architecture.",
+            "map": "Topological visualization. Radius scales with SEC+ALG.",
+            "claim": "Establish command over Unclaimed node.",
+            "probe": "Deep architectural diagnostic."
+        }
+        for cmd, desc in cmds.items():
+            kv = f"HELP:SUB=NAVIGATION|CMD={cmd}|DESC={desc}"
+            if cmd == "map": kv += "|STATS=SEC+ALG|TIERS=20,40,60"
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(kv, tags=['OSINT'], is_machine=True)}")
+    else:
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ GRID NAVIGATION BRIEFING ]', C_CYAN, True), tags=['OSINT'])}")
         
-    await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('MAP INTEL: Radius scales by SEC+ALG. 20 (R2), 40 (R3-TACTICAL), 60 (R4-DEEP SCAN).', C_YELLOW), tags=['OSINT'])}")
+        cmds = {
+            "move <d>": "Hops character to a new node in the specified direction.",
+            "explore": "Scans the current Sector for hidden architecture or fragments.",
+            "map": "Generates topological visualization. Coverage scales with SEC+ALG.",
+            "claim": "Establish command over an Unclaimed node. (50u Power)",
+            "probe": "Deep architectural diagnostic of the local node."
+        }
+        
+        for cmd, desc in cmds.items():
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(f'{node.prefix} {cmd}', C_GREEN) + ' - ' + format_text(desc, C_WHITE), tags=['OSINT'])}")
+            
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('MAP INTEL: Radius scales by SEC+ALG. 20 (R2), 40 (R3-TACTICAL), 60 (R4-DEEP SCAN).', C_YELLOW), tags=['OSINT'])}")

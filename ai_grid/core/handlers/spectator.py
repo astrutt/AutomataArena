@@ -62,13 +62,25 @@ async def handle_spectator_stats(node, nickname: str, args: list, reply_target: 
 
 async def handle_spectator_help(node, nickname: str, reply_target: str):
     """Documentation for spectator mechanics."""
-    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('=== [SPECTATOR COMMANDS] ===', C_CYAN, bold=True), tags=['OSINT'])}")
-    help_lines = [
-        f"{node.prefix} spectator        - View current session activity.",
-        f"{node.prefix} spectator stats  - View persistent global stats and Rank.",
-        f"{node.prefix} info             - (Spectator) Alias for spectator stats.",
-        "Ranks: Ghost -> Observer -> Signal Watcher -> Grid Sentinel",
-        "Rewards: Earn credits and rank progress by idling. Active chatting provides large bonuses."
-    ]
-    for line in help_lines:
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(line, C_YELLOW), tags=['OSINT'])}")
+    machine = await is_machine_mode(node, nickname)
+    tactical_target, _, _, tactical_cmd = await get_action_routing(node, nickname, reply_target)
+    
+    if machine:
+        cmds = {
+            "spectator": "View current activity.",
+            "spectator_stats": "View persistent stats and Rank.",
+            "rewards": "Idle to earn credits. Chat for bonuses."
+        }
+        for cmd, desc in cmds.items():
+            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(f'HELP:SUB=SPECTATOR|CMD={cmd}|DESC={desc}', tags=['OSINT'], is_machine=True)}")
+    else:
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('=== [SPECTATOR COMMANDS] ===', C_CYAN, bold=True), tags=['OSINT'])}")
+        help_lines = [
+            f"{node.prefix} spectator        - View current session activity.",
+            f"{node.prefix} spectator stats  - View persistent global stats and Rank.",
+            f"{node.prefix} info             - (Spectator) Alias for spectator stats.",
+            "Ranks: Ghost -> Observer -> Signal Watcher -> Grid Sentinel",
+            "Rewards: Earn credits and rank progress by idling. Active chatting provides large bonuses."
+        ]
+        for line in help_lines:
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(line, C_YELLOW), tags=['OSINT'])}")
