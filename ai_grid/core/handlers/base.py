@@ -49,7 +49,7 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "engage": {"desc": "Step into a pending Grid Bug encounter.", "syntax": "engage"},
         "flee": {"desc": "Retreat from an encounter to a safe node.", "syntax": "flee"},
         "ping": {"desc": "Verify network latency to the Mainframe.", "syntax": "ping"},
-        "admin": {"desc": "Access high-level mainframe overrides.", "syntax": "admin <subcommand>"}
+        "admin": {"desc": "Access high-level mainframe overrides.", "syntax": "admin <status|nickregister <net> <pass> <mail>|nickconfirm <net> <code>>"}
     }
 
     if args:

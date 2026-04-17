@@ -10,10 +10,10 @@ logger = logging.getLogger("manager")
 async def handle_admin_command(node, admin_nick: str, verb: str, args: list, reply_target: str):
     # Logging Redaction Utility
     def mask_args(v, a):
-        if v in ["nickregister", "nickidentify"] and len(a) > 0:
-            return ["********"] + a[1:]
-        if v == "nickconfirm" and len(a) > 0:
-            return ["****"] + a[1:]
+        if v in ["nickregister", "nickidentify"] and len(a) >= 2:
+            return [a[0], "********"] + a[2:]
+        if v == "nickconfirm" and len(a) >= 2:
+            return [a[0], "****"] + a[2:]
         return a
 
     # Redacted log for INFO, full for DEBUG
@@ -147,42 +147,60 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
             return
 
         if verb == "nickregister":
-            # Report current +r status
-            is_r = admin_nick.lower() in node.nickserv_verified if admin_nick.lower() == node.config['nickname'].lower() else (node.config['nickname'].lower() in node.nickserv_verified)
-            # Actually we want the BOT's status
-            bot_nick = node.config['nickname'].lower()
-            bot_verified = bot_nick in node.nickserv_verified
-            status_str = format_text("ALREADY +r (REGISTERED)", C_GREEN) if bot_verified else format_text("NOT REGISTERED", C_RED)
-            await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'Current Identity Status: {status_str}', tags=['SIGINT'])}")
+            if len(args) < 3:
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] Syntax: {node.prefix} admin nickregister <network> <password> <email>', tags=['OSINT'])}")
+                return
             
-            if len(args) >= 2:
-                password, email = args[0], args[1]
-                await node.send(f"PRIVMSG NickServ :REGISTER {password} {email}", immediate=True)
-                await node.send(f"PRIVMSG {admin_nick} :{tag_msg('Registration command emitted to NickServ.', tags=['SIGINT'])}")
-            else:
-                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] Syntax: {node.prefix} admin nickregister <password> <email>', tags=['OSINT'])}")
+            target_net = args[0].lower()
+            target_node = node.hub.nodes.get(target_net)
+            if not target_node:
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] ROUTING FAILURE: Network \'{target_net}\' not found.', tags=['OSINT'])}")
+                return
+
+            # Report current +r status of TARGET node
+            bot_nick = target_node.config['nickname'].lower()
+            bot_verified = bot_nick in target_node.nickserv_verified
+            status_str = format_text("ALREADY +r (REGISTERED)", C_GREEN) if bot_verified else format_text("NOT REGISTERED", C_RED)
+            await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[{target_net.upper()}] Identity Status: {status_str}', tags=['SIGINT'])}")
+            
+            password, email = args[1], args[2]
+            await target_node.send(f"PRIVMSG NickServ :REGISTER {password} {email}", immediate=True)
+            await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'Registration command emitted to {target_net} NickServ.', tags=['SIGINT'])}")
         
         elif verb == "nickconfirm":
-            if args:
-                code = args[0]
-                await node.send(f"PRIVMSG NickServ :CONFIRM {code}", immediate=True)
-                await node.send(f"PRIVMSG {admin_nick} :{tag_msg('Confirmation code emitted to NickServ.', tags=['SIGINT'])}")
+            if len(args) >= 2:
+                target_net = args[0].lower()
+                target_node = node.hub.nodes.get(target_net)
+                if not target_node:
+                    await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] ROUTING FAILURE: Network \'{target_net}\' not found.', tags=['OSINT'])}")
+                    return
+
+                code = args[1]
+                await target_node.send(f"PRIVMSG NickServ :CONFIRM {code}", immediate=True)
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'Confirmation code emitted to {target_net} NickServ.', tags=['SIGINT'])}")
             else:
-                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] Syntax: {node.prefix} admin nickconfirm <code>', tags=['OSINT'])}")
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] Syntax: {node.prefix} admin nickconfirm <network> <code>', tags=['OSINT'])}")
         
         elif verb == "nickidentify":
-            if args:
-                password = args[0]
-                await node.send(f"PRIVMSG NickServ :IDENTIFY {password}", immediate=True)
-                await node.send(f"PRIVMSG {admin_nick} :{tag_msg('Manual identification emitted to NickServ. Verification WHOIS pending...', tags=['SIGINT'])}")
+            if len(args) >= 2:
+                target_net = args[0].lower()
+                target_node = node.hub.nodes.get(target_net)
+                if not target_node:
+                    await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] ROUTING FAILURE: Network \'{target_net}\' not found.', tags=['OSINT'])}")
+                    return
+
+                password = args[1]
+                await target_node.send(f"PRIVMSG NickServ :IDENTIFY {password}", immediate=True)
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'Manual identification emitted to {target_net} NickServ. Verification WHOIS pending...', tags=['SIGINT'])}")
+                
                 # Trigger a verification WHOIS after a short delay
                 async def delayed_check():
                     await asyncio.sleep(5)
                     from core.security import request_nickserv_check
-                    await request_nickserv_check(node, node.config['nickname'])
+                    await request_nickserv_check(target_node, target_node.config['nickname'])
                 asyncio.create_task(delayed_check())
             else:
-                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] Syntax: {node.prefix} admin nickidentify <password>', tags=['OSINT'])}")
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] Syntax: {node.prefix} admin nickidentify <network> <password>', tags=['OSINT'])}")
                 
     elif verb == "restart":
         msg = tag_msg(format_text('MAINFRAME RESTART INITIATED BY ADMIN.', C_YELLOW, True), tags=['SIGACT'], nick=admin_nick)
