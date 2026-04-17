@@ -14,7 +14,7 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
         if not args:
             # Landing Page
             await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[ MAINFRAME ADMIN OVERRIDES ]', C_CYAN, True), tags=['SIGINT'])}")
-            cmds = ["status", "version", "topic", "broadcast <msg>", "grid rename <old> <new>", "battlestart/stop", "stop", "shutdown"]
+            cmds = ["status", "version", "topic", "broadcast <msg>", "grid rename <old> <new>", "battlestart/stop", "restart", "stop", "shutdown"]
             cmd_str = ", ".join([f"{node.prefix} admin {c}" for c in cmds])
             await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(cmd_str, C_WHITE), tags=['SIGINT'])}")
             return
@@ -120,6 +120,11 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                 await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'Current Grid Nexus: {current_spawn}', C_CYAN), tags=['SIGINT'])}")
         else:
             await node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {node.prefix} admin grid <rename|seed|spawn> [args]")
+    elif verb == "restart":
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text('MAINFRAME RESTART INITIATED BY ADMIN.', C_YELLOW, True), tags=['SIGACT'])}")
+        if node.active_engine: node.active_engine.active = False
+        await asyncio.sleep(1)
+        await node.hub.restart()
     elif verb in ["shutdown", "stop"]:
         await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text('MAINFRAME SHUTDOWN INITIATED BY ADMIN.', C_RED, True), tags=['SIGACT'])}")
         if node.active_engine: node.active_engine.active = False

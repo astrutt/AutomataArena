@@ -31,6 +31,7 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
         await handle_grid_view(node, nick, reply_target)
 
 async def handle_grid_view(node, nickname: str, reply_target: str):
+    loc = await node.db.get_location(nickname, node.net_name)
     if not loc:
         await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nickname} - not a registered player - msg ignored")
         return

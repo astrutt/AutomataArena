@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sys
+import os
 import logging
 from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from grid_llm import ArenaLLM
@@ -299,6 +300,17 @@ class MasterHub:
                 node.irc.writer.write(b"QUIT :Mainframe shutdown.\r\n")
                 await node.irc.writer.drain()
         self.stop_signal.set()
+
+    async def restart(self):
+        logger.warning("RESTARTING MAINFRAME...")
+        await self.db.close()
+        for node in self.nodes.values():
+            if node.irc.writer: 
+                node.irc.writer.write(b"QUIT :Mainframe restarting...\r\n")
+                await node.irc.writer.drain()
+        
+        # Replace process image
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
 if __name__ == "__main__":
     hub = MasterHub()
