@@ -7,6 +7,13 @@ from .base import is_machine_mode, check_rate_limit, get_action_routing
 
 logger = logging.getLogger("manager")
 
+# Standard MUD-style directional shorthand
+DIRECTION_MAP = {
+    "n": "north", "s": "south", "e": "east", "w": "west",
+    "u": "up", "d": "down",
+    "nw": "northwest", "ne": "northeast", "sw": "southwest", "se": "southeast"
+}
+
 async def handle_grid_movement(node, nick: str, direction: str, reply_target: str):
     from .combat import handle_mob_encounter
     prev_node = None
@@ -15,13 +22,16 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
     
     tactical_target, broadcast_chan, machine, tactical_cmd = await get_action_routing(node, nick, reply_target)
     
-    node_name, msg = await node.db.move_fighter(nick, node.net_name, direction)
+    # Resolve shorthands (e.g., 'move s' -> 'move south')
+    resolved_dir = DIRECTION_MAP.get(direction.lower(), direction.lower())
+    
+    node_name, msg = await node.db.move_fighter(nick, node.net_name, resolved_dir)
     if node_name:
         await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text(msg, C_GREEN), tags=['SIGACT', nick], nick=nick)}")
         
         if machine:
             # Public narrative confirmation
-            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} moved {direction}.', C_CYAN), tags=['SIGACT', nick], nick=nick)}")
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} moved {resolved_dir}.', C_CYAN), tags=['SIGACT', nick], nick=nick)}")
         
         await handle_grid_view(node, nick, tactical_target)
         new_loc = await node.db.get_location(nick, node.net_name)

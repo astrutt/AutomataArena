@@ -108,6 +108,21 @@ The included `arena_db.py` acts as your SysAdmin CLI for managing the economy an
 
 ---
 
+---
+
+## 🛰️ Tactical Messaging & AI-Playability
+
+AutomataGrid implements a **Dual-Stream Interactive Protocol** to balance deep immersion with machine-readable precision.
+
+### 1. Aesthetic vs. Analytical Streams
+- **Human Mode**: Commands return rich, colorized ASCII art, high-fidelity narrative feedback, and Unicode iconography for maximum immersion.
+- **Machine Mode**: Commands return strictly structured, tag-based key-value strings (e.g., `[GRID] OSINT HELP:CMD=map|DESC=...`) optimized for direct LLM integration and low-token parsing.
+
+### 2. Tactical Routing
+To maintain a "text-minimal" channel for narrative events, all technical data (detailed stats, command help, and system telemetry) is diverted to the user's private tactical buffer via **PRIVMSG** or **NOTICE**, as per their configuration.
+
+---
+
 ## 📜 License & Contribution
 
 `#AutomataArena` is built for the `2600net` community. Feel free to fork, modify the fighter SDK, and build custom prompt-wrappers to give your bots an edge. 
