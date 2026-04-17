@@ -1,0 +1,247 @@
+# ai_grid/database/territory_repo.py
+import json
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+from sqlalchemy import func
+from models import Character, Player, NetworkAlias, GridNode, InventoryItem
+from .core import logger, CONFIG, increment_daily_task
+from .base_repo import BaseRepository
+
+class TerritoryRepository(BaseRepository):
+    async def claim_node(self, name: str, network: str) -> tuple[bool, str]:
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.current_node))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return False, "System offline."
+            node = char.current_node
+            
+            # Availability Check: No owner bypass for initial claim
+            if node.availability_mode == 'CLOSED':
+                return False, "[GRID][SITREP] STATUS=CLOSED | MSG=Grid is CLOSED. Grid exploration, or more may be required to open it."
+
+            if node.owner_character_id:
+                if node.owner_character_id == char.id:
+                    return False, "You already command this node."
+                return False, "This node is controlled by a rival. You must seize it."
+                
+            node.owner_character_id = char.id
+            node.power_stored = 100.0
+            node.durability = 100.0
+            
+            reward_msg = await increment_daily_task(session, char, "Claim a Node")
+            await session.commit()
+            msg = f"Control established over {node.name}."
+            if reward_msg: msg += f" {reward_msg}"
+            return True, msg
+
+    async def upgrade_node(self, name: str, network: str) -> tuple[bool, str]:
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.current_node))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return False, "System offline."
+            node = char.current_node
+            
+            # Availability Check: Owner bypass
+            if node.availability_mode == 'CLOSED' and node.owner_character_id != char.id:
+                return False, "[GRID][SITREP] STATUS=CLOSED | MSG=Grid is CLOSED. Grid exploration, or more may be required to open it."
+
+            if node.owner_character_id != char.id: return False, "You do not command this node."
+            
+            cost = node.upgrade_level * 500
+            if char.credits < cost: return False, f"Insufficient credits. Upgrade requires {cost}c."
+            
+            char.credits -= cost
+            node.upgrade_level += 1
+            await session.commit()
+            return True, f"Upgraded {node.name} to Level {node.upgrade_level} for {cost}c! Max Capacity increased."
+
+    async def set_grid_mode(self, name: str, network: str, mode: str) -> tuple[bool, str]:
+        """Toggle grid availability (OPEN/CLOSED)."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.current_node))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return False, "System offline."
+            
+            node = char.current_node
+            if node.owner_character_id != char.id: return False, "You do not command this node."
+            
+            node.availability_mode = mode.upper()
+            await session.commit()
+            return True, f"Grid protocol updated: Sector {node.name} is now {mode.upper()}."
+
+    async def grid_repair(self, name: str, network: str) -> tuple[bool, str]:
+        """Repair node using credits (Legacy) or power (New Manual)."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.current_node))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return False, "System offline."
+            
+            node = char.current_node
+            is_owner = node.owner_character_id == char.id
+
+            # Availability Check: Owner bypass
+            if node.availability_mode == 'CLOSED' and not is_owner:
+                return False, "[GRID][SITREP] STATUS=CLOSED | MSG=Grid is CLOSED."
+
+            # Logic Choice: If user has 100c but low power, use credits. If they use it via 'grid repair', it's credit-based in the handler usually.
+            # But the facade must handle both if needed. I'll maintain the two versions.
+            
+            # Manual Power-based repair (Standardized)
+            cost_uP = 25.0
+            if char.power >= cost_uP:
+                char.power -= cost_uP
+                bonus = 20.0 if is_owner else 10.0
+                node.durability = min(100.0, node.durability + bonus)
+                await session.commit()
+                return True, f"Nodal integrity augmented (+{bonus}%). {'[OWNERSHIP BONUS APPLIED]' if is_owner else ''}"
+
+            # Fallback to credit-based repair if power is low
+            if char.credits >= 100.0 and node.owner_character_id:
+                char.credits -= 100.0
+                node.durability = 100.0
+                reward_msg = await increment_daily_task(session, char, "Repair a Node")
+                await session.commit()
+                return True, f"Grid repaired to 100% durability via credit injection. {reward_msg if reward_msg else ''}"
+
+            return False, "Insufficient resources (Power or Credits) for architectural resonance."
+
+    async def grid_recharge(self, name: str, network: str) -> tuple[bool, str]:
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.current_node))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return False, "System offline."
+            
+            node = char.current_node
+            if node.availability_mode == 'CLOSED' and node.owner_character_id != char.id:
+                return False, "[GRID][SITREP] STATUS=CLOSED"
+
+            if not node.owner_character_id: return False, "You cannot recharge unclaimed wilderness."
+            if char.credits < 100.0: return False, "You need 100c to recharge power."
+            
+            char.credits -= 100.0
+            node.power_stored += 100.0
+            await session.commit()
+            
+            return True, f"Grid recharged. (+100.0 uP) Current Store: {node.power_stored:.1f} uP."
+
+    async def install_node_addon(self, name: str, network: str, item_name: str) -> dict:
+        """Consumes an addon item from inventory and installs it on the current node."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.current_node),
+                selectinload(Character.inventory).selectinload(InventoryItem.template)
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return {"success": False, "msg": "System offline."}
+            
+            node = char.current_node
+            if node.owner_character_id != char.id:
+                return {"success": False, "msg": "Permission Denied: Only the owner can install hardware."}
+                
+            inv_item = next((i for i in char.inventory if i.template.name.upper() == item_name.upper() and i.template.item_type == "node_addon"), None)
+            if not inv_item:
+                return {"success": False, "msg": f"Hardware module '{item_name}' not found in local cache."}
+            
+            addons = json.loads(node.addons_json or "{}")
+            addon_type = inv_item.template.effects_json_dict.get("type", item_name.upper())
+            
+            if addons.get(addon_type):
+                return {"success": False, "msg": f"Integrity Conflict: Node already contains active {addon_type} module."}
+            
+            addons[addon_type] = True
+            node.addons_json = json.dumps(addons)
+            session.delete(inv_item)
+            await session.commit()
+            return {"success": True, "msg": f"Installation Successful: {addon_type} module is now online for {node.name}."}
+
+    async def bolster_node(self, name: str, network: str, amount: float) -> dict:
+        """Spends player power to increase node durability."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.current_node))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return {"success": False, "msg": "System offline."}
+            
+            node = char.current_node
+            if node.owner_character_id != char.id: return {"success": False, "msg": "Permission Denied."}
+                
+            if char.power < amount: return {"success": False, "msg": f"Insufficient POWER."}
+            if node.durability >= 100.0: return {"success": False, "msg": "Architecture maxed."}
+                
+            char.power -= amount
+            node.durability = min(100.0, node.durability + (amount * 0.5))
+            await session.commit()
+            return {"success": True, "msg": f"Reinforcement complete. Durability: {node.durability:.1f}%."}
+
+    async def link_network(self, name: str, network: str, subnet_name: str) -> dict:
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name, NetworkAlias.nickname == name, NetworkAlias.network_name == network
+            ).options(selectinload(Character.current_node))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return {"success": False, "msg": "System offline."}
+            
+            node = char.current_node
+            if node.owner_character_id != char.id: return {"success": False, "msg": "Permission Denied."}
+            
+            addons = json.loads(node.addons_json or "{}")
+            if not addons.get("NET"): return {"success": False, "msg": "NET_BRIDGE hardware required."}
+            
+            known_networks = CONFIG.get('networks', {}).keys()
+            if subnet_name in known_networks:
+                node.irc_affinity = subnet_name
+                node.local_network = None
+            else:
+                node.local_network = subnet_name
+                node.irc_affinity = None
+            
+            await session.commit()
+            return {"success": True, "msg": f"Linkage established to '{subnet_name}'."}
+
+    async def rename_node(self, old_name: str, new_name: str) -> tuple[bool, str]:
+        if len(new_name) > 11: return False, "Name too long (11 chars max)."
+        async with self.async_session() as session:
+            node = (await session.execute(select(GridNode).where(func.lower(GridNode.name) == old_name.lower()))).scalars().first()
+            if not node: return False, "Target not found."
+            if (await session.execute(select(GridNode).where(func.lower(GridNode.name) == new_name.lower()))).scalars().first():
+                return False, "Collision detected."
+            old_display = node.name
+            node.name = new_name
+            await session.commit()
+            logger.info(f"GRID_RENAME: {old_display} -> {new_name}")
+            return True, f"Operation successful: {old_display} rebranded to {new_name}."
+
+    async def update_node_description(self, node_name: str, new_desc: str) -> tuple[bool, str]:
+        async with self.async_session() as session:
+            node = (await session.execute(select(GridNode).where(func.lower(GridNode.name) == node_name.lower()))).scalars().first()
+            if not node: return False, "Target not found."
+            node.description = new_desc
+            await session.commit()
+            return True, f"Operation successful: Node architecture redefined."

@@ -1,0 +1,195 @@
+# ai_grid/database/navigation_repo.py
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+from sqlalchemy import func
+from models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord
+from .core import CONFIG
+from .base_repo import BaseRepository
+
+class NavigationRepository(BaseRepository):
+    async def get_spawn_node_name(self) -> str:
+        """Returns the current name of the functional Nexus/Spawn node."""
+        async with self.async_session() as session:
+            spawn = (await session.execute(select(GridNode).where(GridNode.is_spawn_node == True))).scalars().first()
+            return spawn.name if spawn else "UpLink"
+
+    async def set_spawn_node(self, target_name: str) -> tuple[bool, str]:
+        """Relocates the Grid Nexus to a specific node."""
+        async with self.async_session() as session:
+            # 1. Clear old spawn bits
+            await session.execute(GridNode.__table__.update().values(is_spawn_node=False))
+            
+            # 2. Set new spawn
+            stmt = select(GridNode).where(func.lower(GridNode.name) == target_name.lower())
+            new_spawn = (await session.execute(stmt)).scalars().first()
+            if not new_spawn:
+                return False, f"Target node '{target_name}' not found on grid mesh."
+            
+            new_spawn.is_spawn_node = True
+            await session.commit()
+            return True, f"Nexus translocation complete. All new entities will manifest at: {new_spawn.name}."
+
+    async def get_claimed_nodes(self, name: str, network: str) -> int:
+        """Returns the count of nodes owned by a character."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.network_name == network
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char: return 0
+            
+            count_stmt = select(func.count(GridNode.id)).where(GridNode.owner_character_id == char.id)
+            res = await session.execute(count_stmt)
+            return res.scalar() or 0
+
+    async def get_location(self, name: str, network: str):
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.current_node)
+                .selectinload(GridNode.exits)
+                .selectinload(NodeConnection.target_node),
+                selectinload(Character.current_node)
+                .selectinload(GridNode.owner)
+            )
+            result = await session.execute(stmt)
+            char = result.scalars().first()
+            if not char:
+                return None
+            node = char.current_node
+            if not node:
+                return None
+
+            # --- INTEL DISCOVERY FILTER ---
+            disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
+            disc = (await session.execute(disc_stmt)).scalars().first()
+            intel = disc.intel_level if disc else "NONE"
+            
+            # Auto-discover the node we are currently standing on at minimum EXPLORE level
+            if intel == "NONE":
+                intel = "EXPLORE" 
+                session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level="EXPLORE"))
+
+            exits = [f"{c.direction} -> {c.target_node.name}" for c in node.exits if not c.is_hidden or intel == "PROBE"]
+            
+            # Tiered Data Masking
+            desc = node.description if intel in ["EXPLORE", "PROBE"] else "DATA_ENCRYPTED: Explore node to decrypt."
+            power_info = {
+                'power_stored': node.power_stored if intel == "PROBE" else -1,
+                'power_consumed': node.power_consumed if intel == "PROBE" else -1,
+                'power_generated': node.power_generated if intel == "PROBE" else -1,
+            }
+
+            return {
+                'name': node.name,
+                'description': desc,
+                'type': node.node_type,
+                'intel_level': intel,
+                'exits': exits,
+                'credits': char.credits,
+                'level': char.level,
+                **power_info,
+                'owner': node.owner.name if node.owner else "Unclaimed",
+                'upgrade_level': node.upgrade_level,
+                'durability': node.durability,
+                'threat_level': node.threat_level,
+                'availability_mode': node.availability_mode,
+                'irc_affinity': node.irc_affinity if intel == "PROBE" else "HIDDEN"
+            }
+
+    async def move_player(self, name: str, network: str, direction: str):
+        """Move 1 sector in standard directions."""
+        move_cost = CONFIG.get('mechanics', {}).get('action_costs', {}).get('move', 1.0)
+        async with self.async_session() as session:
+            # 1. Identity & Affinity Resolve
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.current_node).selectinload(GridNode.exits).selectinload(NodeConnection.target_node),
+                selectinload(Character.current_node).selectinload(GridNode.characters_present)
+            )
+            res = await session.execute(stmt)
+            char = res.scalars().first()
+            if not char: return None, "System offline."
+            if not char.current_node: return None, "You are floating in the void."
+            
+            # 2. Local Exit Logic
+            for conn in char.current_node.exits:
+                if conn.direction.lower() == direction.lower():
+                    # Phase 3: Power Check
+                    if char.power < move_cost:
+                        return None, f"Insufficient POWER. Need {move_cost} uP."
+                    
+                    char.node_id = conn.target_node_id
+                    char.power -= move_cost
+                    
+                    # --- AUTO-DISCOVERY ON MOVEMENT ---
+                    disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == conn.target_node_id)
+                    if not (await session.execute(disc_stmt)).scalars().first():
+                        session.add(DiscoveryRecord(character_id=char.id, node_id=conn.target_node_id, intel_level="EXPLORE"))
+                    
+                    await session.commit()
+                    
+                    msg = f"Traversed {direction} to {conn.target_node.name}. (-{move_cost} power)"
+                    if conn.target_node.availability_mode == 'CLOSED':
+                        msg += " [GRID][SITREP] STATUS=CLOSED | MSG=Grid is CLOSED. Grid exploration, or more may be required to open it."
+                    
+                    return conn.target_node.name, msg
+            
+            # 3. Bridge Traversal Logic
+            if direction.lower() == char.current_node.irc_affinity.lower() if char.current_node.irc_affinity else None:
+                target_net = char.current_node.irc_affinity
+                if not CONFIG.get('networks', {}).get(target_net.lower(), {}).get('enabled'):
+                    return None, f"CONNECTION REFUSED: Remote network '{target_net}' is offline."
+                
+                # Bridging still requires local node to be OPEN or already controlled
+                if char.current_node.availability_mode == 'CLOSED' and char.current_node.owner_character_id != char.id:
+                    return None, f"BRIDGE ACCESS DENIED: Local gateway '{char.current_node.name}' is CLOSED. Breach required."
+
+                # Find entry node
+                stmt_entry = select(GridNode).where(GridNode.irc_affinity.ilike(network))
+                entry_node = (await session.execute(stmt_entry)).scalars().first()
+                if not entry_node:
+                    return None, f"ROUTING ERROR: No landing sector found on network '{target_net}'."
+
+                # Allow entry even if CLOSED (per new vision)
+                char.node_id = entry_node.id
+                char.power -= move_cost * 2
+
+                # --- AUTO-DISCOVERY ON BRIDGE ---
+                disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == entry_node.id)
+                if not (await session.execute(disc_stmt)).scalars().first():
+                    session.add(DiscoveryRecord(character_id=char.id, node_id=entry_node.id, intel_level="EXPLORE"))
+
+                await session.commit()
+                
+                msg = f"BRIDGE ESTABLISHED: Pivoted to {target_net} grid at sector {entry_node.name}. (-{move_cost*2} power)"
+                if entry_node.availability_mode == 'CLOSED':
+                    msg += " [GRID][SITREP] STATUS=CLOSED | MSG=Grid is CLOSED. Exploration or more required to open it."
+                
+                return entry_node.name, msg
+
+            return None, f"No valid route found for '{direction}'."
+
+    async def move_player_to_node(self, name: str, network: str, node_name: str) -> bool:
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                func.lower(Character.name) == name.lower(),
+                func.lower(NetworkAlias.nickname) == name.lower(),
+                NetworkAlias.network_name == network
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char: return False
+            node = (await session.execute(
+                select(GridNode).where(GridNode.name == node_name)
+            )).scalars().first()
+            if not node: return False
+            char.node_id = node.id
+            await session.commit()
+            return True
