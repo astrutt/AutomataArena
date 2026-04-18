@@ -4,7 +4,7 @@ import time
 from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 
 async def handle_help(node, nick: str, args: list, reply_target: str):
-    """Displays a comprehensive list of all v1.6.4 commands or details for a specific verb."""
+    """Displays a comprehensive list of all v1.7.9 commands or details for a specific verb."""
     
     tactical_target, broadcast_chan, machine, _ = await get_action_routing(node, nick, reply_target)
     
@@ -12,7 +12,7 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
     registry = {
         "register": {"desc": "Found your digital persona.", "syntax": "register <Name> <Race> <Class> <Traits>"},
         "grid": {"desc": "Diagnostic view of the current node.", "syntax": "grid"},
-        "move": {"desc": "Travel to an adjacent node.", "syntax": "move <n/s/e/w>"},
+        "move": {"desc": "Travel to an adjacent node or cross-grid bridge.", "syntax": "move <dir|affinity>"},
         "explore": {"desc": "Scan sector for hidden architecture or fragments.", "syntax": "explore", "cost": "20u Power"},
         "probe": {"desc": "Deep scan of a specific node to reveal security weaknesses.", "syntax": "probe", "cost": "15u Power"},
         "map": {"desc": "Generate topological visualization. Radius scales with SEC/ALG.", "syntax": "map"},
@@ -55,6 +55,10 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "engage": {"desc": "Step into a pending Grid Bug encounter.", "syntax": "engage"},
         "flee": {"desc": "Retreat from an encounter to a safe node.", "syntax": "flee"},
         "ping": {"desc": "Verify network latency to the Mainframe.", "syntax": "ping"},
+        "economy": {"desc": "Audits the grid's financial circulation and market variance.", "syntax": "economy"},
+        "gridpower": {"desc": "Tactical telemetry on grid-wide energy reserves and generation.", "syntax": "gridpower"},
+        "networks": {"desc": "Topological map of all synchronized bridge nodes.", "syntax": "networks"},
+        "about": {"desc": "Core project manifest and repository metadata.", "syntax": "about"},
         "admin": {"desc": "Access high-level mainframe overrides.", "syntax": "admin <status|nickregister|nickconfirm>"}
     }
 
@@ -93,11 +97,12 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "🆔 IDENTITY": ["register", "info", "tasks", "options", "spectator", "news", "memos"],
         "💰 ECONOMY": ["shop", "buy/sell", "auction", "market"],
         "🏗️ THE GIBSON": ["mainframe", "compile", "assemble", "use"],
+        "📡 ANALYTICS": ["economy", "gridpower", "networks", "about"],
         "⚔️ TACTICAL": ["claim", "upgrade", "hack/raid", "repair", "siphon", "install", "bolster", "link/net", "powergen", "train"],
         "🎮 GAMES": ["cipher/guess", "dice", "top", "attack/rob", "queue/ready", "engage"]
     }
 
-    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('[ THE GRID v1.6.4 - COMMAND INTERFACE ]', C_CYAN, bold=True), tags=['OSINT'])}")
+    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('[ THE GRID v1.7.9 - COMMAND INTERFACE ]', C_CYAN, bold=True), tags=['OSINT'])}")
     for cat, cmds in help_categories.items():
         cmd_str = ", ".join([f"{node.prefix} {c}" for c in cmds])
         await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(cat, C_YELLOW) + ': ' + format_text(cmd_str, C_WHITE), tags=['OSINT'])}")

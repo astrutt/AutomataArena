@@ -99,7 +99,7 @@ class NavigationRepository(BaseRepository):
                 'durability': node.durability,
                 'threat_level': node.threat_level,
                 'availability_mode': node.availability_mode,
-                'net_affinity': node.net_affinity if intel == "PROBE" else "HIDDEN"
+                'irc_affinity': node.irc_affinity if intel == "PROBE" else "HIDDEN"
             }
 
     async def move_player(self, name: str, network: str, direction: str):
@@ -145,8 +145,8 @@ class NavigationRepository(BaseRepository):
             
             # 3. Bridge Traversal Logic (The Uplink - Task 021)
             # If direction matches the affinity of the node, we are attempting to "jump" networks
-            if char.current_node.net_affinity and direction.lower() == char.current_node.net_affinity.lower():
-                target_net = char.current_node.net_affinity
+            if char.current_node.irc_affinity and direction.lower() == char.current_node.irc_affinity.lower():
+                target_net = char.current_node.irc_affinity
                 
                 # Check for NET_BRIDGE (NET) Hardware on Current Node
                 addons = json.loads(char.current_node.addons_json or "{}")
@@ -161,14 +161,10 @@ class NavigationRepository(BaseRepository):
                     return None, f"BRIDGE ACCESS DENIED: Local gateway '{char.current_node.name}' is CLOSED. Breach required."
 
                 # Find landing node on the target network (one that points BACK to this network)
-                # Task 021 Fix: Filter by net_affinity AND ensure it's a different node ID
-                stmt_entry = select(GridNode).where(
-                    GridNode.net_affinity.ilike(network),
-                    GridNode.id != char.current_node.id
-                )
+                stmt_entry = select(GridNode).where(GridNode.irc_affinity.ilike(network))
                 entry_node = (await session.execute(stmt_entry)).scalars().first()
                 if not entry_node:
-                    return None, f"ROUTING ERROR: No landing sector found on network '{target_net}' pointing back to '{network}'."
+                    return None, f"ROUTING ERROR: No landing sector found on network '{target_net}'."
 
                 # Bridge Cost: 2x Move Cost
                 bridge_cost = move_cost * 2

@@ -1,5 +1,5 @@
 {
-    "version": "1.5.0",
+    "version": "1.7.9",
     "admins": ["Admin1", "Admin2"],
     "llm": {
         "provider": "ollama",
@@ -27,7 +27,8 @@
             "hack": 3.0,
             "explore": 5.0,
             "compile": 10.0,
-            "assemble": 25.0
+            "assemble": 25.0,
+            "bridge": 2.0
         },
         "mainframe": {
             "compilation_time_minutes": 10,
