@@ -8,7 +8,7 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
     
     tactical_target, broadcast_chan, machine, _ = await get_action_routing(node, nick, reply_target)
     
-    # Detailed Command Registry (v1.6.4)
+    # Detailed Command Registry (v1.8.0)
     registry = {
         "register": {"desc": "Found your digital persona.", "syntax": "register <Name> <Race> <Class> <Traits>"},
         "grid": {"desc": "Diagnostic view of the current node.", "syntax": "grid"},
@@ -62,8 +62,8 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "gridpower": {"desc": "Tactical telemetry on grid-wide energy reserves.", "syntax": "gridpower"},
         "gridstability": {"desc": "Audits the average integrity of the active grid layout.", "syntax": "gridstability"},
         "networks": {"desc": "Topological map of all bridge nodes.", "syntax": "networks"},
-        "about": {"desc": "Core project manifest and metadata.", "syntax": "about"},
-        "admin": {"desc": "Access high-level mainframe overrides.", "syntax": "admin <status|nickidentify|broadcast>"}
+        "about": {"desc": "Core project manifest and repository metadata.", "syntax": "about"},
+        "admin": {"desc": "Access high-level mainframe overrides.", "syntax": "admin <status|grid|broadcast|nickregister|nickconfirm|nickidentify|restart|shutdown>"}
     }
 
     if machine:

@@ -105,10 +105,10 @@ async def handle_about_osint(node, source, target):
     tactical_target, broadcast_chan, machine, _ = await get_action_routing(node, source, target)
     
     if machine:
-        report = "[OSINT] ABOUT|VER:1.7.x|SRC:https://github.com/astrutt/AutomataArena"
+        report = "[OSINT] ABOUT|VER:1.8.0|SRC:https://github.com/astrutt/AutomataArena"
         await node.send(f"PRIVMSG {tactical_target} :{report}")
         return
 
     title = generate_gradient("P R O J E C T   A U T O M A T A G R I D", [C_CYAN, C_WHITE, C_CYAN])
-    about = f"{ICONS['OSINT']} {title} | Version: 1.7.x | Source: https://github.com/astrutt/AutomataArena"
+    about = f"{ICONS['OSINT']} {title} | Version: 1.8.0 | Source: https://github.com/astrutt/AutomataArena"
     await node.send(f"PRIVMSG {target} :{about}")

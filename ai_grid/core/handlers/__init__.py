@@ -20,7 +20,8 @@ from .grid import (
     handle_grid_map,
     handle_grid_command,
     handle_grid_loot,
-    handle_grid_network_msg
+    handle_grid_network_msg,
+    handle_pulse_resolve
 )
 from .economy import (
     handle_shop_view,

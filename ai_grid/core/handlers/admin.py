@@ -40,9 +40,9 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
     if verb == "version":
         # System Versions
         await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('[ SYSTEM VERSION ARCHIVE ]', C_CYAN, True), tags=['SIGINT'], nick=admin_nick)}")
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('Mainframe Core: v1.5.0-STABLE', C_WHITE), tags=['SIGINT'], nick=admin_nick)}")
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('DB Orchestrator: v1.5.0 | Repositories: v1.5.0', C_GREEN), tags=['SIGINT'], nick=admin_nick)}")
-        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('Command Router: v1.5.0 | AI Bot Client: v1.5.0', C_YELLOW), tags=['SIGINT'], nick=admin_nick)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('Mainframe Core: v1.8.0-STABLE', C_WHITE), tags=['SIGINT'], nick=admin_nick)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('DB Orchestrator: v1.8.0 | Repositories: v1.8.0', C_GREEN), tags=['SIGINT'], nick=admin_nick)}")
+        await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(format_text('Command Router: v1.8.0 | AI Bot Client: v1.8.0', C_YELLOW), tags=['SIGINT'], nick=admin_nick)}")
     elif verb == "status":
         # 1. Base Population & Systems
         players = await node.db.list_players(node.net_name)
