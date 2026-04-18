@@ -180,6 +180,7 @@ class AutomataBot:
         self.recovery_attempts = 0
         self.last_recovery_time = 0
         self.puppet_mode = False
+        self.current_nick = NICK # Initialize with config value
 
     def record_memory(self, msg):
         if "Awaiting public commands" in msg:
@@ -313,6 +314,20 @@ class AutomataBot:
                 
             source_nick = source_full.split('!')[0].lower() if source_full else ""
 
+            if command == "001":
+                # RPL_WELCOME: Server confirms our nickname
+                old_nick = self.current_nick
+                self.current_nick = target
+                logger.info(f"Identity confirmed by server: {old_nick} -> {self.current_nick}")
+                continue
+
+            if command == "NICK":
+                # Someone changed their nick
+                if source_nick == self.current_nick.lower():
+                    self.current_nick = msg if msg else target
+                    logger.info(f"Identity updated via NICK message: {self.current_nick}")
+                continue
+
             if command == "PING":
                 pong_target = msg if msg else target
                 await self.send(f"PONG :{pong_target}")
@@ -324,7 +339,7 @@ class AutomataBot:
 
             if command == "JOIN":
                 target_chan = msg if msg else target
-                if source_nick == NICK.lower() and target_chan.lower() == CHANNEL.lower():
+                if source_nick == self.current_nick.lower() and target_chan.lower() == CHANNEL.lower():
                     if not self.char_data:
                         race = config['BOT']['Race']
                         bot_class = config['BOT']['Class']
@@ -336,12 +351,16 @@ class AutomataBot:
                         await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} grid map")
                 continue
 
-            if command == "NOTICE" and target.lower() == NICK.lower():
+            if command == "NOTICE" and (target.lower() == self.current_nick.lower() or target.lower() == NICK.lower()):
                 logger.info(f"NOTICE_RECV: {source_nick} -> {target}: {msg}")
                 if source_nick == MANAGER:
-                    if msg.startswith("[SYS_PAYLOAD]"):
+                    if "[SYS_PAYLOAD]" in msg:
                         logger.debug(f"Intercepted [SYS_PAYLOAD] from {source_nick}")
-                        payload_json = msg.replace("[SYS_PAYLOAD]", "").strip()
+                        # Robust extraction: find content after tag
+                        tag = "[SYS_PAYLOAD]"
+                        payload_start = msg.find(tag) + len(tag)
+                        payload_json = msg[payload_start:].strip()
+                        
                         logger.info(f"NOTICE_RECV: {source_nick} -> {target} [SYS_PAYLOAD]")
                         logger.debug(f"Payload Content: {payload_json}")
                         try:
@@ -361,11 +380,14 @@ class AutomataBot:
                 continue
 
             if command == "PRIVMSG":
-                if target.lower() == NICK.lower():
+                is_private = target.lower() == self.current_nick.lower() or target.lower() == NICK.lower()
+                
+                if is_private:
                     logger.info(f"PRIVMSG_RECV: {source_nick} -> {target}: {msg}")
                 else:
                     logger.debug(f"MSG_RECV: {source_nick} -> {target}: {msg}")
-                if target.lower() == NICK.lower():
+                
+                if is_private:
                     if OWNER and source_nick == OWNER:
                         logger.warning(f"Secure Owner Override Received from {source_nick}: {msg}")
                         if msg.lower() == "!quit":
