@@ -36,10 +36,12 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "raid": {"desc": "Rapid resource extraction from a local node.", "syntax": "raid"},
         "breach": {"desc": "Brute-force entry into high-sec architectures.", "syntax": "breach"},
         "siphon": {"desc": "Forcible extraction from a rival grid node.", "syntax": "siphon grid"},
-        "install": {"desc": "Permanently attach hardware addons (AMP/IDS/FIREWALL) to a node.", "syntax": "install <item_name>"},
+        "install": {"desc": "Permanently attach hardware addons to a node.", "syntax": "install <item_name>"},
         "bolster": {"desc": "Reinforce node stability with manual power allocation.", "syntax": "bolster <amount>"},
         "link": {"desc": "Establish a neural link with a local network alias.", "syntax": "link <alias>"},
         "net": {"desc": "Alias for 'link'. Verifies network bridge protocols.", "syntax": "net <alias>"},
+        "collect": {"desc": "Intercept high-value data packets manifested on the grid.", "syntax": "collect <node_name>"},
+        "patch": {"desc": "Stabilize nodal glitches to prevent cascade failures.", "syntax": "patch <node_name>"},
         "memos": {"desc": "Access received alerts, alarms, and historical memos.", "syntax": "memos [list|read|del] [id]"},
         "guess": {"desc": "Submit a decryption sequence code.", "syntax": "guess <code>"},
         "dice": {"desc": "PvP credit gambling.", "syntax": "dice <amt> <nick>"},
@@ -55,11 +57,13 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "engage": {"desc": "Step into a pending Grid Bug encounter.", "syntax": "engage"},
         "flee": {"desc": "Retreat from an encounter to a safe node.", "syntax": "flee"},
         "ping": {"desc": "Verify network latency to the Mainframe.", "syntax": "ping"},
-        "economy": {"desc": "Audits the grid's financial circulation and market variance.", "syntax": "economy"},
-        "gridpower": {"desc": "Tactical telemetry on grid-wide energy reserves and generation.", "syntax": "gridpower"},
-        "networks": {"desc": "Topological map of all synchronized bridge nodes.", "syntax": "networks"},
-        "about": {"desc": "Core project manifest and repository metadata.", "syntax": "about"},
-        "admin": {"desc": "Access high-level mainframe overrides.", "syntax": "admin <status|nickregister|nickconfirm>"}
+        "version": {"desc": "Query core system module versions.", "syntax": "version"},
+        "economy": {"desc": "Audits the grid's financial circulation.", "syntax": "economy"},
+        "gridpower": {"desc": "Tactical telemetry on grid-wide energy reserves.", "syntax": "gridpower"},
+        "gridstability": {"desc": "Audits the average integrity of the active grid layout.", "syntax": "gridstability"},
+        "networks": {"desc": "Topological map of all bridge nodes.", "syntax": "networks"},
+        "about": {"desc": "Core project manifest and metadata.", "syntax": "about"},
+        "admin": {"desc": "Access high-level mainframe overrides.", "syntax": "admin <status|nickidentify|broadcast>"}
     }
 
     if machine:
@@ -94,15 +98,16 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
     # Generic Categorical Help (Human Mode Only)
     help_categories = {
         "🧭 NAVIGATION": ["grid", "move", "explore", "probe", "map", "flee"],
-        "🆔 IDENTITY": ["register", "info", "tasks", "options", "spectator", "news", "memos"],
-        "💰 ECONOMY": ["shop", "buy/sell", "auction", "market"],
+        "🆔 IDENTITY": ["register", "info", "tasks", "options", "spectator", "news", "memos", "ping", "version"],
+        "💰 ECONOMY": ["shop", "buy", "sell", "auction", "market"],
         "🏗️ THE GIBSON": ["mainframe", "compile", "assemble", "use"],
-        "📡 ANALYTICS": ["economy", "gridpower", "networks", "about"],
+        "⚡ THE PULSE": ["collect", "patch"],
+        "📡 ANALYTICS": ["economy", "gridpower", "gridstability", "networks", "about"],
         "⚔️ TACTICAL": ["claim", "upgrade", "hack/raid", "repair", "siphon", "install", "bolster", "link/net", "powergen", "train"],
         "🎮 GAMES": ["cipher/guess", "dice", "top", "attack/rob", "queue/ready", "engage"]
     }
 
-    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('[ THE GRID v1.7.9 - COMMAND INTERFACE ]', C_CYAN, bold=True), tags=['OSINT'])}")
+    await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text('[ THE GRID v1.8.0 - PULSE PROTOCOL ]', C_CYAN, bold=True), tags=['OSINT'])}")
     for cat, cmds in help_categories.items():
         cmd_str = ", ".join([f"{node.prefix} {c}" for c in cmds])
         await node.send(f"PRIVMSG {tactical_target} :{tag_msg(format_text(cat, C_YELLOW) + ': ' + format_text(cmd_str, C_WHITE), tags=['OSINT'])}")
