@@ -1,4 +1,5 @@
 # ai_grid/database/navigation_repo.py
+import json
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
