@@ -23,7 +23,7 @@ async def set_dynamic_topic(node):
     # 2. Mode-Specific Construction
     try:
         if mode == 0: # STATUS
-            title = "H U B   O P E R A T I O N S"
+            title = "[GRID][SIGACT]"
             gradient_title = generate_gradient(title, [C_CYAN, C_L_BLUE, C_BLUE])
             
             match_status = format_text("ACTIVE", C_GREEN) if node.active_engine else "STANDBY"
@@ -32,7 +32,7 @@ async def set_dynamic_topic(node):
             content = f"ARENA: {match_status} | LOAD: [{bot_meter}] {node.registered_bots} UNITS"
             
         elif mode == 1: # INTEL
-            title = "G R I D   T E L E M E T R Y"
+            title = "[GRID][GEOINT]"
             gradient_title = generate_gradient(title, [C_YELLOW, C_ORANGE, C_RED])
             
             grid = await node.db.get_grid_telemetry()
@@ -40,7 +40,7 @@ async def set_dynamic_topic(node):
             content = f"MESH: [{mesh_meter}] {grid['claimed_percent']:.1f}% | PWR: {grid['total_power']:.0f}uP"
             
         elif mode == 2: # NEWS
-            title = "S I G I N T   T I C K E R"
+            title = "[GRID][SIGINT]"
             gradient_title = generate_gradient(title, [C_L_GREEN, C_GREEN, C_CYAN])
             # news = await node.llm.generate_topic(node.registered_bots, node.net_name)
             # Actually, use generate_hype for a better ticker feel if no match is active
@@ -48,7 +48,7 @@ async def set_dynamic_topic(node):
             content = news[:90] + "..." if len(news) > 90 else news
             
         else: # EVENTS
-            title = "A C T I V E   P R O T O C O L S"
+            title = "[GRID][ARENA]"
             gradient_title = generate_gradient(title, [C_PINK, C_PURPLE, C_BLUE])
             hype_meter = generate_meter(node.hype_counter, 15)
             queue_len = len(node.match_queue)
