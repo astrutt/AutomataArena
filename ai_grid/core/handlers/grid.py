@@ -295,6 +295,22 @@ async def handle_grid_loot(node, nick: str, reply_target: str):
                     if target_nick and target_nick.lower() in node.channel_users:
                         await node.send(f"PRIVMSG {target_nick} :[ALERT] {alert['message']}")
 
+async def handle_pulse_resolve(node, nick: str, reply_target: str, action: str, args: list):
+    """Handle the resolution of interactive Pulsar events (!a collect/patch)."""
+    if not args:
+        await node.send(f"PRIVMSG {reply_target} :Syntax: {node.prefix} {action} <node_name>")
+        return
+        
+    node_name = args[0]
+    success, msg = await node.db.pulse.resolve_pulse(nick, node.net_name, node_name, action)
+    
+    color = C_GREEN if success else C_RED
+    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(msg, color), tags=['PULSE', nick])}")
+    
+    if success:
+        await node.add_xp(nick, 15, reply_target) # Bonus XP for interactive events
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'{nick} successfully resolved a localized pulse at {node_name}!', C_CYAN), tags=['SIGACT'])}")
+
 async def handle_grid_network_msg(node, nick: str, args: list, reply_target: str):
     if len(args) < 3:
         await node.send(f"PRIVMSG {reply_target} :Syntax: {node.prefix} grid network msg <nick> <msg>")

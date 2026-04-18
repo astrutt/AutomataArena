@@ -26,6 +26,39 @@ async def ambient_event_loop(node):
     while True:
         try:
             await asyncio.sleep(600)  # 10 minute interval
+            
+            # --- TASK 022: DYNAMIC CHANNEL FLOW (THE PULSE) ---
+            # Expiry & Penalty Processing
+            penalties = await node.db.pulse.expire_pulses(node.net_name)
+            for alert in penalties:
+                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(alert, C_RED), tags=['PULSE'])}")
+
+            # Pulse Spawning Logic
+            # 10% base + 5% per hype unit (chat volume)
+            base_chance = node.config.get('mechanics', {}).get('pulse_spawn_chance', 0.10)
+            hype_bonus = node.hype_counter * 0.05
+            spawn_chance = min(0.60, base_chance + hype_bonus)
+            
+            node.hype_counter = 0 # Reset activity tracking
+            
+            if random.random() < spawn_chance:
+                pulse = await node.db.pulse.spawn_pulse(node.net_name)
+                if pulse:
+                    p_type = pulse['type']
+                    n_name = pulse['node_name']
+                    expiry = pulse['expiry'].strftime("%H:%M:%S UTC")
+                    
+                    if p_type == 'PACKET':
+                        alert = f"HIGH-VALUE PACKET DETECTED at {n_name}! Signal expires at {expiry}. Use '!a collect {n_name}' to intercept."
+                        color = C_GREEN
+                    else: # GLITCH
+                        alert = f"NODAL GLITCH DETECTED at {n_name}! Cascade failure imminent at {expiry}. Use '!a patch {n_name}' to stabilize."
+                        color = C_YELLOW
+                    
+                    await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(alert, color, bold=True), tags=['PULSE'])}")
+                    continue # Skip standard flavor text if pulse spawned
+
+            # Standard Flavor Text (Fallback)
             if not node.active_engine or not node.active_engine.active:
                 event = await node.llm.generate_ambient_event()
                 cat = event.get('category', 'SYS').upper()

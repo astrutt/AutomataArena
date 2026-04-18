@@ -21,6 +21,7 @@ from database.repositories.economy_repo import EconomyRepository
 from database.repositories.mainframe_repo import MainframeRepository
 from database.repositories.minigame_repo import MiniGameRepository
 from database.repositories.combat_repo import CombatRepository
+from database.repositories.pulse_repo import PulseRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):
@@ -41,6 +42,7 @@ class ArenaDB:
         self.discovery = DiscoveryRepository(self.async_session)
         self.infiltration = InfiltrationRepository(self.async_session)
         self.maintenance = MaintenanceRepository(self.async_session)
+        self.pulse = PulseRepository(self.async_session)
 
         # Legacy Facade Compatibility (grid object proxy)
         class GridFacade:
@@ -155,7 +157,14 @@ class ArenaDB:
         
         def sync_columns(conn):
             inspector = inspect(conn)
+            existing_tables = inspector.get_table_names()
+            
             for table_name, table in Base.metadata.tables.items():
+                if table_name not in existing_tables:
+                    logger.info(f"Creating missing table: {table_name}")
+                    table.create(conn)
+                    continue
+
                 existing_cols = [c['name'] for c in inspector.get_columns(table_name)]
                 for col_name, col in table.columns.items():
                     if col_name not in existing_cols:

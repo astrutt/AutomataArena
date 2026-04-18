@@ -134,8 +134,22 @@ class Character(Base):
     inventory = relationship("InventoryItem", back_populates="owner", cascade="all, delete-orphan")
 
 # ==========================================
-# 3. DISCOVERY & MAPPING
+# 3. DISCOVERY, MAPPING & EVENTS
 # ==========================================
+class PulseEvent(Base):
+    __tablename__ = 'pulse_events'
+    
+    id = Column(Integer, primary_key=True)
+    node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
+    network_name = Column(String, index=True) # Scope limiting
+    event_type = Column(String) # 'PACKET', 'GLITCH'
+    reward_val = Column(Float, default=0.0) # Credits or Data units
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime)
+    status = Column(String, default='ACTIVE') # ACTIVE, RESOLVED, EXPIRED
+    
+    node = relationship("GridNode")
+
 class DiscoveryRecord(Base):
     __tablename__ = 'discovery_records'
     
