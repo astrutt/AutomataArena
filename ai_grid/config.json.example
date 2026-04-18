@@ -14,6 +14,8 @@
         "file": "automata_grid.db"
     },
     "mechanics": {
+        "max_hardware_slots": 4,
+        "durability_multipliers": [1.0, 1.25, 1.5, 2.0],
         "data_to_vuln_ratio": 100,
         "vulns_to_chain_ratio": 4,
         "stability_decay_per_day": 0.01,

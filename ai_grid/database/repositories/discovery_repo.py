@@ -88,6 +88,12 @@ class DiscoveryRepository(BaseRepository):
             if not char or not char.current_node: return {"error": "System offline."}
             node = char.current_node
             
+            # --- SEQUENCE CHECK: Require EXPLORE before PROBE (Task 021) ---
+            disc_check_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
+            existing_disc = (await session.execute(disc_check_stmt)).scalars().first()
+            if not existing_disc:
+                return {"error": "Discovery Conflict: Node topology must be EXPLORED before deep probing."}
+            
             # --- SECURITY PRE-CHECK (IDS) ---
             addons = json.loads(node.addons_json or "{}")
             is_owner = node.owner_character_id == char.id
