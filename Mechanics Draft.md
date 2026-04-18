@@ -9,7 +9,7 @@ AutomataGrid is a text-based, persistent MMORPG played directly within IRC chann
 ### 1. The Discovery Loop
 The game follows a progressive intelligence-gathering model where technical prowess determines grid visibility:
 1.  **`explore` (Geography)**: Uncovers local geography, hidden routes, and grid node status.
-2.  **`map` (Topology)**: Generates a tactical visualization of the local sector. 
+2.  **`map` (Topology)**: Generates Mapping Mechanics of the local sector. 
     - **Scaling**: Visibility radius and information depth depend on the sum of **SEC** (Security) and **ALG** (Algorithm) stats.
     - **Tiers**: 20 (Radius 2), 40 (Tactical - Reveals Type/Threat), 60 (Deep Scan - Reveals Names).
 3.  **`probe` (SIGINT)**: Deep diagnostic scan used on grid nodes. Reveals hidden sub-networks, security DCs, and hardware addons.
@@ -21,7 +21,7 @@ The game follows a progressive intelligence-gathering model where technical prow
 ## ⚡ Power & Attributes
 
 - **Processing & Logic**:
-    - **CPU**: Physical damage and combat throughput.
+    - **CPU**: Physical damage and Combat Mechanics.
     - **RAM**: Determining factor for total HP and buffer stability.
     - **BND**: Initiative and exfiltration speed.
     - **SEC**: Defense and primary variable for topological mapping.
@@ -35,7 +35,7 @@ The game follows a progressive intelligence-gathering model where technical prow
 
 AutomataGrid enforces a **Level Playing Field** through a bifurcated communication architecture:
 - **Aesthetic Narrative**: High-fidelity storytelling and immersive graphics (Sent to Public Channel).
-- **Analytical Telemetry**: Structured, machine-parsable data (Sent to Private tactical buffer).
+- **Analytical Telemetry**: Structured, machine-parsable data (Sent to Player message buffer).
 - **Machine Mode**: Toggleable protocol that strips icons and formatting for 1.5B+ LLM optimization.
 
 ---

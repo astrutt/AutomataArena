@@ -3,7 +3,7 @@ import time
 import logging
 import datetime
 from grid_utils import format_text, tag_msg, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
-from .base import is_machine_mode
+from .base import is_machine_mode, get_action_routing
 
 logger = logging.getLogger("manager")
 
@@ -63,7 +63,7 @@ async def handle_spectator_stats(node, nickname: str, args: list, reply_target: 
 async def handle_spectator_help(node, nickname: str, reply_target: str):
     """Documentation for spectator mechanics."""
     machine = await is_machine_mode(node, nickname)
-    tactical_target, _, _, tactical_cmd = await get_action_routing(node, nickname, reply_target)
+    msg_target, _, _, action_cmd = await get_action_routing(node, nickname, reply_target)
     
     if machine:
         cmds = {
@@ -72,7 +72,7 @@ async def handle_spectator_help(node, nickname: str, reply_target: str):
             "rewards": "Idle to earn credits. Chat for bonuses."
         }
         for cmd, desc in cmds.items():
-            await node.send(f"{tactical_cmd} {tactical_target} :{tag_msg(f'HELP:SUB=SPECTATOR|CMD={cmd}|DESC={desc}', tags=['OSINT'], is_machine=True)}")
+            await node.send(f"{action_cmd} {msg_target} :{tag_msg(f'HELP:SUB=SPECTATOR|CMD={cmd}|DESC={desc}', tags=['OSINT'], is_machine=True)}")
     else:
         await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('=== [SPECTATOR COMMANDS] ===', C_CYAN, bold=True), tags=['OSINT'])}")
         help_lines = [
