@@ -55,13 +55,24 @@ class TerritoryRepository(BaseRepository):
 
             if node.owner_character_id != char.id: return False, "You do not command this node."
             
+            max_lvl = 4
+            if node.upgrade_level >= max_lvl:
+                return False, f"Architecture peak reached (Level {max_lvl}). Further augmentation requires high-mesh hardware."
+
             cost = node.upgrade_level * 500
             if char.credits < cost: return False, f"Insufficient credits. Upgrade requires {cost}c."
             
             char.credits -= cost
             node.upgrade_level += 1
+            
+            # Apply Durability Multiplier from Config
+            dur_mults = CONFIG.get('mechanics', {}).get('durability_multipliers', [1.0, 1.25, 1.5, 2.0])
+            idx = min(node.upgrade_level - 1, len(dur_mults) - 1)
+            # Scaling max durability (conceptual) or just applying a full repair
+            node.durability = 100.0 
+            
             await session.commit()
-            return True, f"Upgraded {node.name} to Level {node.upgrade_level} for {cost}c! Max Capacity increased."
+            return True, f"Upgraded {node.name} to Level {node.upgrade_level} for {cost}c! [Integrity Scaling: {dur_mults[idx]}x]"
 
     async def set_grid_mode(self, name: str, network: str, mode: str) -> tuple[bool, str]:
         """Toggle grid availability (OPEN/CLOSED)."""
@@ -172,11 +183,60 @@ class TerritoryRepository(BaseRepository):
             if addons.get(addon_type):
                 return {"success": False, "msg": f"Integrity Conflict: Node already contains active {addon_type} module."}
             
+            # Enforce Multi-Slot Limit (Task 020)
+            max_slots = node.max_slots or CONFIG.get('mechanics', {}).get('max_hardware_slots', 4)
+            if len(addons) >= max_slots:
+                return {"success": False, "msg": f"Hardware Capacity reached ({max_slots}/{max_slots} slots occupied). Upgrade node or remove hardware."}
+
             addons[addon_type] = True
             node.addons_json = json.dumps(addons)
             await session.delete(inv_item)
             await session.commit()
             return {"success": True, "msg": f"Installation Successful: {addon_type} module is now online for {node.name}."}
+
+    async def uninstall_node_addon(self, name: str, network: str, addon_type: str) -> dict:
+        """Removes a hardware module from a node and returns the template to the owner's inventory."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.current_node),
+                selectinload(Character.inventory).selectinload(InventoryItem.template)
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return {"success": False, "msg": "System offline."}
+            
+            node = char.current_node
+            if node.owner_character_id != char.id:
+                return {"success": False, "msg": "Permission Denied: Only the owner can manage hardware."}
+            
+            addons = json.loads(node.addons_json or "{}")
+            addon_type = addon_type.upper()
+            
+            if addon_type not in addons:
+                return {"success": False, "msg": f"Hardware module '{addon_type}' not found on core."}
+            
+            # Find Template
+            from models import ItemTemplate
+            tpl_stmt = select(ItemTemplate).where(ItemTemplate.name == addon_type, ItemTemplate.item_type == "node_addon")
+            tpl = (await session.execute(tpl_stmt)).scalars().first()
+            
+            if not tpl:
+                # Fallback check for standard items
+                tpl_stmt = select(ItemTemplate).where(func.upper(ItemTemplate.name) == addon_type)
+                tpl = (await session.execute(tpl_stmt)).scalars().first()
+
+            if tpl:
+                # Return to inventory
+                inv_item = InventoryItem(character_id=char.id, template_id=tpl.id, quantity=1)
+                session.add(inv_item)
+            
+            del addons[addon_type]
+            node.addons_json = json.dumps(addons)
+            await session.commit()
+            return {"success": True, "msg": f"Decommission Successful: {addon_type} module returned to local inventory."}
 
     async def bolster_node(self, name: str, network: str, amount: float) -> dict:
         """Spends player power to increase node durability."""

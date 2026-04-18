@@ -34,6 +34,9 @@ class GridNode(Base):
     
     # Hardware & Infrastructure
     addons_json = Column(String, default="{}") # JSON storage for AMP, FIREWALL, IDS, NET
+    firewall_hits = Column(Integer, default=0)
+    ids_alerts = Column(Integer, default=0)
+    max_slots = Column(Integer, default=4)
     
     # Relationships
     owner = relationship("Character", foreign_keys=[owner_character_id], post_update=True)

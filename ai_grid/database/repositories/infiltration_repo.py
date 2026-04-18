@@ -55,9 +55,11 @@ class InfiltrationRepository(BaseRepository):
             if not is_owner:
                 from core.security_utils import is_action_hostile
                 if is_action_hostile('siphon', node.availability_mode):
-                    alert_msg = f"[GRID][ALARM] Target: {node.name} | Unauthorized Siphon by: {char.name} | Amount: {yield_amount:.1f} uP"
-                    session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
-                    alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
+                    if addons.get("IDS") or node.upgrade_level > 2:
+                        node.ids_alerts += 1
+                        alert_msg = f"[GRID][ALARM] Target: {node.name} | Unauthorized Siphon by: {char.name} | Amount: {yield_amount:.1f} uP"
+                        session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
+                        alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
             
             await session.commit()
             return True, f"Siphon Successful: {yield_amount:.1f} uP from {node.name}.{loss_msg}", alert_data
@@ -80,6 +82,7 @@ class InfiltrationRepository(BaseRepository):
                 from core.security_utils import is_action_hostile
                 if is_action_hostile('hack', node.availability_mode):
                     if addons.get("IDS") or node.upgrade_level > 2:
+                        node.ids_alerts += 1 # Track Hit
                         alert_msg = f"[GRID][ALARM] Target: {node.name} | Breach ATTEMPT by: {char.name}"
                         session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
                         alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
@@ -98,6 +101,7 @@ class InfiltrationRepository(BaseRepository):
                     session.add(BreachRecord(character_id=char.id, node_id=node.id))
                     
                     if addons.get("FIREWALL") and not is_owner:
+                        node.firewall_hits += 1 # Track Hit
                         alert_msg = f"[GRID][ALARM] CRITICAL: Firewall Breached on {node.name} by: {char.name}"
                         session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
                         alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
@@ -149,6 +153,7 @@ class InfiltrationRepository(BaseRepository):
                 from core.security_utils import is_action_hostile
                 if is_action_hostile('raid', node.availability_mode):
                     if addons.get("IDS") or node.upgrade_level > 2:
+                        node.ids_alerts += 1
                         alert_msg = f"[GRID][ALARM] Target: {node.name} | RAID Attempt by: {char.name}"
                         session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
                         alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
@@ -178,7 +183,13 @@ class InfiltrationRepository(BaseRepository):
                 p.credits += c_per
                 p.data_units += d_per
 
-            node.durability = max(0.0, node.durability - 25.0)
+            # Damage mitigation logic for FIREWALL
+            dur_loss = 25.0
+            if addons.get("FIREWALL"):
+                dur_loss *= 0.5
+                node.firewall_hits += 1
+                
+            node.durability = max(0.0, node.durability - dur_loss)
             
             if node.owner_character_id and (node.upgrade_level > 1 or addons.get("IDS")):
                 alert_msg = f"SECURITY BREACH: Node {node.name} RAIDED by {char.name}!"
@@ -189,6 +200,7 @@ class InfiltrationRepository(BaseRepository):
             char.data_units += 20.0
             
             if addons.get("FIREWALL") and not is_owner:
+                # Mitigation already handled above, just ensuring hit is tracked if not already
                 alert_msg = f"[GRID][ALARM] CRITICAL: Firewall Breached! {node.name} raided by: {char.name}"
                 session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
                 alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}

@@ -216,7 +216,9 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
         result = await node.db.link_network(nickname, node.net_name, args[0])
         success, msg = result['success'], result['msg']
     elif action == "hack":
-        success, msg = await node.db.hack_node(nickname, node.net_name)
+        res = await node.db.hack_node(nickname, node.net_name)
+        success, msg = res[0], res[1]
+        if len(res) > 2: alert_data = res[2]
         if not success and msg == "PVE_GUARDIAN_SPAWN":
             await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[WARNING] Primary MCP activated. PvE Guardian routine detected.', C_RED), tags=['SIGACT', nickname])}")
             return
@@ -249,8 +251,8 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
         if action in xp_map:
             await node.add_xp(nickname, xp_map[action], reply_target)
 
-    # Tactical Alert Delegation for Siphon
-    if success and action == "siphon" and alert_data:
+    # Tactical Alert Delegation for Siphon & Hack
+    if action in ["siphon", "hack"] and alert_data:
         prefs = await node.db.get_prefs_by_id(alert_data['recipient_id'])
         if prefs.get("briefings_enabled", True):
             if prefs.get("memo_target") == "irc":

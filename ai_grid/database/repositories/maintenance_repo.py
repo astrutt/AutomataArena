@@ -21,7 +21,11 @@ class MaintenanceRepository(BaseRepository):
                 # 2. Power and Stability
                 if node.owner_character_id:
                     addons = json.loads(node.addons_json or "{}")
-                    multiplier = 2.0 if addons.get("AMP") else 1.0
+                    # AMP Logic: 100% boost (2.0x) at Level 1, 200% boost (3.0x) at Level 2+
+                    amp_bonus = 1.0
+                    if addons.get("AMP"):
+                        amp_bonus = 2.0 if node.upgrade_level == 1 else 3.0
+                    multiplier = amp_bonus
                     
                     if occupants > 0:
                         reward = occupants * 5.0 * multiplier

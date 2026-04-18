@@ -32,9 +32,12 @@ class CommandRouter:
                     asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target))
                 elif args and args[0].lower() == "claimed":
                     asyncio.create_task(handlers.handle_grid_claimed(self.node, source_nick, args, reply_target))
-                elif args and args[0].lower() in ["probe", "install", "bolster", "link", "siphon"]:
+                elif args and args[0].lower() in ["probe", "install", "bolster", "link", "siphon", "hardware", "hw", "hack"]:
                     # !a grid <action> <args>
-                    asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, args[0].lower(), args[1:]))
+                    if args[0].lower() in ["hardware", "hw"]:
+                        asyncio.create_task(handlers.handle_grid_hardware(self.node, source_nick, reply_target, args[1].lower() if len(args) > 1 else None, args[2:]))
+                    else:
+                        asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, args[0].lower(), args[1:]))
                 else:
                     asyncio.create_task(handlers.handle_grid_view(self.node, source_nick, reply_target))
             elif verb == "move":
