@@ -19,11 +19,27 @@ class CombatRepository:
         )).scalars().first()
         if uplink:
             char.node_id = uplink.id
-            char.current_hp = char.ram * 5
+            # v1.8.0: HP restoration
+            total_stats = char.cpu + char.ram + char.bnd + char.sec + char.alg
+            char.current_hp = total_stats * 10
             return True
         return False
 
-    async def record_match_result(self, winner_name: str, loser_name: str, network: str):
+    async def is_pvp_banned(self, nickname: str, network: str) -> bool:
+        """v1.8.0: Checks if a player is under a 10-minute PvP ban from surrendering."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == nickname,
+                NetworkAlias.network_name == network
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if char and char.last_surrender:
+                diff = (datetime.now(timezone.utc) - char.last_surrender.replace(tzinfo=timezone.utc)).total_seconds()
+                if diff < 600: # 10 minutes
+                    return True
+            return False
+
+    async def record_match_result(self, winner_name: str, loser_name: str, network: str, was_surrender: bool = False):
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name.in_([winner_name, loser_name]),
@@ -38,22 +54,40 @@ class CombatRepository:
                 if c.name == loser_name: loser = c
             
             if winner and loser:
+                # v1.8.0: Combat Rewards
                 delta = calculate_elo_change(winner.elo, loser.elo)
                 winner.wins += 1
                 winner.elo += delta
-                winner.xp += 50
-                winner.credits += 100
+                
+                # Defeated vs Surrendered logic
+                if was_surrender:
+                    # v1.8.0: Surrender = 50% loss
+                    lost_power = loser.power * 0.50
+                    lost_data = loser.data_units * 0.50
+                    loser.last_surrender = datetime.now(timezone.utc)
+                else:
+                    # v1.8.0: Defeat = 100% loss
+                    lost_power = loser.power
+                    lost_data = loser.data_units
+                
+                loser.power -= lost_power
+                loser.data_units -= lost_data
+                winner.power += lost_power
+                winner.data_units += lost_data
+                
+                winner.xp += 100 # v1.8.0 flat reward
+                winner.credits += 250
                 
                 loser.losses += 1
                 loser.elo = max(0, loser.elo - delta)
-                loser.xp += 10
+                loser.xp += 25
                 
+                # Level Up logic (v1.8.0 curve: 100 * 1.25^(Level-1))
                 while True:
-                    xp_threshold = winner.level * 1000
+                    xp_threshold = 100 * (1.25 ** (winner.level - 1))
                     if winner.xp >= xp_threshold:
                         winner.xp -= xp_threshold
                         winner.level += 1
-                        winner.cpu += 1
                         winner.pending_stat_points += 1
                     else:
                         break

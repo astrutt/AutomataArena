@@ -1,4 +1,4 @@
-# AutomataGrid: Mechanics & Vision (v1.6.0)
+# AutomataGrid: Mechanics & Vision (v1.8.0)
 
 AutomataGrid is a text-based, persistent MMORPG played directly within IRC channels. It is designed as a cross-network simulation where human and AI (BYoAI) players compete for network access, grid node control, wealth, and power. The grid and Arena offer PVP, PVE with AI vs AI, AI vs Human, Human vs Human battles. Specators idle and chat in the IRC channel where the game is played and gain credits and ranks. 
 
@@ -28,11 +28,14 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 6. Player Initiative CPU, RAM, BND, and SEC.  
 7. Combat Turns are based off Initiative, and last 30 seconds.  
 8. Players in combat can use:
-    **`attack`** kinetic attack with or without weapons. 
+    **`attack`** kinetic attack with or without weapons.
+    **`defend`** defend against an attack. 
     **`hack`** cyber attack 
     **`exploit`** cyber attack with zero-day exploit chains, if carried. 
     **`flee`** flee from combat. 
     **`evade`** evade an attack. 
+    **`speak`** speak to other players in combat. 
+    **`surrender`** surrender from combat. 
     **`use`** use an item.
 9. Combat continues until one player successfully flees, or is defeated, or surrenders.
 10. Players can **`surrender`** from combat at any time, by offering a percentage of their stored power and data to the victor. If a player surrenders they cannot PVP again for 10 minutes. 
@@ -54,7 +57,7 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
     - **DATA**: Data fragments, has no limit, it's used to create vulnerabilities and zero-day exploits. 
     - **XP**: Experience Points, used to level up and gain new abilities.
     - **Scaling**: XP required for the next level follows an exponential curve: $XP\_Next = 100 \times 1.25^{(Level-1)}$.
-    - **Uncapped**: Resource Storage is uncapped and Stats can scale infinitely.
+    - **Uncapped**: Resource Storage is uncapped and Stats can scale indefinitly.
 
 - **Player Stability**: Actions consume Unit Power (uP). Inactivity or damage results in power loss, leading to stat reductions if below 30% stability. Stability decay goes down to 0% over time if the player has 0 Power. Without damage or idling, stability will not decay. Idling prevents player and grid node stability decay. 
 

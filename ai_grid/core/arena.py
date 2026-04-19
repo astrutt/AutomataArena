@@ -143,11 +143,12 @@ async def start_match(node, match_id: str, participants: list, pve=False):
         for e in node.active_engine.entities.values():
             if e.is_alive:
                 hp_color = C_GREEN if e.hp > (e.max_hp/2) else C_RED
-                hp_label = f"{e.hp}/{e.max_hp}"
-                hp_str = format_text(hp_label, hp_color)
-                raw_state += f"{e.name} [HP:{hp_str}] "
+                hp_str = format_text(f"{e.hp}/{e.max_hp}", hp_color)
+                # v1.8.0: Display Unit Power
+                up_str = format_text(f"{int(e.up)}uP", C_CYAN)
+                raw_state += f"{e.name} [HP:{hp_str}][PWR:{up_str}] "
         
-        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(raw_state + '| Awaiting public commands (60s)...', tags=['ARENA', 'COMBAT'])}")
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(raw_state + '| Awaiting public commands (30s)...', tags=['ARENA', 'COMBAT'])}")
 
         npc_tasks = [generate_and_queue_npc(node, ent, raw_state) for ent in node.active_engine.entities.values() if ent.is_npc and ent.is_alive]
         if npc_tasks: asyncio.gather(*npc_tasks) 
@@ -161,8 +162,17 @@ async def start_match(node, match_id: str, participants: list, pve=False):
     if node.active_engine: 
         winners = [e.name for e in node.active_engine.entities.values() if e.is_alive and not e.is_npc]
         losers = [e.name for e in node.active_engine.entities.values() if not e.is_alive and not e.is_npc]
+        
         if winners and losers:
-            await node.db.record_match_result(winners[0], losers[0], node.net_name)
+            # v1.8.0: Pass surrender flag to repo
+            winner_name = winners[0]
+            loser_name = losers[0]
+            loser_ent = node.active_engine.entities.get(loser_name)
+            
+            # Temporary attribute for the repo to pick up (since repo is async/session based)
+            # Actually, I'll update the record_match_result signature to accept a surrender flag
+            was_surrender = loser_ent.status == "Surrendered" if loser_ent else False
+            await node.db.record_match_result(winner_name, loser_name, node.net_name, was_surrender=was_surrender)
             
         await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('MATCH CONCLUDED.', tags=['ARENA'])}")
         node.active_engine = None

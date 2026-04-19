@@ -68,6 +68,12 @@ async def resolve_mob(node, nick: str, reply_target: str):
             await node.send(f"{reply_method} {private_target} :{tag_msg(msg, tags=['COMBAT', nick])}")
 
 async def handle_pvp_command(node, nickname: str, reply_target: str, action: str, target_name: str):
+    # v1.8.0: Check for PvP Ban (Surrender Cooldown)
+    if await node.db.combat.is_pvp_banned(nickname, node.net_name):
+        msg = format_text("🚫 PvP lockout active. Re-stabilizing systems after surrender... (10m Cooldown)", C_RED)
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(msg, tags=['COMBAT', nickname])}")
+        return
+
     if not await check_rate_limit(node, nickname, reply_target, cooldown=30): return
     success, msg, reward = False, "", None
     
