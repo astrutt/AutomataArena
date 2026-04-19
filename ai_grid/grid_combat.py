@@ -51,9 +51,9 @@ class Entity:
         except:
             self.inventory = []
             
-        # v1.8.0: HP = (CPU + RAM + BND + SEC + ALG) * 10
+        # v1.8.0: HP = (SumStats * 4) + 10
         total_stats = self.cpu + self.ram + self.bnd + self.sec + self.alg
-        self.max_hp = total_stats * 10
+        self.max_hp = (total_stats * 4) + 10
         self.hp = self.max_hp
         
         # v1.8.0: Unit Power (uP) and Stability
@@ -255,24 +255,26 @@ class CombatEngine:
         target.last_attacker_name = attacker.name
 
         # --- v1.8.0 EVASION / DEFENSE LOGIC ---
-        evade_chance = target.bnd * 2.0
-        if target.status == "Evading": evade_chance += 40
-        evade_chance = min(75.0, evade_chance) # Cap at 75%
+        # Mech Balance: Evasion decoupling - uses ALG instead of BND
+        # Remediation: Reduced multiplier to 1.0 and cap to 60% to normalize STK
+        evade_chance = target.alg * 1.0
+        if target.status == "Evading": evade_chance += 30
+        evade_chance = min(60.0, evade_chance) # Cap at 60%
         
         if random.randint(1, 100) <= evade_chance: 
             return f"{attacker.name}'s {mode} maneuver was {format_text('EVADED', C_YELLOW)} by {target.name}!"
 
         # --- v1.8.0 DAMAGE FORMULAS ---
         if mode == "kinetic":
-            raw_dmg = (attacker.cpu * 2) + attacker.ram
+            raw_dmg = (attacker.cpu * 5) + attacker.ram
             protection = target.sec
             verb = "strikes"
         elif mode == "cyber":
-            raw_dmg = (attacker.bnd * 2) + attacker.sec
+            raw_dmg = (attacker.bnd * 5) + attacker.sec
             protection = target.bnd
             verb = "injects code into"
         elif mode == "exploit":
-            raw_dmg = (attacker.alg + attacker.sec) * 10
+            raw_dmg = (attacker.alg + attacker.sec) * 15
             protection = 0
             verb = "executes a ZERO-DAY on"
         else:

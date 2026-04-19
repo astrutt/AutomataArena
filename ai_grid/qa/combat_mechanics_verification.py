@@ -29,8 +29,8 @@ def test_entity_initialization():
     }
     ent = Entity("TestUnit", db_record)
     
-    # Check HP: (5+5+5+5+5) * 10 = 250
-    expected_hp = 250
+    # Check HP: (5+5+5+5+5) * 4 + 10 = 110
+    expected_hp = 110
     if ent.max_hp == expected_hp:
         print(f"  ✅ HP Calculation Correct: {ent.max_hp}")
     else:
@@ -57,29 +57,29 @@ async def test_offensive_mechanics():
     engine.add_entity(attacker)
     engine.add_entity(defender)
     
-    # 1. Kinetic Attack: (10*2 + 5) - Target SEC(10) = 15 DMG
+    # 1. Kinetic Attack: (10*5 + 5) - Target SEC(10) = 45 DMG
     res_kinetic = engine._execute_attack(attacker, "Defender", mode="kinetic")
     print(f"  > Kinetic Result: {res_kinetic}")
-    if "15 DMG" in res_kinetic or "30 CRITICAL DMG" in res_kinetic:
+    if "45 DMG" in res_kinetic or "90 CRITICAL DMG" in res_kinetic:
         print("  ✅ Kinetic Damage Calculation Correct.")
     else:
-        print(f"  ❌ Kinetic Damage Calculation WRONG. Raw expected near 15.")
+        print(f"  ❌ Kinetic Damage Calculation WRONG. Raw expected near 45.")
 
     # 2. Cyber Attack: (Attacker BND(2)*2 + SEC(2)) - Target BND(10) = 6 - 10 = 1 (Floor)
     res_cyber = engine._execute_attack(attacker, "Defender", mode="cyber")
     print(f"  > Cyber Result: {res_cyber}")
-    if "1 DMG" in res_cyber or "2 CRITICAL DMG" in res_cyber:
+    if any(s in res_cyber for s in ["1 DMG", "2 DMG", "2 CRITICAL DMG", "4 CRITICAL DMG"]):
         print("  ✅ Cyber Damage Calculation Correct (including floor/resist).")
     else:
         print("  ❌ Cyber Damage Calculation unexpected.")
 
-    # 3. Zero-Day Exploit: (ALG(5) + SEC(2)) * 10 = 70 DMG
+    # 3. Zero-Day Exploit: (ALG(5) + SEC(2)) * 15 = 105 DMG
     res_exploit = engine._execute_attack(attacker, "Defender", mode="exploit")
     print(f"  > Exploit Result: {res_exploit}")
-    if "70 DMG" in res_exploit or "140 CRITICAL DMG" in res_exploit:
+    if "105 DMG" in res_exploit or "210 CRITICAL DMG" in res_exploit:
         print("  ✅ Exploit Damage Calculation Correct.")
     else:
-        print("  ❌ Exploit Damage Calculation unexpected.")
+        print(f"  ❌ Exploit Damage Calculation unexpected.")
 
     return True
 
