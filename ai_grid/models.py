@@ -29,7 +29,7 @@ class GridNode(Base):
     is_hidden = Column(Boolean, default=False)
     availability_mode = Column(String, default='OPEN') # OPEN, CLOSED
     is_darknet = Column(Boolean, default=False)
-    irc_affinity = Column(String, nullable=True) # Mapping to IRC Network (e.g. Rizon)
+    net_affinity = Column(String, nullable=True) # Mapping to Network (e.g. Rizon)
     local_network = Column(String, nullable=True) # Named subnet for power pooling
     
     # Hardware & Infrastructure
@@ -103,7 +103,7 @@ class Character(Base):
     status = Column(String, default='ACTIVE')
     auth_token = Column(String, nullable=True)
     daily_tasks = Column(String, default='{}')
-    prefs = Column(String, default='{"output_mode":"human","ids_notify":true,"firewall_notify":true,"alert_method":"notice","auto_sell_trash":false,"tutorial_mode":true,"reminders":true}')
+    prefs = Column(String, default='{"output_mode":"human","msg_type":"privmsg","auto_sell":false,"tutorial_mode":true,"reminders":true,"memo_target":"grid","briefings_enabled":true}')
     
     # Core Attributes
     cpu = Column(Integer, default=5) # Physical/Kinetic
@@ -134,8 +134,22 @@ class Character(Base):
     inventory = relationship("InventoryItem", back_populates="owner", cascade="all, delete-orphan")
 
 # ==========================================
-# 3. DISCOVERY & MAPPING
+# 3. DISCOVERY, MAPPING & EVENTS
 # ==========================================
+class PulseEvent(Base):
+    __tablename__ = 'pulse_events'
+    
+    id = Column(Integer, primary_key=True)
+    node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
+    network_name = Column(String, index=True) # Scope limiting
+    event_type = Column(String) # 'PACKET', 'GLITCH'
+    reward_val = Column(Float, default=0.0) # Credits or Data units
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime)
+    status = Column(String, default='ACTIVE') # ACTIVE, RESOLVED, EXPIRED
+    
+    node = relationship("GridNode")
+
 class DiscoveryRecord(Base):
     __tablename__ = 'discovery_records'
     

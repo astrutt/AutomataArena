@@ -59,11 +59,12 @@ def load_character():
 
 def save_character(payload):
     try:
+        abs_path = os.path.abspath(CHARACTER_FILE)
         with open(CHARACTER_FILE, 'w') as f:
             json.dump(payload, f, indent=4)
-        logger.info(f"Character state successfully saved to disk ({CHARACTER_FILE}).")
+        logger.info(f"Character state successfully saved to disk ({abs_path}).")
     except Exception as e:
-        logger.exception(f"Critical Error saving {CHARACTER_FILE}: {e}")
+        logger.exception(f"Critical Error saving {CHARACTER_FILE} to {os.path.abspath(CHARACTER_FILE)}: {e}")
 
 def call_llm(arena_state, char_data, memory_buffer):
     headers = {"Content-Type": "application/json"}
@@ -180,6 +181,10 @@ class AutomataBot:
         self.recovery_attempts = 0
         self.last_recovery_time = 0
         self.puppet_mode = False
+        self.current_nick = NICK # Initialize with config value
+        self.manager_nick = MANAGER # Primary manager identity
+        self.manager_online = False # Presence bit (WHOIS validated)
+        self.presence_task = None
 
     def record_memory(self, msg):
         if "Awaiting public commands" in msg:
@@ -188,6 +193,21 @@ class AutomataBot:
         self.memory_buffer.append(clean_msg)
         if len(self.memory_buffer) > 10:
             self.memory_buffer.pop(0)
+
+    async def check_manager_presence(self):
+        """Periodic WHOIS heartbeat to verify manager availability."""
+        await asyncio.sleep(10) # Initial grace period
+        while True:
+            try:
+                if self.writer:
+                    logger.debug(f"[PRESENCE] Emitting WHOIS heartbeat for {self.manager_nick}...")
+                    await self.send(f"WHOIS {self.manager_nick}")
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"[PRESENCE] Heartbeat error: {e}")
+                await asyncio.sleep(10)
 
     async def attempt_recovery(self):
         """Automatically initiate re-registration if account loss is detected."""
@@ -244,6 +264,10 @@ class AutomataBot:
 
         await self.send(f"NICK {NICK}")
         await self.send(f"USER {NICK} 0 * :Automata Arena Fighter")
+        
+        # Start presence heartbeat
+        self.presence_task = asyncio.create_task(self.check_manager_presence())
+        
         await self.listen_loop()
 
     async def process_turn(self, arena_state):
@@ -315,6 +339,38 @@ class AutomataBot:
                 
             source_nick = source_full.split('!')[0].lower() if source_full else ""
 
+            if command == "001":
+                # RPL_WELCOME: Server confirms our nickname
+                old_nick = self.current_nick
+                self.current_nick = target
+                logger.info(f"Identity confirmed by server: {old_nick} -> {self.current_nick}")
+                continue
+
+            if command == "NICK":
+                # Someone changed their nick
+                if source_nick == self.current_nick.lower():
+                    self.current_nick = msg if msg else target
+                    logger.info(f"Identity updated via NICK message: {self.current_nick}")
+                continue
+
+            if command in ["311", "318"]:
+                # RPL_WHOISUSER / RPL_ENDOFWHOIS: Confirm manager is online
+                whois_target = header[3].lower() if len(header) > 3 else ""
+                if whois_target == self.manager_nick.lower():
+                    if not self.manager_online:
+                        logger.info(f"[PRESENCE] Manager {self.manager_nick} confirmed ONLINE.")
+                        self.manager_online = True
+                continue
+
+            if command == "401":
+                # ERR_NOSUCHNICK: Manager is offline
+                search_nick = header[3].lower() if len(header) > 3 else ""
+                if search_nick == self.manager_nick.lower():
+                    if self.manager_online:
+                        logger.warning(f"[PRESENCE] Manager {self.manager_nick} confirmed OFFLINE (401).")
+                    self.manager_online = False
+                continue
+
             if command == "PING":
                 pong_target = msg if msg else target
                 await self.send(f"PONG :{pong_target}")
@@ -330,23 +386,32 @@ class AutomataBot:
 
             if command == "JOIN":
                 target_chan = msg if msg else target
-                if source_nick == NICK.lower() and target_chan.lower() == CHANNEL.lower():
+                if source_nick == self.current_nick.lower() and target_chan.lower() == CHANNEL.lower():
                     if not self.char_data:
-                        race = config['BOT']['Race']
-                        bot_class = config['BOT']['Class']
-                        traits = config['BOT']['Traits']
-                        logger.info("Joined channel. Executing initial registration sequence...")
-                        await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} register {NICK} {race} {bot_class} {traits}")
+                        if self.manager_online:
+                            race = config['BOT']['Race']
+                            bot_class = config['BOT']['Class']
+                            traits = config['BOT']['Traits']
+                            logger.info("Joined channel. Executing initial registration sequence...")
+                            await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} register {NICK} {race} {bot_class} {traits}")
+                        else:
+                            logger.info(f"Joined channel, but manager {self.manager_nick} is not yet detected. Registration deferred.")
+                            logger.debug(f"[GATE] Manager online state: {self.manager_online}")
                     else:
                         logger.info("Joined channel. Character data found. Requesting Grid status...")
                         await self.send(f"PRIVMSG {CHANNEL} :{PREFIX} grid map")
                 continue
 
-            if command == "NOTICE" and target.lower() == NICK.lower():
+            if command == "NOTICE" and (target.lower() == self.current_nick.lower() or target.lower() == NICK.lower()):
                 logger.info(f"NOTICE_RECV: {source_nick} -> {target}: {msg}")
                 if source_nick == MANAGER:
-                    if msg.startswith("[SYS_PAYLOAD]"):
-                        payload_json = msg.replace("[SYS_PAYLOAD]", "").strip()
+                    if "[SYS_PAYLOAD]" in msg:
+                        logger.debug(f"Intercepted [SYS_PAYLOAD] from {source_nick}")
+                        # Robust extraction: find content after tag
+                        tag = "[SYS_PAYLOAD]"
+                        payload_start = msg.find(tag) + len(tag)
+                        payload_json = msg[payload_start:].strip()
+                        
                         logger.info(f"NOTICE_RECV: {source_nick} -> {target} [SYS_PAYLOAD]")
                         logger.debug(f"Payload Content: {payload_json}")
                         try:
@@ -366,11 +431,14 @@ class AutomataBot:
                 continue
 
             if command == "PRIVMSG":
-                if target.lower() == NICK.lower():
+                is_private = target.lower() == self.current_nick.lower() or target.lower() == NICK.lower()
+                
+                if is_private:
                     logger.info(f"PRIVMSG_RECV: {source_nick} -> {target}: {msg}")
                 else:
                     logger.debug(f"MSG_RECV: {source_nick} -> {target}: {msg}")
-                if target.lower() == NICK.lower():
+                
+                if is_private:
                     if OWNER and source_nick == OWNER:
                         logger.warning(f"Secure Owner Override Received from {source_nick}: {msg}")
                         if msg.lower() == "!quit":

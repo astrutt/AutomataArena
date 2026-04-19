@@ -75,6 +75,11 @@ GRID_CONNECTIONS = [
     ("UpLink", "Black_Market_Port", "down"), ("Black_Market_Port", "UpLink", "up"),
 ]
 
+BRIDGE_MAPPING = {
+    "Firewall_Perimeter": "rizon",
+    "Logic_Gate": "2600net"
+}
+
 LOOT_TEMPLATES = [
     {"name": "Data_Shard",      "item_type": "junk", "base_value": 5,  "effects_json": "{}"},
     {"name": "Memory_Fragment", "item_type": "junk", "base_value": 8,  "effects_json": "{}"},
@@ -86,9 +91,9 @@ LOOT_TEMPLATES = [
 ]
 
 DEFAULT_PREFS = {
-    "output_mode": "machine",
+    "output_mode": "human",
     "msg_type": "privmsg",
-    "auto_sell_trash": False,
+    "auto_sell": False,
     "tutorial_mode": True,
     "reminders": True,
     "memo_target": "grid",

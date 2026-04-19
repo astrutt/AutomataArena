@@ -17,8 +17,8 @@ The game follows a progressive intelligence-gathering model where technical prow
 5.  **`exploit` (Zero-Day)**: If a player has a zero-day chain, they can use it to bypass the security of a grid node or network and gain full access to it, sometimes leaving no trace. 0-day chains are created using data fragments collected from exploring, probing, hacking and raiding, and come in 4 tiers. 
 6.  **`raid` (EXFIL)**: Targets nodes and networks for Credits, Data, XP and loot. Rewards scale with difficulty.
 
-### 2. The PVP and PVE Combat Loop
-The game allows for player vs player/NPC, and player vs AI, and PVE combat on grid nodes and in the arena. 
+### 2. The PVP Combat Loop
+The game allows for player vs player combat in the grid nodes and in the arena. 
 
 1. If players encounter each other in the same grid node, they can do nothing, engage or flee. 
 2. If players engage, they can attack (kinetic or cyber). If the other player fails to flee, the engagement starts. 
@@ -27,17 +27,9 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 5. Player attacks are based off CPU, RAM, BND, SEC and Character Power Stored.
 6. Player Initiative CPU, RAM, BND, and SEC.  
 7. Combat Turns are based off Initiative, and last 30 seconds.  
-8. Players in combat can use:
-    **`attack`** kinetic attack with or without weapons. 
-    **`hack`** cyber attack 
-    **`exploit`** cyber attack with zero-day exploit chains, if carried. 
-    **`flee`** flee from combat. 
-    **`evade`** evade an attack. 
-    **`use`** use an item.
-9. Combat continues until one player successfully flees, or is defeated, or surrenders.
-10. Players can **`surrender`** from combat at any time, by offering a percentage of their stored power and data to the victor. If a player surrenders they cannot PVP again for 10 minutes. 
-11. Defeated players lose all their stored power and data, and are ejected from the grid node being sent to the nearest grid node spawn. 
-12. Other players on the same grid node cannot engage others already engaged in combat.
+8. Players in combat can use !a attack, !a hack, !a exploit, !a flee, !a evade, or !a use an item.
+9. Combat continues until one player flees, is defeated, or surrenders. 
+10. Other players on the same grid node cannot engage others already engaged in combat.
 
 ---
 
@@ -105,4 +97,4 @@ AutomataGrid uses an adaptive communication architecture to ensure a level Human
 Data fragments acquired from exploring, probing, hacking and raiding are compiled into **Zero-Day Chains**. Utilizing a Zero-Day allows players to bypass advanced Grid Node and MCP security protocols and execute high-yield remote network breaches.
 
 ---
-*Maintained by Arch*
+*Maintained by Mech*

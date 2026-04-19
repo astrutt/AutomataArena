@@ -3,13 +3,18 @@ import argparse
 import logging
 import os
 import shutil
+import json
 import datetime
 from sqlalchemy import inspect, text, func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.future import select
 
-from models import Base, Character, GridNode, NodeConnection, ItemTemplate, Player, NetworkAlias, DiscoveryRecord
-from database.core import DB_FILE, logger, GRID_EXPANSION, GRID_CONNECTIONS, LOOT_TEMPLATES
+from models import (
+    Base, Player, NetworkAlias, Character, GridNode, NodeConnection, 
+    PulseEvent, DiscoveryRecord, BreachRecord, ItemTemplate, InventoryItem, 
+    MainframeTask, AuctionListing, Leaderboard, CipherSession, GlobalMarket, Memo
+)
+from database.core import DB_FILE, logger, CONFIG, GRID_EXPANSION, GRID_CONNECTIONS, BRIDGE_MAPPING, LOOT_TEMPLATES
 from database.repositories.navigation_repo import NavigationRepository
 from database.repositories.territory_repo import TerritoryRepository
 from database.repositories.discovery_repo import DiscoveryRepository
@@ -20,6 +25,7 @@ from database.repositories.economy_repo import EconomyRepository
 from database.repositories.mainframe_repo import MainframeRepository
 from database.repositories.minigame_repo import MiniGameRepository
 from database.repositories.combat_repo import CombatRepository
+from database.repositories.pulse_repo import PulseRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):
@@ -40,6 +46,7 @@ class ArenaDB:
         self.discovery = DiscoveryRepository(self.async_session)
         self.infiltration = InfiltrationRepository(self.async_session)
         self.maintenance = MaintenanceRepository(self.async_session)
+        self.pulse = PulseRepository(self.async_session)
 
         # Legacy Facade Compatibility (grid object proxy)
         class GridFacade:
@@ -154,7 +161,14 @@ class ArenaDB:
         
         def sync_columns(conn):
             inspector = inspect(conn)
+            existing_tables = inspector.get_table_names()
+            
             for table_name, table in Base.metadata.tables.items():
+                if table_name not in existing_tables:
+                    logger.info(f"Creating missing table: {table_name}")
+                    table.create(conn)
+                    continue
+
                 existing_cols = [c['name'] for c in inspector.get_columns(table_name)]
                 for col_name, col in table.columns.items():
                     if col_name not in existing_cols:
@@ -172,9 +186,41 @@ class ArenaDB:
         return True
 
     async def verify_integrity(self):
-        """Audit the database for core nodes and broken records."""
+        """Audit the database for structural sync and logical consistency."""
         logger.info("Running database integrity audit...")
         issues = []
+        
+        # 1. Structural Audit (Missing Tables/Columns)
+        def get_db_schema(conn):
+            from sqlalchemy import inspect
+            inspector = inspect(conn)
+            schema = {}
+            for table_name in inspector.get_table_names():
+                schema[table_name] = [c['name'] for c in inspector.get_columns(table_name)]
+            return schema
+
+        try:
+            async with self.engine.connect() as conn:
+                db_schema = await conn.run_sync(get_db_schema)
+                
+                for table_name, table in Base.metadata.tables.items():
+                    if table_name not in db_schema:
+                        issues.append(f"[CRITICAL] Missing table: {table_name}")
+                        continue
+                    
+                    for col in table.columns:
+                        if col.name not in db_schema[table_name]:
+                            issues.append(f"[CRITICAL] Missing column: {table_name}.{col.name}")
+        except Exception as e:
+            issues.append(f"[CRITICAL] Failed to inspect database schema: {e}")
+
+        # If structural issues found, instruct admin and return early
+        if any("[CRITICAL]" in i for i in issues):
+            logger.error("Database schema desync detected!")
+            logger.error("Run 'python3 ai_grid/grid_db.py update' to safely synchronize without data loss.")
+            return issues
+
+        # 2. Logical Audit
         async with self.async_session() as session:
             # 1. Check Uplink
             uplink = (await session.execute(select(GridNode).where(GridNode.name == "UpLink"))).scalars().first()
@@ -240,6 +286,31 @@ class ArenaDB:
                     session.add(GridNode(name=name, description=desc, node_type=node_type, threat_level=threat, is_spawn_node=is_spawn))
             
             await session.flush()
+
+            # --- SEED BRIDGE AFFINITIES (Task 021 Fix) ---
+            for node_name, net_target in BRIDGE_MAPPING.items():
+                node = (await session.execute(select(GridNode).where(GridNode.name == node_name))).scalars().first()
+                if node:
+                    node.net_affinity = net_target
+                    logger.info(f"Seeded net_affinity: {node_name} -> {net_target}")
+
+            # --- SEED NETWORK HOME NODES (Task 021) ---
+            for net_name in CONFIG.get('networks', {}).keys():
+                node_stmt = select(GridNode).where(GridNode.name == net_name)
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node:
+                    node = GridNode(name=net_name, description=f"Entry point for the {net_name} local mesh.", node_type="wilderness")
+                    session.add(node)
+                    logger.info(f"Created Network Home Node: {net_name}")
+                
+                # Enforce standard entry parameters
+                node.availability_mode = 'OPEN'
+                node.upgrade_level = 1
+                node.net_affinity = net_name
+                node.addons_json = json.dumps({"NET": True})
+                logger.debug(f"Configured {net_name} entry: OPEN, Level 1, NET Hardware.")
+
+            await session.commit()
 
             # Seed connections
             for src_name, tgt_name, direction in GRID_CONNECTIONS:

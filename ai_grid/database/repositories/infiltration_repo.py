@@ -21,6 +21,11 @@ class InfiltrationRepository(BaseRepository):
             node = char.current_node
             
             # Availability Check: Owner bypass
+            disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
+            disc = (await session.execute(disc_stmt)).scalars().first()
+            if not disc:
+                return False, "ACCESS DENIED: Node topology must be EXPLORED before siphoning."
+            
             if node.availability_mode == 'CLOSED' and node.owner_character_id != char.id:
                 # Hostile Siphon check
                 expiry_limit = datetime.now(timezone.utc) - timedelta(seconds=300)
@@ -74,6 +79,15 @@ class InfiltrationRepository(BaseRepository):
             node = char.current_node
             if not node.owner_character_id: return False, "Node is Unclaimed.", None
             
+            # --- SEQUENCE CHECK: Require PROBE before HACK (Task 021) ---
+            disc_stmt = select(DiscoveryRecord).where(
+                DiscoveryRecord.character_id == char.id, 
+                DiscoveryRecord.node_id == node.id,
+                DiscoveryRecord.intel_level == 'PROBE'
+            )
+            if not (await session.execute(disc_stmt)).scalars().first():
+                return False, "ACCESS DENIED: Deep PROBE required to identify localized vulnerabilities.", None
+
             addons = json.loads(node.addons_json or "{}")
             is_owner = node.owner_character_id == char.id
             alert_data = None
@@ -159,8 +173,17 @@ class InfiltrationRepository(BaseRepository):
                         alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
 
             if node.availability_mode == 'CLOSED':
-                return {"success": False, "msg": "Cannot raid CLOSED network.", "alert_data": alert_data}
+                return {"success": False, "msg": "Cannot raid CLOSED network. System protocols must be 'hacked' first.", "alert_data": alert_data}
             
+            # --- SEQUENCE CHECK: Require PROBE before RAID (Task 021) ---
+            disc_stmt = select(DiscoveryRecord).where(
+                DiscoveryRecord.character_id == char.id, 
+                DiscoveryRecord.node_id == node.id,
+                DiscoveryRecord.intel_level == 'PROBE'
+            )
+            if not (await session.execute(disc_stmt)).scalars().first():
+                return {"success": False, "msg": "ACCESS DENIED: Deep PROBE required to map facility layout for coordination."}
+
             if is_owner: return {"success": False, "msg": "Self-Raid Blocked."}
             if not addons.get("NET"): return {"success": False, "msg": "NET_BRIDGE hardware required."}
 
@@ -172,8 +195,13 @@ class InfiltrationRepository(BaseRepository):
             if char.power < cost: return {"success": False, "msg": "Insufficient power."}
             char.power -= cost
             
-            total_c_gain = random.randint(100, 300) * node.upgrade_level
-            total_d_gain = random.uniform(30.0, 60.0) * node.upgrade_level
+            # HVT Scaling Logic (Task 021)
+            hvt_factor = CONFIG.get('mechanics', {}).get('hvt_scaling_factor', 1.5)
+            min_hvt = CONFIG.get('mechanics', {}).get('min_hvt_level', 3)
+            scaling = hvt_factor if node.upgrade_level >= min_hvt else 1.0
+            
+            total_c_gain = int(random.randint(100, 300) * node.upgrade_level * scaling)
+            total_d_gain = random.uniform(30.0, 60.0) * node.upgrade_level * scaling
             
             participants = [c for c in node.characters_present if not c.player.is_autonomous] or [char]
             c_per = total_c_gain / len(participants)

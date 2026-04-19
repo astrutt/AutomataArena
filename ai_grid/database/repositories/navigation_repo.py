@@ -1,4 +1,5 @@
 # ai_grid/database/navigation_repo.py
+import json
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
@@ -98,7 +99,7 @@ class NavigationRepository(BaseRepository):
                 'durability': node.durability,
                 'threat_level': node.threat_level,
                 'availability_mode': node.availability_mode,
-                'irc_affinity': node.irc_affinity if intel == "PROBE" else "HIDDEN"
+                'net_affinity': node.net_affinity if intel == "PROBE" else "HIDDEN"
             }
 
     async def move_player(self, name: str, network: str, direction: str):
@@ -142,25 +143,36 @@ class NavigationRepository(BaseRepository):
                     
                     return conn.target_node.name, msg
             
-            # 3. Bridge Traversal Logic
-            if direction.lower() == char.current_node.irc_affinity.lower() if char.current_node.irc_affinity else None:
-                target_net = char.current_node.irc_affinity
+            # 3. Bridge Traversal Logic (The Uplink - Task 021)
+            # If direction matches the affinity of the node, we are attempting to "jump" networks
+            if char.current_node.net_affinity and direction.lower() == char.current_node.net_affinity.lower():
+                target_net = char.current_node.net_affinity
+                
+                # Check for NET_BRIDGE (NET) Hardware on Current Node
+                addons = json.loads(char.current_node.addons_json or "{}")
+                if not addons.get("NET"):
+                    return None, "BRIDGE OFFLINE: Local network entry requires 'NET_BRIDGE' hardware module to be online."
+
                 if not CONFIG.get('networks', {}).get(target_net.lower(), {}).get('enabled'):
                     return None, f"CONNECTION REFUSED: Remote network '{target_net}' is offline."
                 
-                # Bridging still requires local node to be OPEN or already controlled
+                # Bridging requires local node to be OPEN or owned
                 if char.current_node.availability_mode == 'CLOSED' and char.current_node.owner_character_id != char.id:
                     return None, f"BRIDGE ACCESS DENIED: Local gateway '{char.current_node.name}' is CLOSED. Breach required."
 
-                # Find entry node
-                stmt_entry = select(GridNode).where(GridNode.irc_affinity.ilike(network))
+                # Find landing node on the target network (one that points BACK to this network)
+                stmt_entry = select(GridNode).where(GridNode.net_affinity.ilike(network))
                 entry_node = (await session.execute(stmt_entry)).scalars().first()
                 if not entry_node:
                     return None, f"ROUTING ERROR: No landing sector found on network '{target_net}'."
 
-                # Allow entry even if CLOSED (per new vision)
+                # Bridge Cost: 2x Move Cost
+                bridge_cost = move_cost * 2
+                if char.power < bridge_cost:
+                    return None, f"Insufficient POWER. Bridge jump requires {bridge_cost} uP."
+
                 char.node_id = entry_node.id
-                char.power -= move_cost * 2
+                char.power -= bridge_cost
 
                 # --- AUTO-DISCOVERY ON BRIDGE ---
                 disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == entry_node.id)

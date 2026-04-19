@@ -1,5 +1,5 @@
 {
-    "version": "1.5.0",
+    "version": "1.7.9",
     "admins": ["Admin1", "Admin2"],
     "llm": {
         "provider": "ollama",
@@ -14,6 +14,8 @@
         "file": "automata_grid.db"
     },
     "mechanics": {
+        "max_hardware_slots": 4,
+        "durability_multipliers": [1.0, 1.25, 1.5, 2.0],
         "data_to_vuln_ratio": 100,
         "vulns_to_chain_ratio": 4,
         "stability_decay_per_day": 0.01,
@@ -25,7 +27,8 @@
             "hack": 3.0,
             "explore": 5.0,
             "compile": 10.0,
-            "assemble": 25.0
+            "assemble": 25.0,
+            "bridge": 2.0
         },
         "mainframe": {
             "compilation_time_minutes": 10,

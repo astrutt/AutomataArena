@@ -308,7 +308,11 @@ class MasterHub:
         self.llm = ArenaLLM(CONFIG); self.db = ArenaDB(); self.nodes = {}
     async def start(self):
         # Startup Integrity Audit
-        await self.db.verify_integrity()
+        issues = await self.db.verify_integrity()
+        if any("[CRITICAL]" in i for i in issues):
+            logger.critical("FATAL: Database integrity check failed. Mainframe cannot boot until the schema is synchronized.")
+            logger.critical("Action Required: Resolve the [CRITICAL] issues listed above and restart.")
+            return 
         
         for net_name, net_config in CONFIG['networks'].items():
             if net_config.get('enabled', True):

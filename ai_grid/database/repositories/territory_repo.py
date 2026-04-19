@@ -276,11 +276,11 @@ class TerritoryRepository(BaseRepository):
             
             known_networks = CONFIG.get('networks', {}).keys()
             if subnet_name in known_networks:
-                node.irc_affinity = subnet_name
+                node.net_affinity = subnet_name
                 node.local_network = None
             else:
                 node.local_network = subnet_name
-                node.irc_affinity = None
+                node.net_affinity = None
             
             await session.commit()
             return {"success": True, "msg": f"Linkage established to '{subnet_name}'."}

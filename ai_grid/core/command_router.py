@@ -73,6 +73,10 @@ class CommandRouter:
                 else:
                     asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, verb, args))
             
+            # --- TASK 022: INTERACTIVE PULSES ---
+            elif verb in ["collect", "patch"]:
+                asyncio.create_task(handlers.handle_pulse_resolve(self.node, source_nick, reply_target, verb, args))
+            
             elif verb == "memos":
                 asyncio.create_task(handlers.handle_memos(self.node, source_nick, args, reply_target))
 

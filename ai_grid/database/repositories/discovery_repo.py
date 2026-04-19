@@ -85,8 +85,14 @@ class DiscoveryRepository(BaseRepository):
                 selectinload(Character.current_node).selectinload(GridNode.exits)
             )
             char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return {"error": "System offline."}
+            if not char or not char.current_node: return {"success": False, "error": "System offline."}
             node = char.current_node
+            
+            # --- SEQUENCE CHECK: Require EXPLORE before PROBE (Task 021) ---
+            disc_check_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
+            existing_disc = (await session.execute(disc_check_stmt)).scalars().first()
+            if not existing_disc:
+                return {"success": False, "error": "Discovery Conflict: Node topology must be EXPLORED before deep probing."}
             
             # --- SECURITY PRE-CHECK (IDS) ---
             addons = json.loads(node.addons_json or "{}")
@@ -104,12 +110,12 @@ class DiscoveryRepository(BaseRepository):
             
             if direction:
                 conn = next((c for c in node.exits if c.direction.lower() == direction.lower()), None)
-                if not conn: return {"error": f"Invalid direction: '{direction}'."}
-                if conn.is_hidden: return {"error": f"Direction '{direction}' is not yet mapped."}
+                if not conn: return {"success": False, "error": f"Invalid direction: '{direction}'."}
+                if conn.is_hidden: return {"success": False, "error": f"Direction '{direction}' is not yet mapped."}
                 node = conn.target_node
             
             cost = CONFIG.get('mechanics', {}).get('action_costs', {}).get('probe', 10.0)
-            if char.power < cost: return {"error": f"Insufficient POWER."}
+            if char.power < cost: return {"success": False, "error": "Insufficient POWER."}
             
             difficulty = (12 + (node.upgrade_level * 2)) + (char.current_node.noise * 0.5)
             if direction: difficulty += 3
@@ -138,7 +144,7 @@ class DiscoveryRepository(BaseRepository):
             else:
                 visibility_gate = "OPEN" if node.availability_mode == "OPEN" else "CLOSED [BREACH REQUIRED]"
             
-            bridge = f"Bridge to {node.irc_affinity}" if node.irc_affinity else "No affinity detected."
+            bridge = f"Bridge to {node.net_affinity}" if node.net_affinity else "No affinity detected."
             hack_dc = 10 + (node.upgrade_level * 3)
             char.alg_bonus = 5
             char.credits += 15.0
