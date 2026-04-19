@@ -91,7 +91,7 @@ LOOT_TEMPLATES = [
 ]
 
 DEFAULT_PREFS = {
-    "output_mode": "machine",
+    "output_mode": "human",
     "msg_type": "privmsg",
     "auto_sell_trash": False,
     "tutorial_mode": True,

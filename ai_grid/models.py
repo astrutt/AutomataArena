@@ -103,7 +103,7 @@ class Character(Base):
     status = Column(String, default='ACTIVE')
     auth_token = Column(String, nullable=True)
     daily_tasks = Column(String, default='{}')
-    prefs = Column(String, default='{"output_mode":"human","ids_notify":true,"firewall_notify":true,"alert_method":"notice","auto_sell_trash":false,"tutorial_mode":true,"reminders":true}')
+    prefs = Column(String, default='{"output_mode":"human","msg_type":"privmsg","auto_sell_trash":false,"tutorial_mode":true,"reminders":true,"memo_target":"grid","briefings_enabled":true}')
     
     # Core Attributes
     cpu = Column(Integer, default=5) # Physical/Kinetic

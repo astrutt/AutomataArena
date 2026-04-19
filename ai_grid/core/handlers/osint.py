@@ -13,15 +13,15 @@ logger = logging.getLogger("manager")
 async def handle_economy_osint(node, source, target):
     """Broadcasting global financial metrics."""
     if not await check_rate_limit(node, source, target): return
-    msg_target, broadcast_chan, machine, _ = await get_action_routing(node, source, target)
+    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source, target)
     
     stats = await node.db.get_global_economy()
     market = await node.db.get_market_status()
     junk_m = market.get('junk', 1.0)
     
-    if machine:
+    if machine_mode:
         report = f"[OSINT] ECONOMY|CIRCULATING:{stats['total_credits']}|RESERVES:{stats['total_data_units']:.1f}|VARIANCE:{junk_m:.2f}"
-        await node.send(f"PRIVMSG {msg_target} :{report}")
+        await node.send(f"{reply_method} {private_target} :{report}")
         return
 
     title = generate_gradient("E C O N O M Y   M E T R I C S", [C_YELLOW, C_ORANGE, C_L_GREEN])
@@ -31,19 +31,19 @@ async def handle_economy_osint(node, source, target):
     market_health = f"Market Variance: {junk_m:.2f}x"
     
     report = f"{header} | {circ} | {reserves} | {market_health}"
-    await node.send(f"PRIVMSG {target} :{report}")
+    await node.send(f"{reply_method} {private_target} :{report}")
 
 async def handle_gridpower_osint(node, source, target):
     """Broadcasting energy logistics and generation metrics."""
     if not await check_rate_limit(node, source, target): return
-    msg_target, broadcast_chan, machine, _ = await get_action_routing(node, source, target)
+    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source, target)
     
     tele = await node.db.get_grid_telemetry()
     capacity = tele['total_nodes'] * 1000
     
-    if machine:
+    if machine_mode:
         report = f"[OSINT] GRIDPOWER|STORED:{tele['total_power']:.0f}|CAPACITY:{capacity}|GEN:{tele['total_generation']:.0f}"
-        await node.send(f"PRIVMSG {msg_target} :{report}")
+        await node.send(f"{reply_method} {private_target} :{report}")
         return
 
     title = generate_gradient("G R I D   P O W E R   L O G I S T I C S", [C_CYAN, C_BLUE, C_PURPLE])
@@ -53,18 +53,18 @@ async def handle_gridpower_osint(node, source, target):
     gen = f"GEN: {tele['total_generation']:.0f}uP/tick"
     
     report = f"{header} | {storage} | {gen}"
-    await node.send(f"PRIVMSG {target} :{report}")
+    await node.send(f"{reply_method} {private_target} :{report}")
 
 async def handle_gridstability_osint(node, source, target):
     """Broadcasting mesh integrity and claim metrics."""
     if not await check_rate_limit(node, source, target): return
-    msg_target, broadcast_chan, machine, _ = await get_action_routing(node, source, target)
+    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source, target)
     
     tele = await node.db.get_grid_telemetry()
     
-    if machine:
+    if machine_mode:
         report = f"[OSINT] MESH|CLAIMED:{tele['claimed_nodes']}|TOTAL:{tele['total_nodes']}|PERCENT:{tele['claimed_percent']:.1f}"
-        await node.send(f"PRIVMSG {msg_target} :{report}")
+        await node.send(f"{reply_method} {private_target} :{report}")
         return
 
     title = generate_gradient("M E S H   S T A B I L I T Y", [C_L_GREEN, C_GREEN, C_CYAN])
@@ -73,20 +73,20 @@ async def handle_gridstability_osint(node, source, target):
     claimed = f"CLAIMED: [{mesh_meter}] {tele['claimed_percent']:.1f}% ({tele['claimed_nodes']}/{tele['total_nodes']})"
     
     report = f"{header} | {claimed}"
-    await node.send(f"PRIVMSG {target} :{report}")
+    await node.send(f"{reply_method} {private_target} :{report}")
 
 async def handle_networks_osint(node, source, target):
     """Broadcasting topological bridge statistics."""
     if not await check_rate_limit(node, source, target): return
-    msg_target, broadcast_chan, machine, _ = await get_action_routing(node, source, target)
+    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source, target)
     
-    if machine:
+    if machine_mode:
         nets = []
         for net in node.hub.nodes.values():
             status = "ONLINE" if net.irc.is_connected() else "OFFLINE"
             nets.append(f"{net.net_name}:{status}:{getattr(net, 'registered_bots', 0)}")
         report = f"[OSINT] TOPOLOGY|NETS:" + ",".join(nets)
-        await node.send(f"PRIVMSG {msg_target} :{report}")
+        await node.send(f"{reply_method} {private_target} :{report}")
         return
 
     all_nodes = list(node.hub.nodes.values())
@@ -111,18 +111,18 @@ async def handle_networks_osint(node, source, target):
     p_nets = format_text("[NETWORKS]", C_CYAN)
     
     report = f"{p_grid}{p_nets} - {net_count} IRC networks - {combined_nets}"
-    await node.send(f"PRIVMSG {target} :{report}")
+    await node.send(f"{reply_method} {private_target} :{report}")
 
 async def handle_about_osint(node, source, target):
     """Broadcasting core project metadata."""
     if not await check_rate_limit(node, source, target): return
-    msg_target, broadcast_chan, machine, _ = await get_action_routing(node, source, target)
+    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source, target)
     
-    if machine:
+    if machine_mode:
         report = "[OSINT] ABOUT|VER:1.8.0|SRC:https://github.com/astrutt/AutomataArena"
-        await node.send(f"PRIVMSG {msg_target} :{report}")
+        await node.send(f"{reply_method} {private_target} :{report}")
         return
 
     title = generate_gradient("P R O J E C T   A U T O M A T A G R I D", [C_CYAN, C_WHITE, C_CYAN])
     about = f"{ICONS['OSINT']} {title} | Version: 1.8.0 | Source: https://github.com/astrutt/AutomataArena"
-    await node.send(f"PRIVMSG {target} :{about}")
+    await node.send(f"{reply_method} {private_target} :{about}")

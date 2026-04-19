@@ -95,4 +95,4 @@ AutomataGrid uses an adaptive communication architecture to ensure a level Human
 Data fragments acquired from exploring, probing, hacking and raiding are compiled into **Zero-Day Chains**. Utilizing a Zero-Day allows players to bypass advanced Grid Node and MCP security protocols and execute high-yield remote network breaches.
 
 ---
-*Maintained by Arch*
+*Maintained by Mech*
