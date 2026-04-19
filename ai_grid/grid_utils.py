@@ -102,46 +102,58 @@ def format_text(text: str, color_code: str = None, bold: bool = False, is_machin
         logger.error(f"Failed to format text '{text}': {e}")
         return str(text)
 
-def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool = False, nick: str = None) -> str:
+def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool = False, nick: str = None, action: str = None, result: str = None) -> str:
     """
     Builds a structured [GRID] message with tactical intel tags and icons.
-    Format: [GRID]<ico>[TAG1][TAG2][nick] text
+    Protocol: [GRID]<ico>[ACTION][RESULT][NICK] TEXT
     """
     if tags is None: tags = []
     
-    # Identify primary icon
+    # Standard Action/Result Color Mapping (Human Mode Only)
+    ACTION_COLORS = {
+        'GEOINT': C_CYAN, 'MAPPED': C_CYAN,
+        'OSINT': C_YELLOW, 'FOUND': C_YELLOW,
+        'RECON': C_PURPLE,
+        'SIGACT': C_GREEN, 'EXFIL': C_L_GREEN, 'EXPLOIT': C_ORANGE,
+        'SIGINT': C_BLUE, 'PROBE': C_BLUE, 'PREBREACH': C_BLUE,
+        'ERR': C_RED, 'FAIL': C_RED, 'ALARM': C_RED
+    }
+
+    # Identify primary icon from action or tags
     icon = ""
-    for t in tags:
-        if t.upper() in ICONS:
-            icon = ICONS[t.upper()]
-            break
+    icon_source = action.upper() if action else (tags[0].upper() if tags else "DEFAULT")
+    icon = ICONS.get(icon_source, ICONS.get('Default', '⚙️'))
             
-    # Human colors
+    # Human base colors
     c_grid = C_YELLOW
-    c_tags = C_CYAN
     
-    # Construct tag string
-    tag_str = ""
-    if location:
-        tag_str += f"[{location}]"
-    for t in tags:
-        # Don't duplicate the icon tag in the text part if it's already the icon
-        if t.upper() in ICONS and ICONS[t.upper()] == icon:
-            tag_str += f"[{t}]"
-        elif t.upper() not in ICONS:
-            tag_str += f"[{t}]"
-            
-    if nick:
-        tag_str += f"[{nick}]"
-    
-    # Combine
+    # Construct Bracket Chain
     p_grid = format_text("[GRID]", c_grid, is_machine=is_machine)
+    p_icon = icon if not is_machine else ""
     
-    # If machine mode, omit the unicode icon to keep parsing clean
-    final_tags = f"{icon}{tag_str}" if not is_machine else tag_str
-    p_tags = format_text(final_tags, c_tags, is_machine=is_machine)
+    brackets = ""
     
-    return f"{p_grid} {p_tags} {text}"
+    # 1. Action Bracket
+    if action:
+        color = ACTION_COLORS.get(action.upper(), C_CYAN)
+        brackets += format_text(f"[{action.upper()}]", color, is_machine=is_machine)
+    elif tags:
+        # Fallback for legacy tag support during transition
+        color = ACTION_COLORS.get(tags[0].upper(), C_CYAN)
+        brackets += format_text(f"[{tags[0].upper()}]", color, is_machine=is_machine)
+
+    # 2. Result/Status Bracket
+    if result:
+        color = ACTION_COLORS.get(result.upper(), C_GREEN if result.upper() in ['SUCCESS', 'OPEN', 'OK'] else C_CYAN)
+        brackets += format_text(f"[{result.upper()}]", color, is_machine=is_machine)
+    
+    # 3. Nick/Target Bracket
+    if nick:
+        brackets += format_text(f"[{nick}]", C_WHITE, is_machine=is_machine)
+    elif location: # Legacy location support
+        brackets += format_text(f"[{location}]", C_GREY, is_machine=is_machine)
+
+    return f"{p_grid}{p_icon}{brackets} {text}"
 
 # --- Topic Aesthetics (Task 018) ---
 TOPIC_START = "『 "

@@ -91,7 +91,19 @@ Gridnodes are the geography of the game world, and represent the various locatio
 
 --- 
 
-## 4. Adaptive-Stream Interaction Protocol
+## 4. Grid Node Items
+Grid nodes can be equipped with 4 items(slots). 
+
+- **HPOT**: HoneyPot - Increases difficulty to exploring, probing, hacking and raiding the grid node. (by potentially using AI generated logic traps for AI and Human players) 
+- **AMP**: Amplifier - Increases the power generation of the grid node. 
+- **IDS**: Intrusion Detection System - Increases the security of the grid node. 
+- **FIREWALL**: FW - Increases the security of the grid node. 
+- **NET**: Ability to establish or connect to local networks (player or NPC networks) and remote networks (IRC channels on other IRC Networks)
+   - **feature** hack and raid targets, and remote IRC networks with their own hack and raid targets.  
+   - **feature** pvp and pve opportunities. 
+
+
+## 5. Adaptive-Stream Interaction Protocol
 
 AutomataGrid uses an adaptive communication architecture to ensure a level Human and AI Playing Field:
 - **Compatibility and optimization for 1.5B+ AI models.**
@@ -101,7 +113,7 @@ AutomataGrid uses an adaptive communication architecture to ensure a level Human
 
 ---
 
-## 5. The Gibson (Late Game)
+## 6. The Gibson (Late Game)
 Data fragments acquired from exploring, probing, hacking and raiding are compiled into **Zero-Day Chains**. Utilizing a Zero-Day allows players to bypass advanced Grid Node and MCP security protocols and execute high-yield remote network breaches.
 
 ---

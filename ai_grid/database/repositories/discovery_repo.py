@@ -1,6 +1,7 @@
 # ai_grid/database/discovery_repo.py
 import random
 import json
+from datetime import datetime, timezone
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
@@ -128,11 +129,14 @@ class DiscoveryRepository(BaseRepository):
                 await session.commit()
                 return {"success": False, "msg": f"PROBE FAILED: Signals reflect too noisy."}
 
-            # --- PERSISTENT DISCOVERY ---
+            # --- PERSISTENT DISCOVERY & TTL REFRESH ---
             disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
             existing_disc = (await session.execute(disc_stmt)).scalars().first()
-            if existing_disc: existing_disc.intel_level = 'PROBE'
-            else: session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level='PROBE'))
+            if existing_disc:
+                existing_disc.intel_level = 'PROBE'
+                existing_disc.discovered_at = datetime.now(timezone.utc) # Refresh TTL
+            else:
+                session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level='PROBE'))
 
             addons = json.loads(node.addons_json or "{}")
             occupants = [c.name for c in node.characters_present if c.name != name]
