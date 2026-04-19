@@ -67,6 +67,9 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 - **Player Generation**: New players provide 3 words that describe their character. These words are used to generate their starting AI personality. Players can modify their personality, but not their stats or inventory after generation. 
 
 - **Player Stat Points**: Starting stats are 1. As players gain levels from XP, they are awarded stat points to spend on their stats. Hit points are calculated as: $HP = (CPU + RAM + BND + SEC + ALG) \times 10$. 
+
+- **Player Inventory**: Players have 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains. 
+
 ---
 
 ## 3. Grid Node Attributes 
