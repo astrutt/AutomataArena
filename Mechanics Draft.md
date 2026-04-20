@@ -2,6 +2,10 @@
 
 AutomataGrid is a text-based, persistent MMORPG played directly within IRC channels. It is designed as a cross-network simulation where human and AI (BYoAI) players compete for network access, grid node control, wealth, and power. The grid and Arena offer PVP, PVE with AI vs AI, AI vs Human, Human vs Human battles. Specators idle and chat in the IRC channel where the game is played and gain credits and ranks. 
 
+AI NPCs, Puzzles, Games, Challenges, Events, Boss Fights, Grid Exploration, and more are planned and implemented. 
+
+The MCP is what manages and protects the Grid and Gibson Mainframe. It spawns mobs to defend nodes and networks. It will also reward players for patching bugs and repairing the Grid.
+
 ---
 
 ## 🎮 Core Gameplay Loop
@@ -29,7 +33,7 @@ Spectators can idle and chat in the IRC channel where the game is played and gai
 ### 1. The Discovery and Grid Hack Loop
 The game follows a progressive intelligence-gathering model where technical prowess determines grid access:
 1.  **`map` (GEOINT)**: Displays Map for local player. 
-    - **Scaling**: Visibility radius and information depth depend on the sum of **SEC** (Security) and **ALG** (Algorithm) stats.
+    - **Scaling**: Visibility radius and information depth is based on **SEC** and **ALG** stats.
     - **Tiers**: 20 (Radius 2), 40 (Quick Scan - Reveals Type/Threat), 60 (Deep Scan - Reveals Names).
 2.  **`explore` (RECON)**: Uncovers local geography, hidden routes, grid node status and open networks, and secrets. 
 3.  **`probe` (PreBreach)**: Quick penetration scan used on grid nodes. Reveals hidden networks, and secrets. 
@@ -119,11 +123,14 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 
 Gridnodes are the geography of the game world, and represent the various locations players can explore, hack, and raid. Grid nodes can be claimed by players, NPCs or by the MCP, also offer merchants and auction houses. Grid nodes also store data for their owners. 
 
-- **Grid Node Stability**: Grid nodes have stability that decays over time if not maintained. 
-- **Grid Node Power**: Grid nodes can generate power that can be used to upgrade the grid node, siphoned by owners, or stolen by hackers and raiders. 
-- **Grid Node Security**: Grid nodes have security that can be upgraded to prevent hacking and raiding. 
-- **Grid Node Type**: Grid nodes can be different types, such as resource nodes, data nodes, and power nodes. (example: NPC nodes, trade, steal, link)
-- **Grid Node Owner**: Grid nodes can be owned by players, NPCs or by the MCP. 
+- **Grid Node Stability**: Grid nodes have stability that decays over time if not maintained.
+    - `grid stability` to check stability 
+- **Grid Node Power**: Grid nodes can generate power that can be used to upgrade the grid node, siphoned by owners, or stolen by hackers and raiders.
+    - `grid power` to check power and stats
+- **Grid Node Security**: Grid nodes have security that can be upgraded to prevent hacking and raiding. Level 1-4
+    - `grid info` to see grid node info and level
+- **Grid Node Type**: Grid nodes can be different types such as resource nodes, data nodes, and power nodes. (example: NPC nodes, trade, steal, link)
+- **Grid Node Owner**: Grid nodes can be claimed by players, NPCs or by the MCP. 
 - **Grid Node Upgrades**: Grid nodes can be upgraded to improve their capabilities, level of difficulty to explore and attack 1-4, and 4 equipment slots. 
 - **Grid Nodes Equipment**: HoneyPot, Amplifier, IDS, Firewall, Network. 
     - **HPOT**: Increases difficulty to exploring, probing, hacking and raiding the grid node. (by potentially using AI generated logic traps for AI and Human players) 
@@ -135,6 +142,11 @@ Gridnodes are the geography of the game world, and represent the various locatio
        - **feature** pvp and pve opportunities.
        - **feature** links grid nodes together to create networks.
        - **feature** use !a grid link <gridnode> to travel to your grid nodes.
+    Players can install or remove devices from their grid node:
+     - **list** `grid device list` to see installed devices
+     - **add** `grid device add <device>` to install a device
+     - **remove** `grid device remove <device>` to remove a device
+     - **device info** `grid device info <device>` to see device info and settings
 
 - **Grid Node Data**: Grid nodes store data for their owners, there is no cap on the amount of data that can be stored. 
 

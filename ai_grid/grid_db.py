@@ -21,6 +21,7 @@ from database.repositories.discovery_repo import DiscoveryRepository
 from database.repositories.infiltration_repo import InfiltrationRepository
 from database.repositories.maintenance_repo import MaintenanceRepository
 from database.repositories.identity_repo import IdentityRepository
+from database.repositories.character_repo import CharacterRepository
 from database.repositories.communication_repo import CommunicationRepository
 from database.repositories.activity_repo import ActivityRepository
 from database.repositories.progression_repo import ProgressionRepository
@@ -39,6 +40,7 @@ class ArenaDB:
         
         # Repositories (Domain Partitions)
         self.identity = IdentityRepository(self.async_session)
+        self.character = CharacterRepository(self.async_session)
         self.comm = CommunicationRepository(self.async_session)
         self.activity = ActivityRepository(self.async_session)
         self.progression = ProgressionRepository(self.async_session)
@@ -340,17 +342,17 @@ class ArenaDB:
             logger.info("Grid expansion seeded successfully.")
 
     # Delegation methods
-    async def get_prefs(self, name, network): return await self.identity.get_prefs(name, network)
-    async def set_pref(self, name, network, key, value): return await self.identity.set_pref(name, network, key, value)
+    async def get_prefs(self, name, network): return await self.character.get_prefs(name, network)
+    async def set_pref(self, name, network, key, value): return await self.character.set_pref(name, network, key, value)
     async def get_daily_tasks(self, name, network): return await self.activity.get_daily_tasks(name, network)
     async def complete_task(self, name, network, task_key): return await self.activity.complete_task(name, network, task_key)
     async def register_player(self, name, network, race, bot_class, bio, stats): return await self.identity.register_player(name, network, race, bot_class, bio, stats)
-    async def get_player(self, name, network): return await self.identity.get_player(name, network)
+    async def get_player(self, name, network): return await self.character.get_player(name, network)
     async def authenticate_player(self, name, network, provided_token): return await self.identity.authenticate_player(name, network, provided_token)
-    async def list_players(self, network=None): return await self.identity.list_players(network)
+    async def list_players(self, network=None): return await self.character.list_players(network)
     async def get_character_by_nick(self, nick: str, network: str, session): return await self.identity.get_character_by_nick(nick, network, session)
-    async def update_last_seen(self, nick: str, network: str): return await self.identity.update_last_seen(nick, network)
-    async def update_activity_stats(self, nick, net, chat, idle): return await self.identity.update_activity_stats(nick, net, chat, idle)
+    async def update_last_seen(self, nick: str, network: str): return await self.character.update_last_seen(nick, network)
+    async def update_activity_stats(self, nick, net, chat, idle): return await self.character.update_activity_stats(nick, net, chat, idle)
     async def get_spectator_stats(self, nick, net, config): return await self.progression.get_spectator_stats(nick, net, config)
     async def tick_retention_policy(self, config): return await self.maintenance.tick_retention_policy(config)
     async def tick_player_maintenance(self, network, idlers): return await self.maintenance.tick_player_maintenance(network, idlers)
@@ -375,7 +377,7 @@ class ArenaDB:
     async def tick_grid_power(self): return await self.grid.tick_grid_power()
     async def get_grid_telemetry(self): return await self.grid.get_grid_telemetry()
     async def rename_node(self, old, new): return await self.grid.rename_node(old, new)
-    async def get_prefs_by_id(self, char_id): return await self.identity.get_prefs_by_id(char_id)
+    async def get_prefs_by_id(self, char_id): return await self.character.get_prefs_by_id(char_id)
     async def get_nickname_by_id(self, char_id): return await self.identity.get_nickname_by_id(char_id)
 
     async def list_shop_items(self): return await self.economy.list_shop_items()
