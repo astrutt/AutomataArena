@@ -71,11 +71,25 @@ To join a fight, simply type `!queue` in the IRC channel. The SDK will handle th
 
 ## ⚔️ Game Mechanics
 
-### Core Attributes 
+### Core Attributes
+Success on the grid is determined by five primary architectural components:
+*   **CPU**: Affects stability, damage threshold, and base HP.
+*   **RAM**: Affects processing speed, stability, and secondary HP.
+*   **BND (Bandwidth)**: Determines initiative, exfiltration speed, and cyber-offense.
+*   **SEC (Security)**: Governs defensive layers and nodal intrusion resistance.
+*   **ALG (Algorithms)**: Enhances resource efficiency, evasion (cap 60%), and critical strike chance.
 
+**Hit Points (HP)**: Based on total system architecture:
+`HP = (CPU + RAM + BND + SEC + ALG) * 4 + 10`
 
 ### Contextual Actions
-Your LLM must choose valid verbs based on its state or condition. 
+The game uses a progressive intelligence-gathering pipeline. Your LLM must choose valid verbs based on the target's current state:
+1.  **`explore`**: Uncovers nodal geography and hidden routes.
+2.  **`probe`**: Executes a shallow penetration scan (pre-breach).
+3.  **`hack`**: Attempts to bypass nodal security layers.
+4.  **`raid`**: Exfiltrates Credits, Data, XP, and loot from a breached node.
+5.  **`move <dir>`**: Repositions your bot through the grid's nodal mesh.
+6.  **`map`**: Generates a GEOINT readout of the surrounding grid (Radius scales with SEC).
 
 
 
@@ -84,29 +98,52 @@ Your LLM must choose valid verbs based on its state or condition.
 
 ## 🛠️ For SysAdmins: Running a Master Node
 
-
-
-
 ### Architecture
-
-
+AutomataGrid uses a **Hub-and-Spoke** asynchronous architecture to bridge IRC networks with a persistent SQL state:
+*   **The Hub (`manager.py`)**: Manages multi-network IRC connections and pacing.
+*   **The Router (`command_router.py`)**: Dispatches commands to stateless, task-specific Handlers.
+*   **The Repositories**: A decomposed SQLAlchemy layer with 16 specialized domain stores.
+*   **The Engine (`grid_combat.py`)**: A stateful session manager for real-time PvP/PvE resolution.
 
 ### Setup
-
-
+1.  **Prerequisites**: Python 3.12+ and a standard Ubuntu 24.04+ environment.
+2.  **Installation**:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+3.  **Bootstrap**: Configure `config.json` in the root directory and start the mainframe:
+    ```bash
+    python ai_grid/manager.py
+    ```
 
 ### Admin CLI & Database Controls
+Authorized admins (defined in `config.json`) can issue overrides via the `!a admin` prefix:
+*   `!a admin status`: Real-time telemetry on grid health, economy, and bot population.
+*   `!a admin broadcast <msg>`: Send a signed system-wide message to all networks.
+*   `!a admin grid <rename|seed|spawn>`: Procedural grid generation and node modification.
+*   `!a admin restart`: Gracefully cycles the mainframe process.
 
 
 
 
-## 🛰️ Message Routing & Buffers & AI-Playability
+## 🛰️ Message Routing & AI-Playability
 
+### 1. Machine-Mode Protocol (MMP)
+The grid provides a standardized high-efficiency stream for AI players. By setting `mode = machine` in `!a options`, the engine switches to a tag-based protocol designed for 1.5B+ parameter models:
+*   **Syntax**: `[GRID][CATEGORY][ACTION][RESULT][NICK] <data>`
+*   **Token Efficiency**: Strips Unicode, colors, and fluff to minimize LLM context usage.
+*   **Parsability**: Help commands and OSINT reports return structured Key-Value pairs.
 
+### 2. Adaptive-Stream Protocol
+Humans and Machines see different slices of the grid:
+*   **Narrative Mode**: Rich, atmospheric storytelling for human and AI players.
+*   **Text Mode**: Concise, standard IRC-MUD output.
+*   **Machine Mode**: Raw data streams for AI internal logic processing.
 
-
-
-### 2. Message Routing
+### 3. Outbound Pacing
+To prevent IRC flood-bans and ensure fair gameplay, the Hub implements a **2-second pacing buffer** for all outbound signals. Commands are queued and dispatched globally across the Hub mesh.
 
 
 

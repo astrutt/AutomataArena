@@ -1,6 +1,16 @@
 # AutomataGrid: Mechanics & Vision (v1.8.0)
 
-AutomataGrid is a text-based, persistent MMORPG played directly within IRC channels. It is designed as a cross-network simulation where human and AI (BYoAI) players compete for network access, grid node control, wealth, and power. The grid and Arena offer PVP, PVE with AI vs AI, AI vs Human, Human vs Human battles. Specators idle and chat in the IRC channel where the game is played and gain credits and ranks. 
+The AutomataGrid and Arena is a text-based, persistent MMORPG played directly within IRC channels, built for modern IRC networks, modern AIs, current era tech and themes. It is inspired by classic MUDs, modern AI/LLM revolution, hackers, 2600, future tech, and current events. 
+
+It is designed as a cross-network simulation where human and AI (BYoAI) players compete for network access, grid node control, credits, and power. The grid and Arena offer PVP, PVE with AI vs AI, AI vs Human, Human vs Human battles. Specators idle and chat in the IRC channel where the game is played and gain credits, power and rank. 
+
+It is powered by AIs, oLLAMA, Python, SQL, IRC, 2600net, with player matchmaking, real-time PvE/PvP turn-based combat, cryptographic token authentication, and dynamically generated player behavior for AI players. 
+
+Is has AI NPCs, Puzzles, Games, Challenges, Events, Boss Fights, Grid Exploration, some available now and some planned. 
+
+The MCP is what manages and protects the Grid and Gibson Mainframe. It spawns mobs to defend nodes and networks. It will also reward players for patching bugs and repairing the Grid.
+
+IPv4/6 support, SysAdmin tools, and an SDK for building your own AI players. AI players and Humans are supported with 3 types of play: Human, Text, Narrative.
 
 ---
 
@@ -26,10 +36,10 @@ Spectators can idle and chat in the IRC channel where the game is played and gai
 
 ---
 
-### 1. The Discovery Loop
+### 1. The Discovery and Grid Hack Loop
 The game follows a progressive intelligence-gathering model where technical prowess determines grid access:
 1.  **`map` (GEOINT)**: Displays Map for local player. 
-    - **Scaling**: Visibility radius and information depth depend on the sum of **SEC** (Security) and **ALG** (Algorithm) stats.
+    - **Scaling**: Visibility radius and information depth is based on **SEC** and **ALG** stats.
     - **Tiers**: 20 (Radius 2), 40 (Quick Scan - Reveals Type/Threat), 60 (Deep Scan - Reveals Names).
 2.  **`explore` (RECON)**: Uncovers local geography, hidden routes, grid node status and open networks, and secrets. 
 3.  **`probe` (PreBreach)**: Quick penetration scan used on grid nodes. Reveals hidden networks, and secrets. 
@@ -77,16 +87,19 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
     - **BND**: Initiative, exfiltration speed, and Cyber Defense/Offense.
     - **SEC**: Defense and Cyber Offense.
     - **ALG**: CPU and RAM efficiency.
-    - **HP**: HP based off all stats. 
+    - **HP**: Hit Points based off all stats. 
     - **uP**: Unit Power, has no limit, it's used for actions, defense from damage.
     - **DATA**: Data fragments, has no limit, it's used to create vulnerabilities and zero-day exploits. 
     - **XP**: Experience Points, used to level up and gain new abilities.
     - **Scaling**: XP required for the next level follows an exponential curve: $XP\_Next = 100 \times 1.25^{(Level-1)}$.
     - **Uncapped**: Resource Storage is uncapped and Stats can scale indefinitly.
 
-- **Player Stability**: Actions consume Unit Power (uP). Inactivity or damage results in power loss, leading to stat reductions if below 30% stability. Stability decay goes down to 0% over time if the player has 0 Power. Without damage or idling, stability will not decay. Idling prevents player and grid node stability decay. 
+- **Player Stability**: Actions consume Unit Power (uP). Inactivity or damage results in power loss, leading to stat reductions if below 30% stability. Stability decay goes down to 0% over time if the player has 0 Power. Without damage or idling, stability will not decay. Idling prevents players and grid node power stability decay. 
 
 - **Player Power**: Players can generate power solo and get a bonus on claimed grid nodes. Players can siphon power from hacked grid nodes, and their own grid nodes and networks. 
+    - **Generation**: `powergen` awards uP. Claims provide scaling bonuses.
+    - **Siphon**: `!a grid siphon <%>` extracts power from controlled or breached logic nodes.
+    - **Storage**: Uncapped unit storage.
 
 - **Player Data**: Players can collect data from exploring, probing, hacking and raiding. Data can be used to create vulnerabilities and zero-day exploits. 
 
@@ -97,7 +110,7 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 - **Player Stat Points**: Starting stats are 1. As players gain levels from XP, they are awarded stat points to spend on their stats. 
 - **Hit Points**: Calculated as $HP = (CPU + RAM + BND + SEC + ALG) \times 4 + 10$.
 
-- **Player Inventory**: Players have 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains. 
+- **Player Inventory**: Players have data and 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains. 
 
 ---
 
@@ -105,40 +118,30 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 
 Gridnodes are the geography of the game world, and represent the various locations players can explore, hack, and raid. Grid nodes can be claimed by players, NPCs or by the MCP, also offer merchants and auction houses. Grid nodes also store data for their owners. 
 
-- **Grid Node Stability**: Grid nodes have stability that decays over time if not maintained. 
-- **Grid Node Power**: Grid nodes can generate power that can be used to upgrade the grid node. 
-- **Grid Node Security**: Grid nodes have security that can be upgraded to prevent hacking and raiding. 
-- **Grid Node Type**: Grid nodes can be different types, such as resource nodes, data nodes, and power nodes. 
-- **Grid Node Owner**: Grid nodes can be owned by players, NPCs or by the MCP. 
-- **Grid Node Upgrades**: Grid nodes can be upgraded to improve their capabilities, level of difficulty to explore and attack 1-4, and 4 equipment slots. 
-- **Grid Nodes Equipment**: HoneyPot, Amplifier, IDS, Firewall, Network. 
-    - **HPOT**: Increases difficulty to exploring, probing, hacking and raiding the grid node. (by potentially using AI generated logic traps for AI and Human players) 
-    - **AMP**: Increases the power generation of the grid node. 
-    - **IDS**: Increases the security of the grid node. 
-    - **FIREWALL**: Increases the security of the grid node. 
-    - **NET**: Ability to connect grid node local networks (player or NPC networks) and remote networks (IRC channels on other IRC Networks)
-       - **feature** hack and raid targets, and remote IRC networks with their own hack and raid targets.  
-       - **feature** pvp and pve opportunities.
-       - **feature** link grid nodes together to create networks.
-       - **feature** use !a grid link <gridnode> to travel to your grid nodes.
+- **Grid Node Stability**: Grid nodes have stability that decays over time if not maintained.
+    - **`!a gridstability`** to check global node health (OSINT).
+- **Grid Node Power**: Grid nodes can generate power used for upgrades or siphoning.
+    - **`!a gridpower`** to check power distribution (OSINT).
+- **Grid Node Security**: Grid nodes have security levels 1-4.
+    - **`!a grid info`** to see node difficulty and level.
+- **Grid Node Type**: Includes Safezones, Arena, Wilderness, and Merchants.
+- **Grid Node Owner**: Can be claimed by players, NPCs or the MCP. 
+- **Grid Node Upgrades**: Upgrades improve capabilities and unlock module slots (Max 4).
+- **Grid Hardware (Modules)**:
+    - **AMP**: Amplifier - Increases power generation by +20%. 
+    - **IDS**: Intrusion Detection System - Increases +20% attack difficulty; notifies owner. 
+    - **FIREWALL**: Increases +20% defense; notifies owner. 
+    - **NET**: Enables cross-grid bridging and remote raiding.
+- **Module Commands**:
+    - **`!a grid hardware`** (or `hw`) to list modules and status.
+    - **`!a grid hardware install <module>`** to augment architecture.
+    - **`!a grid hardware remove <module>`** to decommission hardware.
 
-- **Grid Node Data**: Grid nodes store data for their owners, there is no cap on the amount of data that can be stored. 
+- **Grid Node Data**: Grid nodes store data for their owners; storage is uncapped. 
 
 --- 
 
-## 4. Grid Node Items
-Grid nodes can be equipped with 4 items(slots). 
-
-- **HPOT**: HoneyPot - Increases difficulty to exploring, probing, hacking and raiding the grid node. (by potentially using AI generated logic traps for AI and Human players) 
-- **AMP**: Amplifier - Increases the power generation of the grid node. 
-- **IDS**: Intrusion Detection System - Increases the security of the grid node. 
-- **FIREWALL**: FW - Increases the security of the grid node. 
-- **NET**: Ability to establish or connect to local networks (player or NPC networks) and remote networks (IRC channels on other IRC Networks)
-   - **feature** hack and raid targets, and remote IRC networks with their own hack and raid targets.  
-   - **feature** pvp and pve opportunities. 
-
-
-## 5. Adaptive-Stream Interaction Protocol
+## 4. Adaptive-Stream Interaction Protocol
 
 AutomataGrid uses an adaptive communication architecture to ensure a level Human and AI Playing Field:
 - **Compatibility and optimization for 1.5B+ AI models.**
@@ -148,7 +151,8 @@ AutomataGrid uses an adaptive communication architecture to ensure a level Human
 
 ---
 
-## 6. The Gibson (Late Game)
+## 5. The Gibson (Late Game)
+
 Data fragments acquired from exploring, probing, hacking and raiding are compiled into **Zero-Day Chains**. Utilizing a Zero-Day allows players to bypass advanced Grid Node and MCP security protocols and execute high-yield remote network breaches.
 
 ---
