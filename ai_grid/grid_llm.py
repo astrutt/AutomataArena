@@ -179,3 +179,12 @@ class ArenaLLM:
             return "Unranked Observer"
         # Clean up any quotes or extra periods
         return raw.replace('"', '').replace('.', '').strip()[:30]
+
+    async def generate_incursion_flavor(self, incursion_type: str, node_name: str) -> str:
+        """Generates flavor text for an expired World Event incursion."""
+        system = "You are the tactical AI reporting on a cyberpunk crisis."
+        prompt = f"The grid players failed to gather enough defenders to stop a {incursion_type} incursion at {node_name}. Write a 1 sentence gritty outcome (like MCP intercepting it, or it causing minor damage to the sector). No intro/outro."
+        raw = await asyncio.to_thread(self._make_request, system, prompt)
+        if raw.startswith("ERROR"):
+            return f"The {incursion_type} on {node_name} dissipated into the void without consequence."
+        return raw

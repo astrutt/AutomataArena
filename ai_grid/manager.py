@@ -161,6 +161,7 @@ class GridNode:
         asyncio.create_task(loops.economic_ticker_loop(self))
         asyncio.create_task(loops.hype_drop_loop(self))
         asyncio.create_task(loops.topic_engine_loop(self))
+        asyncio.create_task(loops.incursion_event_loop(self))
         await self.db.seed_grid_expansion()
         await self.listen_loop()
 

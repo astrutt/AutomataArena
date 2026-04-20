@@ -31,6 +31,7 @@ from database.repositories.minigame_repo import MiniGameRepository
 from database.repositories.combat_repo import CombatRepository
 from database.repositories.pulse_repo import PulseRepository
 from database.repositories.spectator_repo import SpectatorRepository
+from database.repositories.incursion_repo import IncursionRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):
@@ -57,6 +58,7 @@ class ArenaDB:
         self.infiltration = InfiltrationRepository(self.async_session)
         self.maintenance = MaintenanceRepository(self.async_session)
         self.pulse = PulseRepository(self.async_session)
+        self.incursion = IncursionRepository(self.async_session)
 
         # Legacy Facade Compatibility (grid object proxy)
         class GridFacade:

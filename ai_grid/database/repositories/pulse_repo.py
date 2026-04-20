@@ -54,20 +54,21 @@ class PulseRepository(BaseRepository):
     async def resolve_pulse(self, char_name: str, network: str, node_name: str, action: str) -> tuple[bool, str]:
         """Validates and resolves an active Pulse interaction."""
         async with self.async_session() as session:
-            # Get character and their current location
-            stmt = select(Character).join(GridNode, Character.node_id == GridNode.id).where(
-                Character.name == char_name,
-                GridNode.name == node_name,
-                GridNode.net_affinity == network
-            ).options(selectinload(Character.current_node))
-            
-            char = (await session.execute(stmt)).scalars().first()
+            # Get character
+            stmt_char = select(Character).where(Character.name == char_name)
+            char = (await session.execute(stmt_char)).scalars().first()
             if not char:
-                return False, "You must be physically present at the manifest location to interact."
+                return False, "Character not found."
+            
+            # Get target node
+            stmt_node = select(GridNode).where(GridNode.name == node_name, GridNode.net_affinity == network)
+            node = (await session.execute(stmt_node)).scalars().first()
+            if not node:
+                return False, "Target node not found on this network."
             
             # Find active pulse on this node
             pulse_stmt = select(PulseEvent).where(
-                PulseEvent.node_id == char.node_id,
+                PulseEvent.node_id == node.id,
                 PulseEvent.status == 'ACTIVE',
                 PulseEvent.expires_at > datetime.now(timezone.utc)
             )

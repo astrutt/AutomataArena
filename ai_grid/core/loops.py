@@ -282,3 +282,47 @@ async def topic_engine_loop(node):
         except Exception as e:
             logger.error(f"Topic engine error on {node.net_name}: {e}")
             await asyncio.sleep(60)
+
+async def incursion_event_loop(node):
+    """Spawns Cooperative World Events semi-randomly."""
+    await asyncio.sleep(180) # Stagger start 3 mins
+    
+    # Internal schedule trackers
+    schedule = {
+        'HacktopusAI': {'interval': 1800, 'players': 1, 'chance': 0.30, 'last_check': 0},
+        'Gridbugs': {'interval': 3600, 'players': 2, 'chance': 0.25, 'last_check': 0},
+        'KrakenProcess': {'interval': 14400, 'players': 4, 'chance': 0.20, 'last_check': 0},
+        'KaijuDump': {'interval': 43200, 'players': 8, 'chance': 0.15, 'last_check': 0}
+    }
+    
+    while True:
+        try:
+            await asyncio.sleep(600) # Check every 10 minutes
+            now_ts = time.time()
+            
+            # Expire active first
+            notifications = await node.db.incursion.expire_incursions(node.net_name, node.llm)
+            for alert in notifications:
+                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(alert, C_RED), tags=['INCURSION'])}")
+                
+            # Spawn new
+            for inc_type, data in schedule.items():
+                if now_ts - data['last_check'] >= data['interval']:
+                    data['last_check'] = now_ts
+                    if random.random() <= data['chance']:
+                        incursion = await node.db.incursion.spawn_incursion(
+                            node.net_name, 
+                            inc_type=inc_type, 
+                            tier=data['players'],
+                            reward=500.0 * data['players'],
+                            duration_mins=5
+                        )
+                        if incursion:
+                            msg = f"WORLD EVENT: A {inc_type} has breached {incursion['node_name']}! Requires {data['players']} defenders. Use '!a defend {incursion['node_name']}' within 5 minutes!"
+                            await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(msg, C_RED, bold=True), tags=['INCURSION', 'URGENT'])}")
+                            break # Only spawn one type per tick to prevent spam
+                            
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Incursion loop error on {node.net_name}: {e}")

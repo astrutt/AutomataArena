@@ -155,6 +155,33 @@ class PulseEvent(Base):
     
     node = relationship("GridNode")
 
+class IncursionEvent(Base):
+    __tablename__ = 'incursion_events'
+    
+    id = Column(Integer, primary_key=True)
+    node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
+    network_name = Column(String, index=True)
+    incursion_type = Column(String, nullable=False) # e.g., 'HacktopusAI'
+    tier = Column(Integer, default=1) # Required players
+    reward_val = Column(Float, default=500.0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime)
+    status = Column(String, default='ACTIVE') # ACTIVE, RESOLVED, EXPIRED
+    
+    node = relationship("GridNode")
+    defenders = relationship("IncursionDefender", back_populates="incursion", cascade="all, delete-orphan")
+
+class IncursionDefender(Base):
+    __tablename__ = 'incursion_defenders'
+    
+    id = Column(Integer, primary_key=True)
+    incursion_id = Column(Integer, ForeignKey('incursion_events.id'), index=True)
+    character_id = Column(Integer, ForeignKey('characters.id'), index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    incursion = relationship("IncursionEvent", back_populates="defenders")
+    character = relationship("Character")
+
 class DiscoveryRecord(Base):
     __tablename__ = 'discovery_records'
     

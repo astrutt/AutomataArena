@@ -40,6 +40,7 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "bolster": {"desc": "Reinforce node stability with manual power allocation.", "syntax": "bolster <amount>"},
         "link": {"desc": "Establish a neural link with a local network alias.", "syntax": "link <alias>"},
         "net": {"desc": "Alias for 'link'. Verifies network bridge protocols.", "syntax": "net <alias>"},
+        "defend": {"desc": "Deploy protocols to defend a node from an active incursion.", "syntax": "defend [node_name]"},
         "collect": {"desc": "Intercept high-value data packets manifested on the grid.", "syntax": "collect <node_name>"},
         "patch": {"desc": "Stabilize nodal glitches to prevent cascade failures.", "syntax": "patch <node_name>"},
         "memos": {"desc": "Access received alerts, alarms, and historical memos.", "syntax": "memos [list|read|del] [id]"},
@@ -101,7 +102,7 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "🆔 IDENTITY": ["register", "info", "tasks", "options", "spectator", "news", "memos", "ping", "version"],
         "💰 ECONOMY": ["shop", "buy", "sell", "auction", "market"],
         "🏗️ THE GIBSON": ["mainframe", "compile", "assemble", "use"],
-        "⚡ THE PULSE": ["collect", "patch"],
+        "⚡ THE PULSE": ["collect", "patch", "defend"],
         "📡 ANALYTICS": ["economy", "gridpower", "gridstability", "networks", "about"],
         "⚔️ TACTICAL": ["claim", "upgrade", "hack/raid", "repair", "siphon", "install", "bolster", "link/net", "powergen", "train"],
         "🎮 GAMES": ["cipher/guess", "dice", "top", "attack/rob", "queue/ready", "engage"]
