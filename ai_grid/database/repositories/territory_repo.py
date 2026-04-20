@@ -8,7 +8,7 @@ from ..core import logger, CONFIG, increment_daily_task
 from ..base_repo import BaseRepository
 
 class TerritoryRepository(BaseRepository):
-    async def claim_node(self, name: str, network: str) -> tuple[bool, str]:
+    async def claim_node(self, name: str, network: str, node_name: str = None) -> tuple[bool, str]:
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name,
@@ -16,8 +16,22 @@ class TerritoryRepository(BaseRepository):
                 NetworkAlias.network_name == network
             ).options(selectinload(Character.current_node))
             char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
-            node = char.current_node
+            if not char: return False, "System offline."
+            
+            # Resolve target node
+            if node_name:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == node_name.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node: return False, f"Coordinate '{node_name}' not found."
+            else:
+                node = char.current_node
+            
+            if not node: return False, "Target node unavailable."
+            
+            # Location Validation
+            success, err_msg = await self.verify_presence(char, node, "claim")
+            if not success:
+                return False, err_msg
             
             # Availability Check: No owner bypass for initial claim
             if node.availability_mode == 'CLOSED':
@@ -38,7 +52,7 @@ class TerritoryRepository(BaseRepository):
             if reward_msg: msg += f" {reward_msg}"
             return True, msg
 
-    async def upgrade_node(self, name: str, network: str) -> tuple[bool, str]:
+    async def upgrade_node(self, name: str, network: str, node_name: str = None) -> tuple[bool, str]:
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name,
@@ -46,8 +60,22 @@ class TerritoryRepository(BaseRepository):
                 NetworkAlias.network_name == network
             ).options(selectinload(Character.current_node))
             char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
-            node = char.current_node
+            if not char: return False, "System offline."
+            
+            # Resolve target node
+            if node_name:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == node_name.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node: return False, f"Coordinate '{node_name}' not found."
+            else:
+                node = char.current_node
+            
+            if not node: return False, "Target node unavailable."
+
+            # Location Validation
+            success, err_msg = await self.verify_presence(char, node, "upgrade")
+            if not success:
+                return False, err_msg
             
             # Availability Check: Owner bypass
             if node.availability_mode == 'CLOSED' and node.owner_character_id != char.id:
@@ -92,7 +120,7 @@ class TerritoryRepository(BaseRepository):
             await session.commit()
             return True, f"Grid protocol updated: Sector {node.name} is now {mode.upper()}."
 
-    async def grid_repair(self, name: str, network: str) -> tuple[bool, str]:
+    async def grid_repair(self, name: str, network: str, node_name: str = None) -> tuple[bool, str]:
         """Repair node using credits (Legacy) or power (New Manual)."""
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
@@ -101,9 +129,23 @@ class TerritoryRepository(BaseRepository):
                 NetworkAlias.network_name == network
             ).options(selectinload(Character.current_node))
             char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
+            if not char: return False, "System offline."
             
-            node = char.current_node
+            # Resolve target node
+            if node_name:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == node_name.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node: return False, f"Coordinate '{node_name}' not found in local sector."
+            else:
+                node = char.current_node
+            
+            if not node: return False, "Target node unavailable."
+
+            # Location Validation
+            success, err_msg = await self.verify_presence(char, node, "repair")
+            if not success:
+                return False, err_msg
+            
             is_owner = node.owner_character_id == char.id
 
             # Availability Check: Owner bypass
@@ -132,7 +174,7 @@ class TerritoryRepository(BaseRepository):
 
             return False, "Insufficient resources (Power or Credits) for architectural resonance."
 
-    async def grid_recharge(self, name: str, network: str) -> tuple[bool, str]:
+    async def grid_recharge(self, name: str, network: str, node_name: str = None) -> tuple[bool, str]:
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name,
@@ -140,9 +182,23 @@ class TerritoryRepository(BaseRepository):
                 NetworkAlias.network_name == network
             ).options(selectinload(Character.current_node))
             char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
+            if not char: return False, "System offline."
             
-            node = char.current_node
+            # Resolve target node
+            if node_name:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == node_name.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node: return False, f"Coordinate '{node_name}' not found."
+            else:
+                node = char.current_node
+            
+            if not node: return False, "Target node unavailable."
+            
+            # Location Validation
+            success, err_msg = await self.verify_presence(char, node, "recharge")
+            if not success:
+                return False, err_msg
+            
             if node.availability_mode == 'CLOSED' and node.owner_character_id != char.id:
                 return False, "[GRID][SITREP] STATUS=CLOSED"
 
@@ -155,8 +211,8 @@ class TerritoryRepository(BaseRepository):
             
             return True, f"Grid recharged. (+100.0 uP) Current Store: {node.power_stored:.1f} uP."
 
-    async def install_node_addon(self, name: str, network: str, item_name: str) -> dict:
-        """Consumes an addon item from inventory and installs it on the current node."""
+    async def install_node_addon(self, name: str, network: str, item_name: str, node_name: str = None) -> dict:
+        """Consumes an addon item from inventory and installs it on the target node."""
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name,
@@ -167,9 +223,23 @@ class TerritoryRepository(BaseRepository):
                 selectinload(Character.inventory).selectinload(InventoryItem.template)
             )
             char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return {"success": False, "msg": "System offline."}
+            if not char: return {"success": False, "msg": "System offline."}
             
-            node = char.current_node
+            # Resolve target node
+            if node_name:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == node_name.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node: return {"success": False, "msg": f"Coordinate '{node_name}' not found."}
+            else:
+                node = char.current_node
+            
+            if not node: return {"success": False, "msg": "Target node unavailable."}
+            
+            # Location Validation
+            success, err_msg = await self.verify_presence(char, node, "install")
+            if not success:
+                return {"success": False, "msg": err_msg}
+            
             if node.owner_character_id != char.id:
                 return {"success": False, "msg": "Permission Denied: Only the owner can install hardware."}
                 
@@ -238,8 +308,8 @@ class TerritoryRepository(BaseRepository):
             await session.commit()
             return {"success": True, "msg": f"Decommission Successful: {addon_type} module returned to local inventory."}
 
-    async def bolster_node(self, name: str, network: str, amount: float) -> dict:
-        """Spends player power to increase node durability."""
+    async def bolster_node(self, name: str, network: str, amount: float, node_name: str = None) -> dict:
+        """Spends player power to increase node durability on a target node."""
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name,
@@ -247,9 +317,23 @@ class TerritoryRepository(BaseRepository):
                 NetworkAlias.network_name == network
             ).options(selectinload(Character.current_node))
             char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return {"success": False, "msg": "System offline."}
+            if not char: return {"success": False, "msg": "System offline."}
             
-            node = char.current_node
+            # Resolve target node
+            if node_name:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == node_name.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node: return {"success": False, "msg": f"Coordinate '{node_name}' not found."}
+            else:
+                node = char.current_node
+            
+            if not node: return {"success": False, "msg": "Target node unavailable."}
+            
+            # Location Validation
+            success, err_msg = await self.verify_presence(char, node, "bolster")
+            if not success:
+                return {"success": False, "msg": err_msg}
+            
             if node.owner_character_id != char.id: return {"success": False, "msg": "Permission Denied."}
                 
             if char.power < amount: return {"success": False, "msg": f"Insufficient POWER."}
@@ -260,15 +344,30 @@ class TerritoryRepository(BaseRepository):
             await session.commit()
             return {"success": True, "msg": f"Reinforcement complete. Durability: {node.durability:.1f}%."}
 
-    async def link_network(self, name: str, network: str, subnet_name: str) -> dict:
+    async def link_network(self, name: str, network: str, subnet_name: str, node_name: str = None) -> dict:
+        """Enables remote network linkage for a target node."""
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name, NetworkAlias.nickname == name, NetworkAlias.network_name == network
             ).options(selectinload(Character.current_node))
             char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return {"success": False, "msg": "System offline."}
+            if not char: return {"success": False, "msg": "System offline."}
             
-            node = char.current_node
+            # Resolve target node
+            if node_name:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == node_name.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node: return {"success": False, "msg": f"Coordinate '{node_name}' not found."}
+            else:
+                node = char.current_node
+            
+            if not node: return {"success": False, "msg": "Target node unavailable."}
+            
+            # Location Validation
+            success, err_msg = await self.verify_presence(char, node, "link")
+            if not success:
+                return {"success": False, "msg": err_msg}
+            
             if node.owner_character_id != char.id: return {"success": False, "msg": "Permission Denied."}
             
             addons = json.loads(node.addons_json or "{}")

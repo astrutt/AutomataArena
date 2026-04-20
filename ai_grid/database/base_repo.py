@@ -54,3 +54,19 @@ class BaseRepository:
             NetworkAlias.network_name == network
         ).options(selectinload(Character.current_node))
         return (await session.execute(stmt)).scalars().first()
+
+    async def verify_presence(self, char: Character, target_node, command_label: str) -> tuple[bool, str]:
+        """ Standardizes physical presence checks for grid interactions.
+            Allows remote interaction for specific commands (collect, defend, patch, repair).
+        """
+        remote_allowed = ['collect', 'defend', 'patch', 'repair']
+        
+        # If command is in the remote allowed list, bypass the presence check
+        if command_label.lower() in remote_allowed:
+            return True, ""
+            
+        # Verify physical presence
+        if not char.node_id or char.node_id != target_node.id:
+            return False, f"[GRID][SITREP] Physical presence required at {target_node.name} for {command_label.upper()} protocols."
+            
+        return True, ""

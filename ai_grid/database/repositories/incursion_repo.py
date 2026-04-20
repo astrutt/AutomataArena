@@ -71,6 +71,11 @@ class IncursionRepository(BaseRepository):
             if not inc:
                 return False, "No active incursion detected at this coordinate.", []
                 
+            # Location Validation
+            success, err_msg = await self.verify_presence(char, node, "defend")
+            if not success:
+                return False, err_msg, []
+                
             # Check if already defended
             if any(d.character_id == char.id for d in inc.defenders):
                 return False, f"You have already deployed defense protocols against the {inc.incursion_type}.", []

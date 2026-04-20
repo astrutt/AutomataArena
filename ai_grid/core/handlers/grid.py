@@ -162,10 +162,18 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
     alert_data = None
     
-    if action == "claim": success, msg = await node.db.claim_node(nickname, node.net_name)
-    elif action == "upgrade": success, msg = await node.db.upgrade_node(nickname, node.net_name)
-    elif action == "repair": success, msg = await node.db.grid_repair(nickname, node.net_name)
-    elif action == "recharge": success, msg = await node.db.grid_recharge(nickname, node.net_name)
+    if action == "claim": 
+        node_name = args[0] if args else None
+        success, msg = await node.db.claim_node(nickname, node.net_name, node_name=node_name)
+    elif action == "upgrade": 
+        node_name = args[0] if args else None
+        success, msg = await node.db.upgrade_node(nickname, node.net_name, node_name=node_name)
+    elif action == "repair":
+        node_name = args[0] if args else None
+        success, msg = await node.db.grid_repair(nickname, node.net_name, node_name=node_name)
+    elif action == "recharge": 
+        node_name = args[0] if args else None
+        success, msg = await node.db.grid_recharge(nickname, node.net_name, node_name=node_name)
     elif action == "probe": 
         await handle_node_probe(node, nickname, reply_target)
         return
@@ -180,7 +188,8 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
         if not args:
             await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: grid install <hardware>', action='INFO', result='ERR')}")
             return
-        res = await node.db.install_node_addon(nickname, node.net_name, args[0])
+        node_name = args[1] if len(args) > 1 else None
+        res = await node.db.install_node_addon(nickname, node.net_name, args[0], node_name=node_name)
         success, msg = res['success'], res['msg']
     elif action == "bolster":
         if not args:
@@ -188,13 +197,15 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
             return
         try: amt = float(args[0])
         except: return
-        res = await node.db.bolster_node(nickname, node.net_name, amt)
+        node_name = args[1] if len(args) > 1 else None
+        res = await node.db.bolster_node(nickname, node.net_name, amt, node_name=node_name)
         success, msg = res['success'], res['msg']
     elif action in ["link", "net"]:
         if not args:
              await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: grid net <affinity>', action='INFO', result='ERR')}")
              return
-        res = await node.db.link_network(nickname, node.net_name, args[0])
+        node_name = args[1] if len(args) > 1 else None
+        res = await node.db.link_network(nickname, node.net_name, args[0], node_name=node_name)
         success, msg = res['success'], res['msg']
     elif action == "hack":
         res = await node.db.hack_node(nickname, node.net_name)

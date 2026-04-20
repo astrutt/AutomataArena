@@ -77,6 +77,11 @@ class PulseRepository(BaseRepository):
             if not pulse:
                 return False, "No active signal or glitch detected at this coordinate."
             
+            # Location Validation
+            success, err_msg = await self.verify_presence(char, node, action)
+            if not success:
+                return False, err_msg
+            
             # Command Validation
             # !a collect -> PACKET
             # !a patch -> GLITCH
