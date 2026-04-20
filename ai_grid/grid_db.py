@@ -377,7 +377,8 @@ class ArenaDB:
     async def process_transaction(self, name, network, action, item_name): return await self.economy.process_transaction(name, network, action, item_name)
     async def get_global_economy(self): return await self.economy.get_global_economy()
 
-    async def record_match_result(self, winner_name, loser_name, network): return await self.combat.record_match_result(winner_name, loser_name, network)
+    async def record_match_result(self, winner_name, loser_name, network, was_surrender=False, winner_up=None, loser_up=None): 
+        return await self.combat.record_match_result(winner_name, loser_name, network, was_surrender=was_surrender, winner_up=winner_up, loser_up=loser_up)
     async def resolve_mob_encounter(self, name, network, threat_level): return await self.combat.resolve_mob_encounter(name, network, threat_level)
     async def grid_attack(self, attacker_name, target_name, network): return await self.combat.grid_attack(attacker_name, target_name, network)
     async def grid_hack(self, attacker_name, target_name, network): return await self.combat.grid_hack(attacker_name, target_name, network)

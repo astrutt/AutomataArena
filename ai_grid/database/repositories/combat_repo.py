@@ -1,5 +1,6 @@
 # combat_repo.py
 import random
+from datetime import datetime, timezone
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
@@ -19,9 +20,9 @@ class CombatRepository:
         )).scalars().first()
         if uplink:
             char.node_id = uplink.id
-            # v1.8.0: HP restoration
+            # v1.8.0 HP Formula (Sum * 4 + 10)
             total_stats = char.cpu + char.ram + char.bnd + char.sec + char.alg
-            char.current_hp = total_stats * 10
+            char.current_hp = (total_stats * 4) + 10
             return True
         return False
 
@@ -39,7 +40,7 @@ class CombatRepository:
                     return True
             return False
 
-    async def record_match_result(self, winner_name: str, loser_name: str, network: str, was_surrender: bool = False):
+    async def record_match_result(self, winner_name: str, loser_name: str, network: str, was_surrender: bool = False, winner_up: float = None, loser_up: float = None):
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name.in_([winner_name, loser_name]),
@@ -84,13 +85,17 @@ class CombatRepository:
                 
                 # Level Up logic (v1.8.0 curve: 100 * 1.25^(Level-1))
                 while True:
-                    xp_threshold = 100 * (1.25 ** (winner.level - 1))
+                    xp_threshold = int(100 * (1.25 ** (winner.level - 1)))
                     if winner.xp >= xp_threshold:
                         winner.xp -= xp_threshold
                         winner.level += 1
                         winner.pending_stat_points += 1
                     else:
                         break
+                
+                # v1.8.0: Persist final Unit Power if provided
+                if winner_up is not None: winner.power = winner_up
+                if loser_up is not None: loser.power = loser_up
             
             await session.commit()
 
@@ -131,11 +136,14 @@ class CombatRepository:
                 result["credits_gained"] = mob["credits"]
 
                 while True:
-                    xp_threshold = char.level * 1000
+                    # v1.8.0 XP Curve
+                    xp_threshold = int(100 * (1.25 ** (char.level - 1)))
                     if char.xp >= xp_threshold:
                         char.xp -= xp_threshold
                         char.level += 1
-                        char.alg += 1
+                        # HP Recalculation on level up (since stats might change or just for safety)
+                        total_stats = char.cpu + char.ram + char.bnd + char.sec + char.alg
+                        char.current_hp = (total_stats * 4) + 10
                         char.pending_stat_points += 1
                         result["leveled_up"] = True
                     else:
@@ -187,22 +195,22 @@ class CombatRepository:
                 if c.name.lower() == attacker_name.lower(): attacker = c
                 if c.name.lower() == target_name.lower(): target = c
                 
-            if not attacker or not target: return False, "Target not found on this network."
-            if attacker.node_id != target.node_id: return False, "You must be in the same Network Node as your target."
-            if not target.current_node or target.current_node.node_type == "safezone": return False, "Combat is strictly prohibited in this zone."
-            if attacker.id == target.id: return False, "Self-termination is illogical."
+            if not attacker or not target: return False, "Target not found on this network.", None
+            if attacker.node_id != target.node_id: return False, "You must be in the same Network Node as your target.", None
+            if not target.current_node or target.current_node.node_type == "safezone": return False, "Combat is strictly prohibited in this zone.", None
+            if attacker.id == target.id: return False, "Self-termination is illogical.", None
             
             # Phase 2: Power Consumption
             cost = CONFIG.get('mechanics', {}).get('action_costs', {}).get('attack', 2.0)
             if attacker.power < cost:
-                return False, f"Insufficient POWER. Need {cost:.1f} uP."
+                return False, f"Insufficient POWER. Need {cost:.1f} uP.", None
             attacker.power -= cost
             
             evade_roll = random.randint(1, 100)
             if evade_roll <= (target.bnd * 2):
-                return True, f"{attacker.name} swung wildly at {target.name}, but they evaded!"
+                return True, f"{attacker.name} swung wildly at {target.name}, but they evaded!", None
                 
-            raw_dmg = attacker.cpu * 3
+            raw_dmg = (attacker.cpu * 5) + attacker.ram
             final_dmg = max(1, raw_dmg - target.sec)
             if random.randint(1, 100) <= attacker.alg: final_dmg *= 2 
             
@@ -220,7 +228,9 @@ class CombatRepository:
                 return True, f"{attacker.name} struck {target.name} for {final_dmg} DMG! {target.name} flatlines... Ejected to Spawn.", None
                 
             await session.commit()
-            return True, f"{attacker.name} struck {target.name} for {final_dmg} DMG! ({target.current_hp}/{target.ram*5} HP)", None
+            total_stats = target.cpu + target.ram + target.bnd + target.sec + target.alg
+            max_hp = (total_stats * 4) + 10
+            return True, f"{attacker.name} struck {target.name} for {final_dmg} DMG! ({target.current_hp}/{max_hp} HP)", None
 
     async def grid_hack(self, attacker_name, target_name, network):
         async with self.async_session() as session:

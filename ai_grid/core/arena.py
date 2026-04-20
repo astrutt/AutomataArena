@@ -164,15 +164,22 @@ async def start_match(node, match_id: str, participants: list, pve=False):
         losers = [e.name for e in node.active_engine.entities.values() if not e.is_alive and not e.is_npc]
         
         if winners and losers:
-            # v1.8.0: Pass surrender flag to repo
+            # v1.8.0: Pass surrender flag and final uP to repo
             winner_name = winners[0]
             loser_name = losers[0]
+            winner_ent = node.active_engine.entities.get(winner_name)
             loser_ent = node.active_engine.entities.get(loser_name)
             
-            # Temporary attribute for the repo to pick up (since repo is async/session based)
-            # Actually, I'll update the record_match_result signature to accept a surrender flag
             was_surrender = loser_ent.status == "Surrendered" if loser_ent else False
-            await node.db.record_match_result(winner_name, loser_name, node.net_name, was_surrender=was_surrender)
+            winner_up = winner_ent.up if winner_ent else None
+            loser_up = loser_ent.up if loser_ent else None
+            
+            await node.db.record_match_result(
+                winner_name, loser_name, node.net_name, 
+                was_surrender=was_surrender,
+                winner_up=winner_up,
+                loser_up=loser_up
+            )
             
         await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('MATCH CONCLUDED.', tags=['ARENA'])}")
         node.active_engine = None

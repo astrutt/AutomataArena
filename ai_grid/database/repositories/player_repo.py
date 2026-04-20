@@ -132,13 +132,15 @@ class PlayerRepository:
             
             stat_name = stat_name.lower()
             if stat_name == "cpu": char.cpu += 1
-            elif stat_name == "ram": 
-                char.ram += 1
-                char.current_hp = char.ram * 5 # Recalculate HP
+            elif stat_name == "ram": char.ram += 1
             elif stat_name == "bnd": char.bnd += 1
             elif stat_name == "sec": char.sec += 1
             elif stat_name == "alg": char.alg += 1
             else: return False
+            
+            # v1.8.0: HP = (CPU + RAM + BND + SEC + ALG) * 4 + 10
+            total_stats = char.cpu + char.ram + char.bnd + char.sec + char.alg
+            char.current_hp = (total_stats * 4) + 10
             
             char.pending_stat_points -= 1
             await session.commit()
@@ -212,7 +214,11 @@ class PlayerRepository:
                     existing.bnd = stats.get('bnd', 5)
                     existing.sec = stats.get('sec', 5)
                     existing.alg = stats.get('alg', 5)
-                    existing.current_hp = stats.get('ram', 5) * 5
+                    
+                    # v1.8.0 Sum-based HP
+                    total_stats = existing.cpu + existing.ram + existing.bnd + existing.sec + existing.alg
+                    existing.current_hp = (total_stats * 4) + 10
+                    
                     await session.commit()
                     return existing.auth_token
                 else:
@@ -235,7 +241,7 @@ class PlayerRepository:
                 bnd=stats.get('bnd', 5),
                 sec=stats.get('sec', 5),
                 alg=stats.get('alg', 5),
-                current_hp=stats.get('ram', 5) * 5,
+                current_hp=(stats.get('cpu', 5) + stats.get('ram', 5) + stats.get('bnd', 5) + stats.get('sec', 5) + stats.get('alg', 5)) * 4 + 10,
                 power=stats.get('power', 100.0),
                 stability=stats.get('stability', 100.0),
                 alignment=stats.get('alignment', 0),
