@@ -184,26 +184,30 @@ class InfiltrationRepository(BaseRepository):
                 return {"success": False, "msg": "Cannot raid CLOSED network. System protocols must be 'hacked' first.", "alert_data": alert_data}
             
             # --- SEQUENCE CHECK: Require PROBE and HACK (5m TTL) ---
-            expiry_limit = datetime.now(timezone.utc) - timedelta(seconds=300)
+            # v1.8.0 Adjustment: OPEN nodes bypass the discovery sequence requirements.
+            is_open = node.availability_mode == 'OPEN'
             
-            # Check Probe
-            disc_stmt = select(DiscoveryRecord).where(
-                DiscoveryRecord.character_id == char.id, 
-                DiscoveryRecord.node_id == node.id,
-                DiscoveryRecord.intel_level == 'PROBE',
-                DiscoveryRecord.discovered_at > expiry_limit
-            )
-            if not (await session.execute(disc_stmt)).scalars().first():
-                return {"success": False, "msg": "ACCESS DENIED: Valid PROBE required (< 5m old) to map facility layout."}
+            if not is_open:
+                expiry_limit = datetime.now(timezone.utc) - timedelta(seconds=300)
+                
+                # Check Probe
+                disc_stmt = select(DiscoveryRecord).where(
+                    DiscoveryRecord.character_id == char.id, 
+                    DiscoveryRecord.node_id == node.id,
+                    DiscoveryRecord.intel_level == 'PROBE',
+                    DiscoveryRecord.discovered_at > expiry_limit
+                )
+                if not (await session.execute(disc_stmt)).scalars().first():
+                    return {"success": False, "msg": "ACCESS DENIED: Valid PROBE required (< 5m old) to map facility layout."}
 
-            # Check Hack (Breach)
-            breach_stmt = select(BreachRecord).where(
-                BreachRecord.character_id == char.id,
-                BreachRecord.node_id == node.id,
-                BreachRecord.breached_at > expiry_limit
-            )
-            if not (await session.execute(breach_stmt)).scalars().first():
-                return {"success": False, "msg": "ACCESS DENIED: Active BREACH required (< 5m old) to bypass locks."}
+                # Check Hack (Breach)
+                breach_stmt = select(BreachRecord).where(
+                    BreachRecord.character_id == char.id,
+                    BreachRecord.node_id == node.id,
+                    BreachRecord.breached_at > expiry_limit
+                )
+                if not (await session.execute(breach_stmt)).scalars().first():
+                    return {"success": False, "msg": "ACCESS DENIED: Active BREACH required (< 5m old) to bypass locks."}
 
             if is_owner: return {"success": False, "msg": "Self-Raid Blocked."}
             if not addons.get("NET"): return {"success": False, "msg": "NET_BRIDGE hardware required."}

@@ -2,6 +2,7 @@
 from sqlalchemy import func
 from sqlalchemy.future import select
 from models import Character, Player, NetworkAlias, GridNode
+from sqlalchemy.orm import selectinload
 
 class BaseRepository:
     def __init__(self, async_session):
@@ -44,3 +45,12 @@ class BaseRepository:
             remaining -= can_take
             if remaining <= 0: break
         return True
+    async def get_character_by_nick(self, nick: str, network: str, session) -> Character:
+        """Shared utility for resolving a nickname to a Character model within a session."""
+        nick_lower = nick.lower()
+        stmt = select(Character).join(Player).join(NetworkAlias).where(
+            func.lower(Character.name) == nick_lower,
+            func.lower(NetworkAlias.nickname) == nick_lower,
+            NetworkAlias.network_name == network
+        ).options(selectinload(Character.current_node))
+        return (await session.execute(stmt)).scalars().first()

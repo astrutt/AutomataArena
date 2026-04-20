@@ -1,0 +1,237 @@
+# database/repositories/identity_repo.py
+import json
+import datetime
+import uuid
+import logging
+from sqlalchemy import func
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+from models import Player, NetworkAlias, Character, GridNode, ItemTemplate, InventoryItem
+from ..core import logger, DEFAULT_PREFS
+from ..base_repo import BaseRepository
+
+logger = logging.getLogger("manager")
+
+class IdentityRepository(BaseRepository):
+    async def register_player(self, name: str, network: str, race: str, bot_class: str, bio: str, stats: dict) -> str | None:
+        """Handles registration for new Players and Spectators."""
+        reg_type = "Spectator" if race == "Spectator" else "Player"
+        logger.info(f"Attempting to register {reg_type}: {name} on {network}")
+        auth_token = str(uuid.uuid4())
+        
+        async with self.async_session() as session:
+            stmt_player = select(Player).join(NetworkAlias).where(NetworkAlias.nickname == name, NetworkAlias.network_name == network)
+            result = await session.execute(stmt_player)
+            player = result.scalars().first()
+            
+            if not player:
+                player = Player(global_name=f"{name}_{network}", is_autonomous=False)
+                session.add(player)
+                await session.flush()
+                
+                alias = NetworkAlias(player_id=player.id, network_name=network, nickname=name)
+                session.add(alias)
+                await session.flush()
+                
+            stmt_char = select(Character).where(Character.name == name, Character.player_id == player.id)
+            result = await session.execute(stmt_char)
+            existing = result.scalars().first()
+            
+            if existing:
+                if existing.race == "Spectator" and race != "Spectator":
+                    # Spectator to Player conversion
+                    existing.race = race
+                    existing.char_class = bot_class
+                    existing.bio = bio
+                    existing.cpu = stats.get('cpu', 5)
+                    existing.ram = stats.get('ram', 5)
+                    existing.bnd = stats.get('bnd', 5)
+                    existing.sec = stats.get('sec', 5)
+                    existing.alg = stats.get('alg', 5)
+                    
+                    total_stats = existing.cpu + existing.ram + existing.bnd + existing.sec + existing.alg
+                    existing.current_hp = (total_stats * 4) + 10
+                    
+                    await session.commit()
+                    return existing.auth_token
+                else:
+                    logger.warning(f"Registration failed: Player '{name}' already exists.")
+                    return None
+            
+            stmt_node = select(GridNode).where(GridNode.is_spawn_node == True)
+            result = await session.execute(stmt_node)
+            node = result.scalars().first()
+                
+            character = Character(
+                player_id=player.id,
+                node_id=node.id if node else None,
+                name=name,
+                race=race,
+                char_class=bot_class,
+                bio=bio,
+                cpu=stats.get('cpu', 5),
+                ram=stats.get('ram', 5),
+                bnd=stats.get('bnd', 5),
+                sec=stats.get('sec', 5),
+                alg=stats.get('alg', 5),
+                current_hp=(stats.get('cpu', 5) + stats.get('ram', 5) + stats.get('bnd', 5) + stats.get('sec', 5) + stats.get('alg', 5)) * 4 + 10,
+                power=stats.get('power', 100.0),
+                stability=stats.get('stability', 100.0),
+                alignment=stats.get('alignment', 0),
+                auth_token=auth_token
+            )
+            session.add(character)
+            await session.flush()
+            
+            stmt_item = select(ItemTemplate).where(ItemTemplate.name == "Basic_Ration")
+            res = await session.execute(stmt_item)
+            tpl = res.scalars().first()
+            if tpl:
+                inv_item = InventoryItem(character_id=character.id, template_id=tpl.id, quantity=1)
+                session.add(inv_item)
+                
+            await session.commit()
+            return auth_token
+
+    async def authenticate_player(self, name: str, network: str, provided_token: str) -> bool:
+        """Verifies character ownership via auth token."""
+        async with self.async_session() as session:
+            char = await self.get_character_by_nick(name, network, session)
+            if char and char.auth_token == provided_token:
+                return True
+            return False
+
+    async def get_nickname_by_id(self, char_id: int) -> str | None:
+        """Retrieves character name by character ID."""
+        async with self.async_session() as session:
+            stmt = select(Character).where(Character.id == char_id)
+            char = (await session.execute(stmt)).scalars().first()
+            return char.name if char else None
+
+    async def get_prefs(self, name: str, network: str) -> dict:
+        """Retrieves character preferences."""
+        async with self.async_session() as session:
+            char = await self.get_character_by_nick(name, network, session)
+            if not char: return dict(DEFAULT_PREFS)
+            try:
+                return {**DEFAULT_PREFS, **json.loads(char.prefs or '{}')}
+            except Exception:
+                return dict(DEFAULT_PREFS)
+
+    async def get_prefs_by_id(self, char_id: int) -> dict:
+        """Retrieves character preferences by character ID."""
+        async with self.async_session() as session:
+            stmt = select(Character).where(Character.id == char_id)
+            char = (await session.execute(stmt)).scalars().first()
+            if not char: return dict(DEFAULT_PREFS)
+            try:
+                return {**DEFAULT_PREFS, **json.loads(char.prefs or '{}')}
+            except Exception:
+                return dict(DEFAULT_PREFS)
+
+    async def set_pref(self, name: str, network: str, key: str, value) -> bool:
+        """Updates a specific character preference."""
+        async with self.async_session() as session:
+            char = await self.get_character_by_nick(name, network, session)
+            if not char: return False
+            prefs = json.loads(char.prefs or '{}')
+            prefs[key] = value
+            char.prefs = json.dumps(prefs)
+            await session.commit()
+            return True
+
+    async def get_player(self, name: str, network: str):
+        """Retrieves a full player profile summary."""
+        async with self.async_session() as session:
+            name_lower = name.lower()
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                func.lower(Character.name) == name_lower,
+                func.lower(NetworkAlias.nickname) == name_lower,
+                NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.inventory).selectinload(InventoryItem.template)
+            )
+            
+            result = await session.execute(stmt)
+            char = result.scalars().first()
+            
+            territory_count, mesh_power = 0, 0
+            if char:
+                # Territory aggregation
+                t_stmt = select(func.count(GridNode.id), func.sum(GridNode.power_stored)).where(GridNode.owner_character_id == char.id)
+                t_res = await session.execute(t_stmt)
+                territory_count, mesh_power = t_res.first()
+                territory_count = territory_count or 0
+                mesh_power = mesh_power or 0.0
+
+            if char:
+                inv = [item.template.name for item in char.inventory] if char.inventory else []
+                return {
+                    'name': char.name,
+                    'race': char.race,
+                    'char_class': char.char_class,
+                    'level': char.level,
+                    'xp': char.xp,
+                    'is_npc': False,
+                    'cpu': char.cpu,
+                    'ram': char.ram,
+                    'bnd': char.bnd,
+                    'sec': char.sec,
+                    'alg': char.alg,
+                    'bio': char.bio,
+                    'inventory': json.dumps(inv), 
+                    'alignment': char.alignment,
+                    'stability': char.stability,
+                    'power': char.power,
+                    'status': char.status,
+                    'elo': char.elo,
+                    'wins': char.wins,
+                    'losses': char.losses,
+                    'credits': char.credits,
+                    'current_hp': char.current_hp,
+                    'max_hp': char.ram * 5,
+                    'data_units': char.data_units,
+                    'pending_stat_points': char.pending_stat_points,
+                    'territory_count': territory_count,
+                    'mesh_power': mesh_power
+                }
+            return None
+
+    async def list_players(self, network=None):
+        """Lists all registered characters, optionally filtered by network."""
+        async with self.async_session() as session:
+            stmt = select(Character, NetworkAlias).select_from(Character).join(Player).join(NetworkAlias)
+            if network:
+                stmt = stmt.where(NetworkAlias.network_name == network)
+            stmt = stmt.order_by(Character.elo.desc())
+            
+            result = await session.execute(stmt)
+            players = []
+            for char, alias in result:
+                players.append({
+                    'name': char.name,
+                    'network': alias.network_name,
+                    'elo': char.elo,
+                    'wins': char.wins,
+                    'losses': char.losses,
+                    'credits': char.credits
+                })
+            return players
+
+    async def update_last_seen(self, nick: str, network: str):
+        """Updates the activity timestamp for a character."""
+        async with self.async_session() as session:
+            char = await self.get_character_by_nick(nick, network, session)
+            if char:
+                char.last_seen_at = datetime.datetime.now(datetime.timezone.utc)
+                await session.commit()
+
+    async def update_activity_stats(self, nick: str, network: str, chat_inc: int, idle_sec: float):
+        """Updates persistent activity stats (idle time and chat count)."""
+        async with self.async_session() as session:
+            char = await self.get_character_by_nick(nick, network, session)
+            if char:
+                char.total_chat_messages += chat_inc
+                char.total_idle_seconds += idle_sec
+                char.last_seen_at = datetime.datetime.now(datetime.timezone.utc)
+                await session.commit()

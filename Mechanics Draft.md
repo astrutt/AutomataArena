@@ -11,7 +11,7 @@ AutomataGrid is a text-based, persistent MMORPG played directly within IRC chann
 Spectators can idle and chat in the IRC channel where the game is played and gain credits and ranks.
 
 1. Spectator players are automatically registered by idling in the IRC channel where the game is played. 
-2. Spectators gain XP, Credits, and Power per second of idling in the IRC channel where the game is played. Payouts happen daily. Bonuses are given for chatting in the IRC channel where the game is played, hourly, and for high activity.
+2. Spectators gain XP, Credits, and Power per second of idling in the IRC channel. Passive accrual payouts happen hourly. A high-value automated dividend is awarded once per UTC day for active participation. Bonuses are given for chatting, hourly, and for high activity.
 3. Ranks are given for XP and Credits. Ranks are AI generated and can be changed by the player using credits.
 4. Spectators can also drop items in the grid Arena, purchased with Credits. Spectators trickle power to the grid based on their rank, and chat activity.
 5. Can convert to Players by registering a character with the game. 
@@ -26,7 +26,7 @@ Spectators can idle and chat in the IRC channel where the game is played and gai
 
 ---
 
-### 1. The Discovery Loop
+### 1. The Discovery and Grid Hack Loop
 The game follows a progressive intelligence-gathering model where technical prowess determines grid access:
 1.  **`map` (GEOINT)**: Displays Map for local player. 
     - **Scaling**: Visibility radius and information depth depend on the sum of **SEC** (Security) and **ALG** (Algorithm) stats.
@@ -35,7 +35,18 @@ The game follows a progressive intelligence-gathering model where technical prow
 3.  **`probe` (PreBreach)**: Quick penetration scan used on grid nodes. Reveals hidden networks, and secrets. 
 4.  **`hack` (Breach)**: Attempts to bypass or defeat nodal security to enable exploitation.
 5.  **`exploit` (Zero-Day)**: If a player has a zero-day chain, they can use it to bypass the security of a grid node or network and gain full access to it, sometimes leaving no trace. 0-day chains are created using data fragments collected from exploring, probing, hacking and raiding, and come in 4 tiers. 
-6.  **`raid` (EXFIL)**: Targets nodes and networks for Credits, Data, XP and loot. Rewards scale with difficulty.
+6.  **`raid` (EXFIL)**: Targets nodes and networks for Credits, Data, XP and loot. Rewards scale with difficulty. 
+    - Possible raid targets: [SMB][EDU][GOV][MIL][CORP][ORG][LEA][DC] (random discovery based on node level) at any point throughout the discovery loop players can discover a raid target. Easy targets may not need to be hacked or exploited, but will yield less rewards.   
+    - raid target local grid nodes without a net device-
+        **`raid <target>`** shows information about the target
+        **`raid hack <target>`** attempts to hack the target
+        **`raid exploit <target>`** attempts to exploit the target
+        
+    - raid network targets- 
+        **`raid <network>`** shows information about the network
+        **`raid <network> <target>`** shows information about a network target
+        **`raid <network> hack <target>`** network target hack
+        **`raid <network> exploit <target>`** network target exploit
 
 ### 2. The PVP and PVE Combat Loop
 The game allows for player vs player/NPC, and player vs AI, and PVE combat on grid nodes and in the arena. 
@@ -84,9 +95,12 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
     - **Scaling**: XP required for the next level follows an exponential curve: $XP\_Next = 100 \times 1.25^{(Level-1)}$.
     - **Uncapped**: Resource Storage is uncapped and Stats can scale indefinitly.
 
-- **Player Stability**: Actions consume Unit Power (uP). Inactivity or damage results in power loss, leading to stat reductions if below 30% stability. Stability decay goes down to 0% over time if the player has 0 Power. Without damage or idling, stability will not decay. Idling prevents player and grid node stability decay. 
+- **Player Stability**: Actions consume Unit Power (uP). Inactivity or damage results in power loss, leading to stat reductions if below 30% stability. Stability decay goes down to 0% over time if the player has 0 Power. Without damage or idling, stability will not decay. Idling prevents players and grid node power stability decay. 
 
-- **Player Power**: Players can generate power solo and get a bonus on claimed grid nodes. Players can siphon power from hacked grid nodes, and their own grid nodes and networks. 
+- **Player Power**: Players can generate power solo and get a bonus on claimed grid nodes. Players can siphon power from hacked grid nodes, and their own grid nodes and networks. While on a gain an idle bonus to power generation. 
+    - **Generation**: Players can generate power solo and get a bonus on claimed grid nodes. `powergen` 
+    - **Siphon**: Players can siphon power from hacked grid nodes, and their own grid nodes and networks. `siphon` 
+    - **Storage**: Players can store power in their inventory, but it will decay over time if not used or generated regularly.   
 
 - **Player Data**: Players can collect data from exploring, probing, hacking and raiding. Data can be used to create vulnerabilities and zero-day exploits. 
 
@@ -97,7 +111,7 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 - **Player Stat Points**: Starting stats are 1. As players gain levels from XP, they are awarded stat points to spend on their stats. 
 - **Hit Points**: Calculated as $HP = (CPU + RAM + BND + SEC + ALG) \times 4 + 10$.
 
-- **Player Inventory**: Players have 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains. 
+- **Player Inventory**: Players have data and 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains. 
 
 ---
 
@@ -106,9 +120,9 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 Gridnodes are the geography of the game world, and represent the various locations players can explore, hack, and raid. Grid nodes can be claimed by players, NPCs or by the MCP, also offer merchants and auction houses. Grid nodes also store data for their owners. 
 
 - **Grid Node Stability**: Grid nodes have stability that decays over time if not maintained. 
-- **Grid Node Power**: Grid nodes can generate power that can be used to upgrade the grid node. 
+- **Grid Node Power**: Grid nodes can generate power that can be used to upgrade the grid node, siphoned by owners, or stolen by hackers and raiders. 
 - **Grid Node Security**: Grid nodes have security that can be upgraded to prevent hacking and raiding. 
-- **Grid Node Type**: Grid nodes can be different types, such as resource nodes, data nodes, and power nodes. 
+- **Grid Node Type**: Grid nodes can be different types, such as resource nodes, data nodes, and power nodes. (example: NPC nodes, trade, steal, link)
 - **Grid Node Owner**: Grid nodes can be owned by players, NPCs or by the MCP. 
 - **Grid Node Upgrades**: Grid nodes can be upgraded to improve their capabilities, level of difficulty to explore and attack 1-4, and 4 equipment slots. 
 - **Grid Nodes Equipment**: HoneyPot, Amplifier, IDS, Firewall, Network. 
@@ -119,10 +133,11 @@ Gridnodes are the geography of the game world, and represent the various locatio
     - **NET**: Ability to connect grid node local networks (player or NPC networks) and remote networks (IRC channels on other IRC Networks)
        - **feature** hack and raid targets, and remote IRC networks with their own hack and raid targets.  
        - **feature** pvp and pve opportunities.
-       - **feature** link grid nodes together to create networks.
+       - **feature** links grid nodes together to create networks.
        - **feature** use !a grid link <gridnode> to travel to your grid nodes.
 
 - **Grid Node Data**: Grid nodes store data for their owners, there is no cap on the amount of data that can be stored. 
+
 
 --- 
 
@@ -137,6 +152,14 @@ Grid nodes can be equipped with 4 items(slots).
    - **feature** hack and raid targets, and remote IRC networks with their own hack and raid targets.  
    - **feature** pvp and pve opportunities. 
 
+Example: If Rizon's grid node is set to 2600net and is CLOSED, an attacker must: 
+            -from a grid node on 2600net-
+            !a grid net Rizon explore
+            !a grid net Rizon probe
+            !a grid net Rizon hack
+            !a grid net Rizon raid <-successful raids on closed network nodes enables remote pvp/pve, remote msg, and yields data and credits. 
+
+        If Rizon's grid node is set to 2600net and is OPEN, PVP/PVE, MSG, are enabled for players on that grid node.
 
 ## 5. Adaptive-Stream Interaction Protocol
 

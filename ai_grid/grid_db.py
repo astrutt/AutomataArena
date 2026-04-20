@@ -12,7 +12,7 @@ from sqlalchemy.future import select
 from models import (
     Base, Player, NetworkAlias, Character, GridNode, NodeConnection, 
     PulseEvent, DiscoveryRecord, BreachRecord, ItemTemplate, InventoryItem, 
-    MainframeTask, AuctionListing, Leaderboard, CipherSession, GlobalMarket, Memo
+    MainframeTask, AuctionListing, Leaderboard, CipherSession, GlobalMarket, Memo, Character
 )
 from database.core import DB_FILE, logger, CONFIG, GRID_EXPANSION, GRID_CONNECTIONS, BRIDGE_MAPPING, LOOT_TEMPLATES
 from database.repositories.navigation_repo import NavigationRepository
@@ -20,7 +20,10 @@ from database.repositories.territory_repo import TerritoryRepository
 from database.repositories.discovery_repo import DiscoveryRepository
 from database.repositories.infiltration_repo import InfiltrationRepository
 from database.repositories.maintenance_repo import MaintenanceRepository
-from database.repositories.player_repo import PlayerRepository
+from database.repositories.identity_repo import IdentityRepository
+from database.repositories.communication_repo import CommunicationRepository
+from database.repositories.activity_repo import ActivityRepository
+from database.repositories.progression_repo import ProgressionRepository
 from database.repositories.economy_repo import EconomyRepository
 from database.repositories.mainframe_repo import MainframeRepository
 from database.repositories.minigame_repo import MiniGameRepository
@@ -35,7 +38,10 @@ class ArenaDB:
         self.async_session = async_sessionmaker(self.engine, expire_on_commit=False, class_=AsyncSession)
         
         # Repositories (Domain Partitions)
-        self.player = PlayerRepository(self.async_session)
+        self.identity = IdentityRepository(self.async_session)
+        self.comm = CommunicationRepository(self.async_session)
+        self.activity = ActivityRepository(self.async_session)
+        self.progression = ProgressionRepository(self.async_session)
         self.economy = EconomyRepository(self.async_session)
         self.combat = CombatRepository(self.async_session)
         self.mainframe = MainframeRepository(self.async_session)
@@ -334,22 +340,22 @@ class ArenaDB:
             logger.info("Grid expansion seeded successfully.")
 
     # Delegation methods
-    async def get_prefs(self, name, network): return await self.player.get_prefs(name, network)
-    async def set_pref(self, name, network, key, value): return await self.player.set_pref(name, network, key, value)
-    async def get_daily_tasks(self, name, network): return await self.player.get_daily_tasks(name, network)
-    async def complete_task(self, name, network, task_key): return await self.player.complete_task(name, network, task_key)
-    async def register_player(self, name, network, race, bot_class, bio, stats): return await self.player.register_player(name, network, race, bot_class, bio, stats)
-    async def get_player(self, name, network): return await self.player.get_player(name, network)
-    async def authenticate_player(self, name, network, provided_token): return await self.player.authenticate_player(name, network, provided_token)
-    async def list_players(self, network=None): return await self.player.list_players(network)
-    async def get_character_by_nick(self, nick: str, network: str, session): return await self.player.get_character_by_nick(nick, network, session)
-    async def update_last_seen(self, nick: str, network: str): return await self.player.update_last_seen(nick, network)
-    async def update_activity_stats(self, nick, net, chat, idle): return await self.player.update_activity_stats(nick, net, chat, idle)
-    async def get_spectator_stats(self, nick, net, config): return await self.player.get_spectator_stats(nick, net, config)
-    async def tick_retention_policy(self, config): return await self.player.tick_retention_policy(config)
-    async def tick_player_maintenance(self, network, idlers): return await self.player.tick_player_maintenance(network, idlers)
-    async def active_powergen(self, name, network): return await self.player.active_powergen(name, network)
-    async def active_training(self, name, network): return await self.player.active_training(name, network)
+    async def get_prefs(self, name, network): return await self.identity.get_prefs(name, network)
+    async def set_pref(self, name, network, key, value): return await self.identity.set_pref(name, network, key, value)
+    async def get_daily_tasks(self, name, network): return await self.activity.get_daily_tasks(name, network)
+    async def complete_task(self, name, network, task_key): return await self.activity.complete_task(name, network, task_key)
+    async def register_player(self, name, network, race, bot_class, bio, stats): return await self.identity.register_player(name, network, race, bot_class, bio, stats)
+    async def get_player(self, name, network): return await self.identity.get_player(name, network)
+    async def authenticate_player(self, name, network, provided_token): return await self.identity.authenticate_player(name, network, provided_token)
+    async def list_players(self, network=None): return await self.identity.list_players(network)
+    async def get_character_by_nick(self, nick: str, network: str, session): return await self.identity.get_character_by_nick(nick, network, session)
+    async def update_last_seen(self, nick: str, network: str): return await self.identity.update_last_seen(nick, network)
+    async def update_activity_stats(self, nick, net, chat, idle): return await self.identity.update_activity_stats(nick, net, chat, idle)
+    async def get_spectator_stats(self, nick, net, config): return await self.progression.get_spectator_stats(nick, net, config)
+    async def tick_retention_policy(self, config): return await self.maintenance.tick_retention_policy(config)
+    async def tick_player_maintenance(self, network, idlers): return await self.maintenance.tick_player_maintenance(network, idlers)
+    async def active_powergen(self, name, network): return await self.activity.active_powergen(name, network)
+    async def active_training(self, name, network): return await self.activity.active_training(name, network)
     async def explore_node(self, name, network): return await self.grid.explore_node(name, network)
     async def raid_node(self, name, network): return await self.grid.raid_node(name, network)
 
@@ -369,8 +375,8 @@ class ArenaDB:
     async def tick_grid_power(self): return await self.grid.tick_grid_power()
     async def get_grid_telemetry(self): return await self.grid.get_grid_telemetry()
     async def rename_node(self, old, new): return await self.grid.rename_node(old, new)
-    async def get_prefs_by_id(self, char_id): return await self.player.get_prefs_by_id(char_id)
-    async def get_nickname_by_id(self, char_id): return await self.player.get_nickname_by_id(char_id)
+    async def get_prefs_by_id(self, char_id): return await self.identity.get_prefs_by_id(char_id)
+    async def get_nickname_by_id(self, char_id): return await self.identity.get_nickname_by_id(char_id)
 
     async def list_shop_items(self): return await self.economy.list_shop_items()
     async def award_credits_bulk(self, payouts, network): return await self.economy.award_credits_bulk(payouts, network)
