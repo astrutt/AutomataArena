@@ -93,7 +93,7 @@ async def handle_ready(node, nick: str, token: str, reply_target: str):
 async def handle_dice_roll(node, nick: str, args: list, reply_target: str):
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     if len(args) < 2:
-        await node.send(f"{reply_method} {private_target} :Usage: dice <bet> <high|low|seven>")
+        await node.send(f"{reply_method} {private_target} :{tag_msg('Usage: dice <bet> <high|low|seven>', action='INFO', result='ERR')}")
         return
     
     try: bet = int(args[0])
@@ -117,7 +117,7 @@ async def handle_cipher_start(node, nick: str, reply_target: str):
 async def handle_guess(node, nick: str, args: list, reply_target: str):
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     if not args:
-        await node.send(f"{reply_method} {private_target} :Usage: guess <sequence>")
+        await node.send(f"{reply_method} {private_target} :{tag_msg('Usage: guess <sequence>', action='INFO', result='ERR')}")
         return
     result = await node.db.guess_cipher(nick, node.net_name, args[0])
     msg = result.get('error') or result.get('msg', 'GUESS_SUBMITTED')
@@ -132,8 +132,11 @@ async def handle_leaderboard(node, nick: str, args: list, reply_target: str):
         await node.send(f"{reply_method} {private_target} :{tag_msg(f'No records for {cat}', action='OSINT', result='ERR', is_machine=machine_mode)}")
         return
     
-    await node.send(f"{reply_method} {private_target} :{tag_msg(f'[ LEADERBOARD: {cat} ]', action='OSINT', result='SUCCESS', is_machine=machine_mode)}")
-    for i, r in enumerate(results):
-        line = f"#{i+1} | {r['name']} | score: {r['score']:.1f}"
-        if machine_mode: line = f"RANK:{i+1} NICK:{r['name']} SCORE:{r['score']:.1f}"
-        await node.send(f"{reply_method} {private_target} :{line}")
+    if machine_mode:
+        parts = " ".join(f"RANK:{i+1}|NICK:{r['name']}|SCORE:{r['score']:.1f}" for i, r in enumerate(results))
+        await node.send(f"{reply_method} {private_target} :{tag_msg(parts, action='OSINT', result='SUCCESS', is_machine=True)}")
+    else:
+        await node.send(f"{reply_method} {private_target} :{tag_msg(f'[ LEADERBOARD: {cat} ]', action='OSINT', result='SUCCESS', is_machine=False)}")
+        for i, r in enumerate(results):
+            line = f"#{i+1} | {r['name']} | score: {r['score']:.1f}"
+            await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='OSINT', is_machine=False)}")

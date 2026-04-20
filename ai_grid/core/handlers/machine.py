@@ -55,9 +55,9 @@ async def handle_gibson_status(node, nick: str, reply_target: str):
         for t in data['active_tasks']:
             m, s = divmod(t['remaining_sec'], 60)
             line = f"[{t['type']}] Yielding {t['amount']} units | ETA: {m}m {s}s"
-            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(line, C_GREEN), action='SIGINT')}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(line, C_GREEN), action='SIGINT', is_machine=False)}")
     else:
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('Mainframe Idle. Ready for compilation.', C_CYAN), action='SIGINT')}")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('Mainframe Idle. Ready for compilation.', C_CYAN), action='SIGINT', is_machine=False)}")
 
 async def handle_gibson_compile(node, nick: str, args: list, reply_target: str):
     try: amount = int(args[0]) if args else 100

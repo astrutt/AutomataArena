@@ -34,7 +34,7 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
                     await handle_mob_encounter(node, nick, node_name, threat, prev_node, private_target)
     else:
         if msg == "System offline.":
-            await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{nick} - not a registered player - msg ignored', action='MCP', result='ERR')}")
         else:
             await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='FAIL', nick=nick, is_machine=machine_mode)}")
         await handle_grid_view(node, nick, private_target)
@@ -44,7 +44,7 @@ async def handle_grid_view(node, nickname: str, reply_target: str):
     private_target, _, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
     
     if not loc:
-        await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nickname} - not a registered player - msg ignored")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{nickname} - not a registered player - msg ignored', action='MCP', result='ERR')}")
         return
 
     if machine_mode:
@@ -119,7 +119,7 @@ async def handle_grid_map(node, nick: str, reply_target: str):
     async with node.db.async_session() as session:
         char = await node.db.get_character_by_nick(nick, node.net_name, session)
         if not char:
-            await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{nick} - not a registered player - msg ignored', action='MCP', result='ERR')}")
             return
         
         private_target, _, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
@@ -178,13 +178,13 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
         success, msg, alert_data = res[0], res[1], res[2] if len(res) > 2 else None
     elif action == "install":
         if not args:
-            await node.send(f"{reply_method} {private_target} :Syntax: grid install <hardware>")
+            await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: grid install <hardware>', action='INFO', result='ERR')}")
             return
         res = await node.db.install_node_addon(nickname, node.net_name, args[0])
         success, msg = res['success'], res['msg']
     elif action == "bolster":
         if not args:
-            await node.send(f"{reply_method} {private_target} :Syntax: grid bolster <power>")
+            await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: grid bolster <power>', action='INFO', result='ERR')}")
             return
         try: amt = float(args[0])
         except: return
@@ -192,7 +192,7 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
         success, msg = res['success'], res['msg']
     elif action in ["link", "net"]:
         if not args:
-             await node.send(f"{reply_method} {private_target} :Syntax: grid net <affinity>")
+             await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: grid net <affinity>', action='INFO', result='ERR')}")
              return
         res = await node.db.link_network(nickname, node.net_name, args[0])
         success, msg = res['success'], res['msg']
@@ -212,7 +212,7 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
     if alert_data:
         target_nick = await node.db.get_nickname_by_id(alert_data['recipient_id'])
         if target_nick:
-            await node.send(f"PRIVMSG {target_nick} :[ALARM] {alert_data['message']}")
+            await node.send(f"PRIVMSG {target_nick} :{tag_msg(alert_data['message'], action='ALARM')}")
 
 async def handle_node_exploit(node, nick: str, reply_target: str, args: list):
     if not await check_rate_limit(node, nick, reply_target, cooldown=45): return

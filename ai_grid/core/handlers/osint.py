@@ -104,7 +104,8 @@ async def handle_info_nick(node, nickname: str, args: list, reply_target: str):
             if not machine_mode:
                  msg = format_text(f"[GRID INFO] {loc['name']} | Type: {loc['type'].upper()} | Owner: {loc.get('owner','none')}", C_CYAN)
             await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='GEOINT', nick=nickname, is_machine=machine_mode)}")
-        else: await node.send(f"PRIVMSG {reply_target} :[ERR] {nickname} - you must be on the grid.")
+        else:
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{nickname} - you must be on the grid to access GEOINT.', action='GEOINT', result='ERR')}")
         return
 
     # 2. Arena Info
@@ -119,7 +120,7 @@ async def handle_info_nick(node, nickname: str, args: list, reply_target: str):
     # 3. Character Info
     f = await node.db.get_player(target, node.net_name)
     if not f:
-        await node.send(f"{reply_method} {private_target} :[ERR] {nickname} - character '{target}' not found.")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(f'Character {target!r} not found in historical archives.', action='HUMINT', result='ERR', nick=nickname, is_machine=machine_mode)}")
         return
         
     if f.get('race') == "Spectator":

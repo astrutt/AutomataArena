@@ -10,11 +10,11 @@ async def handle_shop_view(node, nickname: str, reply_target: str):
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
     
     if not items:
-        await node.send(f"{reply_method} {private_target} :[SHOP] The marketplace is empty.")
+        await node.send(f"{reply_method} {private_target} :{tag_msg('The marketplace is empty.', action='ECONOMY', result='FAIL')}")
         return
     if machine_mode:
-        parts = " ".join(f"{i['name']}:{i['cost']}c" for i in items)
-        await node.send(f"{reply_method} {private_target} :[SHOP] ITEMS:{parts}")
+        parts = " ".join(f"ITEM:{i['name']}|COST:{i['cost']}c" for i in items)
+        await node.send(f"{reply_method} {private_target} :{tag_msg(parts, action='ECONOMY', result='SUCCESS', is_machine=True)}")
         return
     await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ BLACK MARKET WARES ]', C_CYAN, bold=True), tags=['ECONOMY'], is_machine=machine_mode)}")
     for i in items:
@@ -27,13 +27,13 @@ async def handle_merchant_tx(node, nickname: str, verb: str, item_name: str, rep
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
     
     if not result and "System offline" in msg:
-        await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nickname} - not a registered player - msg ignored")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{nickname} - not a registered player - msg ignored', action='MCP', result='ERR')}")
         return
     banner = format_text(msg, C_GREEN if result else C_RED)
     if reply_target.startswith(('#', '&', '+', '!')):
         await node.send(f"{reply_method} {private_target} :{tag_msg(banner, tags=['SIGACT', nickname])}")
     else:
-        await node.send(f"{reply_method} {private_target} :{msg}")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='FAIL' if not result else 'SUCCESS', nick=nickname, is_machine=machine_mode)}")
     
     if result:
         act = "purchased" if verb == "buy" else "liquidated"
@@ -49,19 +49,19 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     
     if not args:
-        await node.send(f"{reply_method} {private_target} :Usage: {node.prefix} auction <list|sell|bid>")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(f'Usage: {node.prefix} auction <list|sell|bid>', action='INFO', result='ERR')}")
         return
     
     sub = args[0].lower()
     if sub == "list":
         listings = await node.db.list_active_auctions()
         if not listings:
-            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[DARKNET] The auction house is currently empty.', C_CYAN), tags=['ECONOMY'])}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg('The auction house is currently empty.', action='ECONOMY', result='INFO', is_machine=machine_mode)}")
             return
         
         if machine_mode:
             parts = " ".join(f"ID:{l['id']}|ITEM:{l['item']}|BID:{l['current_bid']}|END:{l['ends_in_min']}m" for l in listings)
-            await node.send(f"{reply_method} {private_target} :[AUCTION] LIST:{parts}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(parts, action='ECONOMY', result='SUCCESS', is_machine=True)}")
             return
     
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ GLOBAL DARKNET AUCTIONS ]', C_CYAN, True), tags=['ECONOMY'], is_machine=machine_mode)}")
@@ -77,7 +77,7 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
         
         success, msg = await node.db.create_auction(nick, node.net_name, item_name, start_bid, 1440)
         if not success and msg == "Character offline.":
-            await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{nick} - not a registered player - msg ignored', action='MCP', result='ERR')}")
             return
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_GREEN if success else C_RED), tags=['SIGACT', nick])}")
         
@@ -87,16 +87,16 @@ async def handle_auction(node, nick: str, args: list, reply_target: str):
             aid = int(args[1])
             amt = int(args[2])
         except:
-            await node.send(f"{reply_method} {private_target} :Usage: {node.prefix} auction bid <id> <amount>")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(f'Usage: {node.prefix} auction bid <id> <amount>', action='INFO', result='ERR')}")
             return
             
         success, msg = await node.db.bid_on_auction(nick, node.net_name, aid, amt)
         if not success and msg == "Character offline.":
-            await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{nick} - not a registered player - msg ignored', action='MCP', result='ERR')}")
             return
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_GREEN if success else C_RED), tags=['SIGACT', nick])}")
     else:
-        await node.send(f"PRIVMSG {reply_target} :Invalid auction command. Try: list, sell <item> <bid>, or bid <id> <amount>.")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg('Invalid auction command. Try: list, sell, or bid.', action='INFO', result='ERR')}")
 
 async def handle_market_view(node, nickname: str, reply_target: str):
     """View current global market multipliers."""
@@ -104,12 +104,12 @@ async def handle_market_view(node, nickname: str, reply_target: str):
     
     status = await node.db.get_market_status()
     if not status:
-        await node.send(f"{reply_method} {private_target} :[MARKET] Market is currently stable (1.0x baseline).")
+        await node.send(f"{reply_method} {private_target} :{tag_msg('Market is currently stable (1.0x baseline).', action='ECONOMY', result='INFO', is_machine=machine_mode)}")
         return
     
     if machine_mode:
-        parts = " ".join(f"{k}:{v:.2f}" for k, v in status.items())
-        await node.send(f"{reply_method} {private_target} :[MARKET] MULTS:{parts}")
+        parts = " ".join(f"TYPE:{k}|MULT:{v:.2f}" for k, v in status.items())
+        await node.send(f"{reply_method} {private_target} :{tag_msg(parts, action='ECONOMY', result='SUCCESS', is_machine=True)}")
         return
         
     await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ GLOBAL MARKET CONDITIONS ]', C_CYAN, True), tags=['ECONOMY'], is_machine=machine_mode)}")

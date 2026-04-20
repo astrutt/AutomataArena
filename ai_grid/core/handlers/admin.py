@@ -74,10 +74,10 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
             node.active_engine.active = False
             node.active_engine = None
             await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text('ADMIN OVERRIDE: ACTIVE COMBAT SEQUENCE HALTED.', C_RED, True), tags=['SIGACT'], nick=admin_nick)}")
-            await node.send(f"{reply_method} {private_target} :[SYS] Match aborted.")
-        else: await node.send(f"{reply_method} {private_target} :[SYS] No active battle.")
+            await node.send(f"{reply_method} {private_target} :{tag_msg('Arena match aborted by administrative override.', action='MCP', result='SUCCESS')}")
+        else: await node.send(f"{reply_method} {private_target} :{tag_msg('No active battle sequence detected.', action='MCP', result='FAIL')}")
     elif verb == "battlestart":
-        if node.active_engine and node.active_engine.active: await node.send(f"{reply_method} {private_target} :[SYS] Arena locked.")
+        if node.active_engine and node.active_engine.active: await node.send(f"{reply_method} {private_target} :{tag_msg('Arena locked into active match.', action='MCP', result='FAIL')}")
         elif len(node.ready_players) > 0: await node.check_match_start()
         else: await node.trigger_arena_call()
     elif verb == "topic": await node.set_dynamic_topic()
@@ -140,7 +140,7 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                 current_spawn = await node.db.grid.get_spawn_node_name()
                 await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'Current Grid Nexus: {current_spawn}', C_CYAN), tags=['SIGINT'], nick=admin_nick)}")
         else:
-            await node.send(f"{reply_method} {private_target} :[ERR] Syntax: {node.prefix} admin grid <rename|seed|spawn> [args]")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(f'Syntax: {node.prefix} admin grid <rename|seed|spawn> [args]', action='INFO', result='ERR')}")
     elif verb in ["nickregister", "nickconfirm", "nickidentify"]:
         # SECURITY GATE: Force PM for auth commands
         if reply_target.lower() == node.config['channel'].lower():
@@ -224,9 +224,9 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                     await node.send(f"{reply_method} {private_target} :{tag_msg(msg, tags=['SIGINT'], nick=admin_nick)}")
                 except Exception as e:
                     logger.error(f"Topic rotate error: {e}")
-                    await node.send(f"{reply_method} {private_target} :[ERR] Syntax: {node.prefix} admin chantopic rotate <min>")
+                    await node.send(f"{reply_method} {private_target} :{tag_msg(f'Syntax: {node.prefix} admin chantopic rotate <min>', action='INFO', result='ERR')}")
             else:
-                await node.send(f"{reply_method} {private_target} :[ERR] Syntax: {node.prefix} admin chantopic rotate <min>")
+                await node.send(f"{reply_method} {private_target} :{tag_msg(f'Syntax: {node.prefix} admin chantopic rotate <min>', action='INFO', result='ERR')}")
     elif verb == "restart":
         msg = tag_msg(format_text('MAINFRAME RESTART INITIATED BY ADMIN.', C_YELLOW, True), tags=['SIGACT'], nick=admin_nick)
         await node.send(f"PRIVMSG {node.config['channel']} :{msg}", immediate=True)

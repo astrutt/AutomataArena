@@ -1,6 +1,25 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Float
 from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.types import TypeDecorator
 from datetime import datetime, timezone
+
+class AwareDateTime(TypeDecorator):
+    """
+    Ensures that datetimes are always timezone-aware (UTC) when entering/exiting the DB.
+    SQLite stores these as strings, so we re-attach the UTC info on the way out.
+    """
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
 
 Base = declarative_base()
 
@@ -67,7 +86,7 @@ class Player(Base):
     id = Column(Integer, primary_key=True)
     global_name = Column(String, unique=True)
     is_autonomous = Column(Boolean, default=False) # True if driven by LLM
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
     aliases = relationship("NetworkAlias", back_populates="player", cascade="all, delete-orphan")
     characters = relationship("Character", back_populates="player", cascade="all, delete-orphan")
@@ -120,20 +139,20 @@ class Character(Base):
     alignment = Column(Integer, default=0) # Ethics: -100 to 100
     data_units = Column(Float, default=0.0) # Raw fodder for The Gibson
     alg_bonus = Column(Integer, default=0) # Temporary boost for next hack
-    ice_lockdown_until = Column(DateTime, nullable=True) # CipherLock penalty
+    ice_lockdown_until = Column(AwareDateTime, nullable=True) # CipherLock penalty
     
     # Activity & Retention (IdleRPG)
     total_chat_messages = Column(Integer, default=0)
     total_idle_seconds = Column(Float, default=0.0)
     pending_stat_points = Column(Integer, default=0)
-    last_surrender = Column(DateTime, nullable=True) # v1.8.0: PvP Ban tracking
-    last_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_surrender = Column(AwareDateTime, nullable=True) # v1.8.0: PvP Ban tracking
+    last_seen_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
     # v1.8.0: Spectator Specifics
     rank_title = Column(String, nullable=True)
-    last_daily_bonus_at = Column(DateTime, nullable=True)
+    last_daily_bonus_at = Column(AwareDateTime, nullable=True)
     
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     player = relationship("Player", back_populates="characters")
@@ -151,8 +170,8 @@ class PulseEvent(Base):
     network_name = Column(String, index=True) # Scope limiting
     event_type = Column(String) # 'PACKET', 'GLITCH'
     reward_val = Column(Float, default=0.0) # Credits or Data units
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    expires_at = Column(DateTime)
+    created_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(AwareDateTime)
     status = Column(String, default='ACTIVE') # ACTIVE, RESOLVED, EXPIRED
     
     node = relationship("GridNode")
@@ -166,8 +185,8 @@ class IncursionEvent(Base):
     incursion_type = Column(String, nullable=False) # e.g., 'HacktopusAI'
     tier = Column(Integer, default=1) # Required players
     reward_val = Column(Float, default=500.0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    expires_at = Column(DateTime)
+    created_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(AwareDateTime)
     status = Column(String, default='ACTIVE') # ACTIVE, RESOLVED, EXPIRED
     
     node = relationship("GridNode")
@@ -179,7 +198,7 @@ class IncursionDefender(Base):
     id = Column(Integer, primary_key=True)
     incursion_id = Column(Integer, ForeignKey('incursion_events.id'), index=True)
     character_id = Column(Integer, ForeignKey('characters.id'), index=True)
-    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
     incursion = relationship("IncursionEvent", back_populates="defenders")
     character = relationship("Character")
@@ -195,8 +214,8 @@ class RaidTarget(Base):
     credits_pool = Column(Float, default=0.0)
     data_pool = Column(Float, default=0.0)
     is_active = Column(Boolean, default=True)
-    last_raided_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_raided_at = Column(AwareDateTime, nullable=True)
+    created_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
     node = relationship("GridNode", foreign_keys=[node_id])
 
@@ -207,7 +226,7 @@ class DiscoveryRecord(Base):
     character_id = Column(Integer, ForeignKey('characters.id'), index=True)
     node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
     intel_level = Column(String) # 'EXPLORE' (Topological), 'PROBE' (Deep)
-    discovered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    discovered_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
     character = relationship("Character", foreign_keys=[character_id])
     node = relationship("GridNode", foreign_keys=[node_id])
@@ -219,7 +238,7 @@ class BreachRecord(Base):
     character_id = Column(Integer, ForeignKey('characters.id'), index=True)
     node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
     is_silent = Column(Boolean, default=False) # True if via 'exploit'
-    breached_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    breached_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
     character = relationship("Character", foreign_keys=[character_id])
     node = relationship("GridNode", foreign_keys=[node_id])
@@ -264,7 +283,7 @@ class MainframeTask(Base):
     character_id = Column(Integer, ForeignKey('characters.id'), nullable=False)
     task_type = Column(String, nullable=False) # COMPILE, ASSEMBLE
     amount = Column(Integer, default=1) # Target yield
-    completion_time = Column(DateTime, nullable=False)
+    completion_time = Column(AwareDateTime, nullable=False)
     is_collected = Column(Boolean, default=False)
     
     owner = relationship("Character")
@@ -280,7 +299,7 @@ class AuctionListing(Base):
     item_id = Column(Integer, ForeignKey('inventory_items.id'), nullable=False)
     current_bid = Column(Integer, default=0)
     highest_bidder_id = Column(Integer, ForeignKey('characters.id'), nullable=True)
-    end_time = Column(DateTime, nullable=False)
+    end_time = Column(AwareDateTime, nullable=False)
     is_darknet = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     
@@ -326,7 +345,7 @@ class Memo(Base):
     sender_id = Column(Integer, ForeignKey('characters.id'), nullable=True) # Null = System
     recipient_id = Column(Integer, ForeignKey('characters.id'), nullable=False)
     message = Column(String, nullable=False)
-    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     is_read = Column(Boolean, default=False)
     source_node_id = Column(Integer, ForeignKey('grid_nodes.id'), nullable=True)
     

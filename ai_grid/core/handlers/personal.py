@@ -10,7 +10,7 @@ logger = logging.getLogger("manager")
 async def handle_registration(node, nick: str, args: list, reply_target: str):
     try:
         if len(args) < 4:
-            await node.send(f"PRIVMSG {reply_target} :Syntax: register <Name> <Race> <Class> <Traits>")
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg('Syntax: register <Name> <Race> <Class> <Traits>', action='INFO', result='ERR')}")
             return
         bot_name, race, b_class = args[0], args[1], args[2]
         await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'Compiling architecture for {bot_name}...', action='SIGACT', nick=nick)}")
@@ -43,7 +43,8 @@ async def handle_tasks_view(node, nickname: str, reply_target: str):
     await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('=== [DAILY TASKS] ===', C_CYAN), action='OSINT', nick=nickname)}")
     for k, v in tasks.items():
         if k in ["date", "completed"]: continue
-        await node.send(f"{reply_method} {private_target} :{'[x]' if v >= 1 else '[ ]'} {k}")
+        status = '[x]' if v >= 1 else '[ ]'
+        await node.send(f"{reply_method} {private_target} :{tag_msg(f'{status} {k}', action='TASKS', is_machine=False)}")
 
 async def handle_options(node, nickname: str, args: list, reply_target: str):
     VALID = {
@@ -63,7 +64,7 @@ async def handle_options(node, nickname: str, args: list, reply_target: str):
         else:
             await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('=== [ACCOUNT OPTIONS] ===', C_CYAN, True), action='OSINT')}")
             for k, v in prefs.items():
-                await node.send(f"{reply_method} {private_target} :{k}: {format_text(str(v), C_GREEN if v else C_RED)}")
+                await node.send(f"{reply_method} {private_target} :{tag_msg(f'{k}: {v}', action='OPTIONS', is_machine=False)}")
         return
 
     if len(args) < 2: return
@@ -88,9 +89,9 @@ async def handle_stats(node, nickname: str, args: list, reply_target: str):
             await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'[ {nickname.upper()} - ATTRIBUTES ]', C_CYAN, True), action='OSINT')}")
             stats = [("CPU", char['cpu']), ("RAM", char['ram']), ("BND", char['bnd']), ("SEC", char['sec']), ("ALG", char['alg'])]
             for n, v in stats:
-                await node.send(f"{reply_method} {private_target} :{n}: {format_text(str(v), C_YELLOW)}")
+                await node.send(f"{reply_method} {private_target} :{tag_msg(f'{n}: {v}', action='STATS', is_machine=False)}")
             if char['pending_stat_points'] > 0:
-                await node.send(f"{reply_method} {private_target} :{tag_msg(f'PENDING POINTS: {char['pending_stat_points']}', action='OSINT', result='INFO')}")
+                await node.send(f"{reply_method} {private_target} :{tag_msg(f'PENDING POINTS: {char['pending_stat_points']}', action='STATS', result='INFO', is_machine=False)}")
         return
     
     if args[0].lower() == "allocate" and len(args) > 1:

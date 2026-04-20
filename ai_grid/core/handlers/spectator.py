@@ -11,7 +11,7 @@ async def handle_spectator_view(node, nickname: str, args: list, reply_target: s
     """Shows current session activity ratio and status."""
     nick_lower = nickname.lower()
     if nick_lower not in node.channel_users:
-        await node.send(f"PRIVMSG {reply_target} :[ERR] absence in grid uplink.")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg('Absence in grid uplink detected.', action='ERR', result='FAIL')}")
         return
 
     data = node.channel_users[nick_lower]
@@ -34,7 +34,7 @@ async def handle_spectator_stats(node, nickname: str, args: list, reply_target: 
     target = args[0] if args else nickname
     stats = await node.db.get_spectator_stats(target, node.net_name, node.config)
     if not stats:
-        await node.send(f"PRIVMSG {reply_target} :[ERR] No record for '{target}'.")
+        await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'No record found for historical probe: {target}', action='OSINT', result='FAIL')}")
         return
     
     private_target, _, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
@@ -52,9 +52,9 @@ async def handle_spectator_help(node, nickname: str, reply_target: str):
     if machine_mode:
         await node.send(f"{reply_method} {private_target} :{tag_msg('SUB=SPECTATOR CMD=stats,view,drop,inventory', action='HELP', is_machine=True)}")
     else:
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('=== [SPECTATOR COMMANDS] ===', C_CYAN, True), action='OSINT')}")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('=== [SPECTATOR COMMANDS] ===', C_CYAN, True), action='OSINT', is_machine=False)}")
         for line in ["spectator view", "spectator stats", "spectator drop <nick>", "spectator inventory"]:
-            await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='OSINT')}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='OSINT', is_machine=False)}")
 
 async def handle_spectator_drop(node, nickname: str, args: list, reply_target: str):
     target = args[0] if args else None
