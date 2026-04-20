@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
-from models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord
+from sqlalchemy import func, update
+from models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord, RaidTarget
 from ..core import CONFIG
 from ..base_repo import BaseRepository
 
@@ -64,6 +65,25 @@ class DiscoveryRepository(BaseRepository):
                 
                 # 3. Rare data
                 char.credits += 25.0
+                
+                # --- TASK 038: Procedural Raid Target Discovery ---
+                if node.threat_level >= 1 and not node.active_target_id:
+                    if random.random() < 0.25:
+                        target_type = random.choice(["SMB", "EDU"])
+                        new_target = RaidTarget(
+                            node_id = node.id,
+                            name = f"[{target_type}]",
+                            target_type = target_type,
+                            difficulty = 12 + (node.threat_level * 2),
+                            credits_pool = 500.0 * node.upgrade_level,
+                            data_pool = 100.0 * node.upgrade_level
+                        )
+                        session.add(new_target)
+                        await session.flush()
+                        node.active_target_id = new_target.id
+                        await session.commit()
+                        return {"status": "success", "discovery": "raid_target", "target": new_target.name, "occupants": occupants, "msg": f"Discovered an insecure local subnet: {new_target.name}. Resources detected."}
+
                 await session.commit()
                 return {"status": "success", "discovery": "data", "occupants": occupants, "msg": f"Found a discarded encrypted data packet. Extracted 25.0c.{mob_msg}"}
             else:
@@ -148,6 +168,27 @@ class DiscoveryRepository(BaseRepository):
             else:
                 visibility_gate = "OPEN" if node.availability_mode == "OPEN" else "CLOSED [BREACH REQUIRED]"
             
+            # --- TASK 038: Deep Scan Raid Targets ---
+            target_info = None
+            if not node.active_target_id and random.random() < 0.40:
+                t_tier = "DC" if node.upgrade_level >= 4 else random.choice(["CORP", "MIL", "LEA", "ORG", "GOV"])
+                new_target = RaidTarget(
+                    node_id = node.id,
+                    name = f"[{t_tier}]",
+                    target_type = t_tier,
+                    difficulty = 15 + (node.upgrade_level * 3),
+                    credits_pool = 2000.0 * node.upgrade_level,
+                    data_pool = 500.0 * node.upgrade_level
+                )
+                session.add(new_target)
+                await session.flush()
+                node.active_target_id = new_target.id
+                target_info = {"name": new_target.name, "type": new_target.target_type, "difficulty": new_target.difficulty}
+            elif node.active_target_id:
+                target_stmt = select(RaidTarget).where(RaidTarget.id == node.active_target_id)
+                t = (await session.execute(target_stmt)).scalars().first()
+                if t: target_info = {"name": t.name, "type": t.target_type, "difficulty": t.difficulty}
+
             bridge = f"Bridge to {node.net_affinity}" if node.net_affinity else "No affinity detected."
             hack_dc = 10 + (node.upgrade_level * 3)
             char.alg_bonus = 5
@@ -159,5 +200,5 @@ class DiscoveryRepository(BaseRepository):
                 "success": True, "name": node.name, "level": node.upgrade_level, "durability": node.durability,
                 "threat": node.threat_level, "noise": node.noise, "addons": [k for k, v in addons.items() if v],
                 "occupants": occupants, "visibility": visibility_gate, "bridge": bridge, "hack_dc": hack_dc, "bonus_granted": 5,
-                "alert_data": alert_data
+                "alert_data": alert_data, "raid_target": target_info
             }

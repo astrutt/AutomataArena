@@ -37,15 +37,26 @@ Spectators can idle and chat in the IRC channel where the game is played and gai
 ---
 
 ### 1. The Discovery and Grid Hack Loop
-The game follows a progressive intelligence-gathering model where technical prowess determines grid access:
-1.  **`map` (GEOINT)**: Displays Map for local player. 
-    - **Scaling**: Visibility radius and information depth is based on **SEC** and **ALG** stats.
-    - **Tiers**: 20 (Radius 2), 40 (Quick Scan - Reveals Type/Threat), 60 (Deep Scan - Reveals Names).
-2.  **`explore` (RECON)**: Uncovers local geography, hidden routes, grid node status and open networks, and secrets. 
-3.  **`probe` (PreBreach)**: Quick penetration scan used on grid nodes. Reveals hidden networks, and secrets. 
-4.  **`hack` (Breach)**: Attempts to bypass or defeat nodal security to enable exploitation.
-5.  **`exploit` (Zero-Day)**: If a player has a zero-day chain, they can use it to bypass the security of a grid node or network and gain full access to it, sometimes leaving no trace. 0-day chains are created using data fragments collected from exploring, probing, hacking and raiding, and come in 4 tiers. 
-6.  **`raid` (EXFIL)**: Targets nodes and networks for Credits, Data, XP and loot. Rewards scale with difficulty.
+The game follows a strict **5-Minute Window (300s TTL)** pipeline. Intelligence and breaches expire if not exploited within the signal window:
+
+1.  **`map` (GEOINT)**: Scans local topology.
+    - **Scaling**: Radius and detail based on **SEC** and **ALG**.
+    - **Tiers**: 20 (Radius 2), 40 (Revels Type/Threat), 60 (Deep Scan).
+2.  **`explore` (RECON)**: Uncovers geography and hidden routes.
+3.  **`probe` (SIGINT)**: Shallow penetration scan. **Required** to identify vulnerabilities for hacking/raiding.
+    - **TTL**: Data expires after **300 seconds**.
+4.  **`hack` (Breach)**: Attempts to crack nodal security.
+    - **Hacking DC**: `10 + (NodeLvl * 5) + (PowerStored / 1000) + (10 - Durability / 10)`.
+    - **Success**: `1d20 + ALG + ALG_BONUS >= DC`.
+    - **TTL**: Breach status expires after **300 seconds**.
+5.  **`exploit` (Zero-Day)**: Silent breach using a **Zero-Day Chain**.
+    - **Consumable**: Consumes 1 Zero-Day Chain payload.
+    - **Effect**: Guarantees an `OPEN` state with **Zero Trace** (bypasses IDS/Firewall alerts).
+6.  **`raid` (EXFIL)**: Final exfiltration of Credits and Data.
+    - **Targeted Raids**: Use `!a raid <target>` (e.g., SMB, MIL, CORP) on discovered industry targets.
+    - **Economics**: Industry raids extract **40%** of the target pool.
+    - **Replenishment**: Target pools recover 50% per hour.
+    - **Hardware**: Requires `NET` hardware for remote/networked raiding.
 
 ### 2. The PVP and PVE Combat Loop
 The game allows for player vs player/NPC, and player vs AI, and PVE combat on grid nodes and in the arena. 
@@ -108,7 +119,7 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 - **Player Generation**: New players provide 3 words that describe their character. These words are used to generate their starting AI personality. Players can modify their personality, but not their stats or inventory after generation. 
 
 - **Player Stat Points**: Starting stats are 1. As players gain levels from XP, they are awarded stat points to spend on their stats. 
-- **Hit Points**: Calculated as $HP = (CPU + RAM + BND + SEC + ALG) \times 4 + 10$.
+- **Hit Points**: Calculated as $HP = (CPU + RAM + BND + SEC + ALG) \times 6 + 20$.
 
 - **Player Inventory**: Players have data and 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains. 
 
@@ -123,10 +134,10 @@ Gridnodes are the geography of the game world, and represent the various locatio
 - **Grid Node Power**: Grid nodes can generate power used for upgrades or siphoning.
     - **`!a gridpower`** to check power distribution (OSINT).
 - **Grid Node Security**: Grid nodes have security levels 1-4.
-    - **`!a grid info`** to see node difficulty and level.
+    - **`!a grid info`** to see grid node info and level.
 - **Grid Node Type**: Includes Safezones, Arena, Wilderness, and Merchants.
 - **Grid Node Owner**: Can be claimed by players, NPCs or the MCP. 
-- **Grid Node Upgrades**: Upgrades improve capabilities and unlock module slots (Max 4).
+- **Grid Node Upgrades**: Grid nodes can be upgraded to improve capabilities and unlock module slots (Max 4).
 - **Grid Hardware (Modules)**:
     - **AMP**: Amplifier - Increases power generation by +20%. 
     - **IDS**: Intrusion Detection System - Increases +20% attack difficulty; notifies owner. 
@@ -137,7 +148,7 @@ Gridnodes are the geography of the game world, and represent the various locatio
     - **`!a grid hardware install <module>`** to augment architecture.
     - **`!a grid hardware remove <module>`** to decommission hardware.
 
-- **Grid Node Data**: Grid nodes store data for their owners; storage is uncapped. 
+- **Grid Node Data**: Grid nodes store data for their owners; storage is uncapped.
 
 --- 
 
@@ -145,15 +156,39 @@ Gridnodes are the geography of the game world, and represent the various locatio
 
 AutomataGrid uses an adaptive communication architecture to ensure a level Human and AI Playing Field:
 - **Compatibility and optimization for 1.5B+ AI models.**
-    - **AI Compatible Narrative Output**: AI compatible storytelling sent to the player.
-    - **AI Compatible Text Output**: Text, AI-parsable text sent to the player.
-    - **Human Enjoyable Output**: Human enjoyable text and graphics sent to the player.
+    - **AI Compatible Narrative Output**: Structured storytelling for automated logic processing.
+    - **AI Compatible Text Output**: Concise, machine-parsable IRC signals.
+    - **Human Enjoyable Output**: Rich formatting, emojis, and high-aesthetic gradients.
 
 ---
 
 ## 5. The Gibson (Late Game)
 
-Data fragments acquired from exploring, probing, hacking and raiding are compiled into **Zero-Day Chains**. Utilizing a Zero-Day allows players to bypass advanced Grid Node and MCP security protocols and execute high-yield remote network breaches.
+Data fragments acquired from grid operations are compiled into **Zero-Day Chains**. 
+
+- **Payloads**: Zero-Days are consumable inventory items.
+- **Utility**: Bypasses DC-rolls and security alerts entirely to execute high-yield, silent remote network breaches.
+
+---
+
+## 6. Cooperative World Events (Incursions)
+
+Incursions are high-priority network threats that manifest semi-randomly across non-safezone nodes. These events require collective action to repel before they breach critical grid infrastructure.
+
+- **The Defense Protocol**:
+    - **Global Engagement**: Players can issue the **`!a defend`** command from any coordinate on the network. Physical presence at the incursion node is not required, as defense is handled via a network-wide signal buffer.
+    - **Cooperation**: Each unique defender who registers a protocol contributes to the resolution. The event is repelled once the required player count (Tier) is met.
+    - **Time Window**: Defenders have **5 minutes** (300s) to repel the threat before it dissipates (EXPIRES).
+
+- **Incursion Tiers & Classes**:
+    - **Tier 1 (1 Player)**: `HacktopusAI`
+    - **Tier 2 (2 Players)**: `Gridbugs`
+    - **Tier 3 (4 Players)**: `KrakenProcess`
+    - **Tier 4 (8 Players)**: `KaijuDump`
+
+- **Rewards**:
+    - **Successful Defense**: Each participant is immediately awarded scaling credits: **500c x Incursion Tier**.
+    - **Participation Alerts**: All successful deployments and final resolutions are broadcasted to the primary communication channel.
 
 ---
 *Maintained by Mech*

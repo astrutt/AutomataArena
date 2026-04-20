@@ -262,12 +262,73 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
                 if target_nick and target_nick.lower() in node.channel_users:
                     await node.send(f"PRIVMSG {target_nick} :[ALERT] {alert_data['message']}")
 
-async def handle_grid_loot(node, nick: str, reply_target: str):
+async def handle_node_exploit(node, nick: str, reply_target: str, args: list):
+    """Handle the multi-level exploit command: grid, network, raid."""
+    if not await check_rate_limit(node, nick, reply_target, cooldown=45): return
+    
+    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
+    
+    # Defaults
+    is_network = False
+    is_raid = False
+    target_name = None
+    
+    if args:
+        sub = args[0].lower()
+        if sub == "network":
+            is_network = True
+            if len(args) > 1: target_name = args[1]
+        elif sub == "raid":
+            is_raid = True
+            if len(args) > 1:
+                # Handle possible 'network' sub-nesting: grid raid network exploit <target>
+                if args[1].lower() == "network" and len(args) > 3:
+                     # This matches the user's specific syntax: grid raid network exploit <target>
+                     # In this router, we'd have args=['raid', 'network', 'exploit', '<target>']
+                     target_name = args[3]
+                else: target_name = args[1]
+        elif sub == "exploit": # Handle !a grid exploit directly
+             pass
+    
+    success, msg, alert = await node.db.infiltration.exploit_node(nick, node.net_name, target=target_name, is_network=is_network, is_raid=is_raid)
+    
+    color = C_GREEN if success else C_RED
+    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, color), is_machine=machine_mode, nick=nick, action='SIGACT', result='EXPLOIT' if success else 'FAIL')}")
+    
+    if success:
+        await node.add_xp(nick, 25, reply_target)
+        # Note: exploit is silent, so no public SIGACT broadcast by default as per 'silent' logic
+        # But we could send a very subtle one? Or nothing. Draft says 'no trace'.
+        if machine_mode:
+             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} executed a zero-day payload.', C_CYAN), is_machine=machine_mode, nick=nick, action='SIGACT')}")
+
+async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None):
     if not await check_rate_limit(node, nick, reply_target, cooldown=60): return
     
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     
-    result = await node.db.raid_node(nick, node.net_name)
+    # Handle sub-actions: !a raid hack <target> or !a raid exploit <target>
+    sub_action = None
+    target_name = None
+    
+    if args:
+        if args[0].lower() in ["hack", "exploit"]:
+            sub_action = args[0].lower()
+            if len(args) > 1: target_name = args[1]
+        elif len(args) == 1:
+            target_name = args[0]
+            
+    if sub_action == "exploit":
+        return await handle_node_exploit(node, nick, reply_target, ["raid"] + args[1:])
+    
+    if sub_action == "hack":
+        # Temporary logic for raid hacking
+        success, msg, alert = await node.db.infiltration.hack_node(nick, node.net_name) # simplified
+        color = C_GREEN if success else C_RED
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'[RAID_HACK] {msg}', color), is_machine=machine_mode, nick=nick, action='SIGACT')}")
+        return
+
+    result = await node.db.raid_node(nick, node.net_name, target_name=target_name)
     
     if not result['success'] and result['msg'] == "System offline.":
         await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")

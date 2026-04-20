@@ -37,9 +37,11 @@ class GridNode(Base):
     firewall_hits = Column(Integer, default=0)
     ids_alerts = Column(Integer, default=0)
     max_slots = Column(Integer, default=4)
+    active_target_id = Column(Integer, ForeignKey('raid_targets.id'), nullable=True)
     
     # Relationships
     owner = relationship("Character", foreign_keys=[owner_character_id], post_update=True)
+    active_target = relationship("RaidTarget", foreign_keys=[active_target_id])
     characters_present = relationship("Character", foreign_keys="[Character.node_id]", back_populates="current_node")
     # Connections as source
     exits = relationship("NodeConnection", foreign_keys="[NodeConnection.source_node_id]", back_populates="source_node")
@@ -182,6 +184,22 @@ class IncursionDefender(Base):
     incursion = relationship("IncursionEvent", back_populates="defenders")
     character = relationship("Character")
 
+class RaidTarget(Base):
+    __tablename__ = 'raid_targets'
+    
+    id = Column(Integer, primary_key=True)
+    node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
+    name = Column(String, nullable=False) # e.g. [SMB], [MIL]
+    target_type = Column(String, nullable=False) # SMB, EDU, GOV, MIL, CORP, ORG, LEA, DC
+    difficulty = Column(Integer, default=10)
+    credits_pool = Column(Float, default=0.0)
+    data_pool = Column(Float, default=0.0)
+    is_active = Column(Boolean, default=True)
+    last_raided_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    node = relationship("GridNode", foreign_keys=[node_id])
+
 class DiscoveryRecord(Base):
     __tablename__ = 'discovery_records'
     
@@ -200,6 +218,7 @@ class BreachRecord(Base):
     id = Column(Integer, primary_key=True)
     character_id = Column(Integer, ForeignKey('characters.id'), index=True)
     node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
+    is_silent = Column(Boolean, default=False) # True if via 'exploit'
     breached_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     character = relationship("Character", foreign_keys=[character_id])

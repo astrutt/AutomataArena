@@ -83,6 +83,7 @@ class ArenaDB:
             async def explore_node(self, *a, **k): return await self.db.discovery.explore_node(*a, **k)
             async def probe_node(self, *a, **k): return await self.db.discovery.probe_node(*a, **k)
             async def hack_node(self, *a, **k): return await self.db.infiltration.hack_node(*a, **k)
+            async def exploit_node(self, *a, **k): return await self.db.infiltration.exploit_node(*a, **k)
             async def siphon_node(self, *a, **k): return await self.db.infiltration.siphon_node(*a, **k)
             async def raid_node(self, *a, **k): return await self.db.infiltration.raid_node(*a, **k)
             async def tick_grid_power(self, *a, **k): return await self.db.maintenance.tick_grid_power(*a, **k)
@@ -131,6 +132,7 @@ class ArenaDB:
     async def bolster_node(self, *a, **k): return await self.territory.bolster_node(*a, **k)
     async def link_network(self, *a, **k): return await self.territory.link_network(*a, **k)
     async def explore_node(self, *a, **k): return await self.discovery.explore_node(*a, **k)
+    async def exploit_node(self, *a, **k): return await self.infiltration.exploit_node(*a, **k)
     async def probe_node(self, *a, **k): return await self.discovery.probe_node(*a, **k)
 
     async def close(self):

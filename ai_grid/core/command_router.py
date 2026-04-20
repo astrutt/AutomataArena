@@ -32,10 +32,12 @@ class CommandRouter:
                     asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target))
                 elif args and args[0].lower() == "claimed":
                     asyncio.create_task(handlers.handle_grid_claimed(self.node, source_nick, args, reply_target))
-                elif args and args[0].lower() in ["probe", "install", "bolster", "link", "siphon", "hardware", "hw", "hack"]:
+                elif args and args[0].lower() in ["probe", "install", "bolster", "link", "siphon", "hardware", "hw", "hack", "exploit"]:
                     # !a grid <action> <args>
                     if args[0].lower() in ["hardware", "hw"]:
                         asyncio.create_task(handlers.handle_grid_hardware(self.node, source_nick, reply_target, args[1].lower() if len(args) > 1 else None, args[2:]))
+                    elif args[0].lower() == "exploit":
+                        asyncio.create_task(handlers.handle_node_exploit(self.node, source_nick, reply_target, args[1:]))
                     else:
                         asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, args[0].lower(), args[1:]))
                 else:
@@ -66,7 +68,7 @@ class CommandRouter:
             # 4. Grid Interaction (Claim, Upgrade, etc.)
             elif verb in ["claim", "upgrade", "repair", "recharge", "raid", "breach", "hack", "probe", "siphon", "install", "bolster", "link", "net"]:
                 if verb in ["raid", "breach"]:
-                    asyncio.create_task(handlers.handle_grid_loot(self.node, source_nick, reply_target))
+                    asyncio.create_task(handlers.handle_grid_loot(self.node, source_nick, reply_target, args))
                 elif verb == "siphon" and args and args[0].lower() == "grid":
                     # Backward compatibility for !a siphon grid
                     asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, "siphon", args[1:]))
@@ -94,8 +96,11 @@ class CommandRouter:
                 asyncio.create_task(handlers.handle_gibson_compile(self.node, source_nick, args, reply_target))
             elif verb == "assemble":
                 asyncio.create_task(handlers.handle_gibson_assemble(self.node, source_nick, reply_target))
-            elif verb == "use":
-                asyncio.create_task(handlers.handle_item_use(self.node, source_nick, args, reply_target))
+            elif verb == "exploit" and (not args or args[0].lower() != "grid"):
+                # Handle !a exploit <nick> (Combat)
+                if args: asyncio.create_task(handlers.handle_pvp_command(self.node, source_nick, reply_target, "exploit", args[0]))
+                else: await self.node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {prefix} exploit <nick> OR {prefix} grid exploit")
+
 
             # --- PHASE 5: GLOBAL ECONOMY & MINI-GAMES ---
             elif verb == "auction":
@@ -134,7 +139,7 @@ class CommandRouter:
                 asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target))
 
             # 5. Combat & Mob Encounters
-            elif verb in ["attack", "hack", "rob"] and len(args) > 0 and args[0].lower() != "grid":
+            elif verb in ["attack", "hack", "rob", "exploit"] and len(args) > 0 and args[0].lower() != "grid":
                 asyncio.create_task(handlers.handle_pvp_command(self.node, source_nick, reply_target, verb, args[0]))
             elif verb == "engage":
                 if source_nick in self.node.pending_encounters:

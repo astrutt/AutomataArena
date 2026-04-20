@@ -88,6 +88,8 @@ LOOT_TEMPLATES = [
     {"name": "FIREWALL",        "item_type": "node_addon", "base_value": 750, "effects_json": "{\"type\": \"FIREWALL\"}"},
     {"name": "IDS",             "item_type": "node_addon", "base_value": 400, "effects_json": "{\"type\": \"IDS\"}"},
     {"name": "NET",             "item_type": "node_addon", "base_value": 1000, "effects_json": "{\"type\": \"NET\"}"},
+    {"name": "Vulnerability",    "item_type": "hack", "base_value": 500, "is_darknet": False, "effects_json": "{\"alg_boost\": 5}"},
+    {"name": "ZeroDay_Chain",    "item_type": "hack", "base_value": 2500, "is_darknet": True, "effects_json": "{\"alg_boost\": 15}"},
 ]
 
 DEFAULT_PREFS = {

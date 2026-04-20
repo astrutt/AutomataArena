@@ -51,9 +51,9 @@ class Entity:
         except:
             self.inventory = []
             
-        # v1.8.0: HP = (SumStats * 4) + 10
+        # v1.8.1: HP = (SumStats * 6) + 20 (Calibrated for 6-10 STK)
         total_stats = self.cpu + self.ram + self.bnd + self.sec + self.alg
-        self.max_hp = (total_stats * 4) + 10
+        self.max_hp = (total_stats * 6) + 20
         self.hp = self.max_hp
         
         # v1.8.0: Unit Power (uP) and Stability

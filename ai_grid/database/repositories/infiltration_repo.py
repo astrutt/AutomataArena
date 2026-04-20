@@ -34,8 +34,12 @@ class InfiltrationRepository(BaseRepository):
                     BreachRecord.node_id == node.id,
                     BreachRecord.breached_at > expiry_limit
                 )
-                if not (await session.execute(breach_stmt)).scalars().first():
+                existing_breach = (await session.execute(breach_stmt)).scalars().first()
+                if not existing_breach:
                     return False, "ACCESS DENIED: Active BREACH required (< 5m old)."
+                
+                # Silent Siphon: If breach was an exploit, don't alert
+                is_silent = existing_breach.is_silent if existing_breach else False
             
             if not node.owner_character_id: return False, "Node is Unclaimed."
             
@@ -59,7 +63,9 @@ class InfiltrationRepository(BaseRepository):
             alert_data = None
             if not is_owner:
                 from core.security_utils import is_action_hostile
-                if is_action_hostile('siphon', node.availability_mode):
+                # Check for Silent flag
+                is_hostile = is_action_hostile('siphon', node.availability_mode)
+                if is_hostile and not is_silent:
                     if addons.get("IDS") or node.upgrade_level > 2:
                         node.ids_alerts += 1
                         alert_msg = f"[GRID][ALARM] Target: {node.name} | Unauthorized Siphon by: {char.name} | Amount: {yield_amount:.1f} uP"
@@ -136,42 +142,100 @@ class InfiltrationRepository(BaseRepository):
                     await session.commit()
                     return False, f"Failed (Rolled {roll} vs DC {difficulty}).", alert_data
 
-            if is_owner: return False, "Grid already OPEN.", None
-            
-            if node.power_stored >= (node.upgrade_level * 100) * 0.9:
-                return False, "PVE_GUARDIAN_SPAWN", None
-            
-            # Seizure Logic
-            from core.security_utils import get_security_dc_multiplier
-            base_dc = 10 + (node.upgrade_level * 2)
-            difficulty = int(base_dc * get_security_dc_multiplier(addons)) if not is_owner else base_dc
-            roll = random.randint(1, 20) + char.alg + char.alg_bonus
-            char.alg_bonus = 0
-            
-            if roll >= difficulty:
-                node.owner_character_id = char.id
-                reward_msg = await increment_daily_task(session, char, "Claim a Node")
-                await session.commit()
-                return True, f"Command Seized! (Rolled {roll}). {reward_msg if reward_msg else ''}", alert_data
             else:
                 char.credits = max(0.0, char.credits - 50.0)
                 await session.commit()
                 return False, f"Seizure Failed (Rolled {roll}). Fined 50c.", alert_data
 
-    async def raid_node(self, name: str, network: str) -> dict:
+    async def exploit_node(self, name: str, network: str, target: str = None, is_network: bool = False, is_raid: bool = False) -> tuple[bool, str, dict | None]:
+        """Perform a Silent Breach using a Zero-Day Chain."""
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name, NetworkAlias.nickname == name, NetworkAlias.network_name == network
-            ).options(selectinload(Character.current_node), selectinload(Character.inventory))
+            ).options(
+                selectinload(Character.current_node),
+                selectinload(Character.inventory).selectinload(InventoryItem.template)
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char or not char.current_node: return False, "System offline.", None
+            node = char.current_node
+            
+            # 1. Consumable Check: ZeroDay_Chain
+            chain_item = next((i for i in char.inventory if i.template.name == "ZeroDay_Chain"), None)
+            if not chain_item:
+                return False, "EXPLOIT FAILED: Zero-Day Chain payload missing from local inventory.", None
+            
+            # 2. Sequence Check: Requires PROBE (v1.8.0)
+            expiry_limit = datetime.now(timezone.utc) - timedelta(seconds=300)
+            disc_stmt = select(DiscoveryRecord).where(
+                DiscoveryRecord.character_id == char.id, 
+                DiscoveryRecord.node_id == node.id,
+                DiscoveryRecord.intel_level == 'PROBE',
+                DiscoveryRecord.discovered_at > expiry_limit
+            )
+            if not (await session.execute(disc_stmt)).scalars().first():
+                return False, "ACCESS DENIED: Deep PROBE required to identify zero-day injection vectors.", None
+
+            # 3. Consumption
+            if chain_item.quantity > 1:
+                chain_item.quantity -= 1
+            else:
+                await session.delete(chain_item)
+            
+            # 4. Silent Breach Logic
+            node.availability_mode = 'OPEN'
+            breach_stmt = select(BreachRecord).where(BreachRecord.character_id == char.id, BreachRecord.node_id == node.id)
+            existing_breach = (await session.execute(breach_stmt)).scalars().first()
+            if existing_breach:
+                existing_breach.breached_at = datetime.now(timezone.utc)
+                existing_breach.is_silent = True
+            else:
+                session.add(BreachRecord(character_id=char.id, node_id=node.id, is_silent=True))
+            
+            # 5. Raid Target Specific Logic
+            msg = "Silent Breach Successful. Grid access established with zero trace."
+            if is_raid and node.active_target_id:
+                msg = f"Silent Breach Successful. Secondary target subnets mapped. Zero-Day injected into RAID target."
+            
+            await session.commit()
+            return True, msg, None
+
+    async def raid_node(self, name: str, network: str, target_name: str = None) -> dict:
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name, NetworkAlias.nickname == name, NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.current_node).selectinload(GridNode.active_target),
+                selectinload(Character.inventory)
+            )
             char = (await session.execute(stmt)).scalars().first()
             if not char or not char.current_node: return {"success": False, "msg": "System offline."}
             node = char.current_node
             
+            # --- TASK 038: Targeted Raid Logic ---
+            raid_target = None
+            if target_name:
+                # Support nested search or directly the active target
+                if node.active_target and (target_name.upper() in node.active_target.name.upper() or target_name.upper() == node.active_target.target_type):
+                    raid_target = node.active_target
+                else:
+                    return {"success": False, "msg": f"Target '{target_name}' not discovered in local sector."}
+
             addons = json.loads(node.addons_json or "{}")
             is_owner = node.owner_character_id == char.id
             alert_data = None
             
-            if not is_owner:
+            # Check for Silent Breach (Exploit)
+            expiry_limit = datetime.now(timezone.utc) - timedelta(seconds=300)
+            breach_stmt = select(BreachRecord).where(
+                BreachRecord.character_id == char.id,
+                BreachRecord.node_id == node.id,
+                BreachRecord.breached_at > expiry_limit
+            )
+            existing_breach = (await session.execute(breach_stmt)).scalars().first()
+            is_silent = existing_breach.is_silent if existing_breach else False
+
+            if not is_owner and not is_silent:
                 from core.security_utils import is_action_hostile
                 if is_action_hostile('raid', node.availability_mode):
                     if addons.get("IDS") or node.upgrade_level > 2:
@@ -180,17 +244,12 @@ class InfiltrationRepository(BaseRepository):
                         session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
                         alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
 
-            if node.availability_mode == 'CLOSED':
-                return {"success": False, "msg": "Cannot raid CLOSED network. System protocols must be 'hacked' first.", "alert_data": alert_data}
+            if node.availability_mode == 'CLOSED' and not is_silent:
+                return {"success": False, "msg": "Cannot raid CLOSED network. System protocols must be 'hacked' or 'exploited' first.", "alert_data": alert_data}
             
-            # --- SEQUENCE CHECK: Require PROBE and HACK (5m TTL) ---
-            # v1.8.0 Adjustment: OPEN nodes bypass the discovery sequence requirements.
-            is_open = node.availability_mode == 'OPEN'
-            
-            if not is_open:
-                expiry_limit = datetime.now(timezone.utc) - timedelta(seconds=300)
-                
-                # Check Probe
+            # --- SEQUENCE CHECK: Require PROBE and HACK/EXPLOIT ---
+            if not is_silent and node.availability_mode != 'OPEN':
+                # Re-check records as per existing logic
                 disc_stmt = select(DiscoveryRecord).where(
                     DiscoveryRecord.character_id == char.id, 
                     DiscoveryRecord.node_id == node.id,
@@ -200,16 +259,40 @@ class InfiltrationRepository(BaseRepository):
                 if not (await session.execute(disc_stmt)).scalars().first():
                     return {"success": False, "msg": "ACCESS DENIED: Valid PROBE required (< 5m old) to map facility layout."}
 
-                # Check Hack (Breach)
-                breach_stmt = select(BreachRecord).where(
-                    BreachRecord.character_id == char.id,
-                    BreachRecord.node_id == node.id,
-                    BreachRecord.breached_at > expiry_limit
-                )
-                if not (await session.execute(breach_stmt)).scalars().first():
-                    return {"success": False, "msg": "ACCESS DENIED: Active BREACH required (< 5m old) to bypass locks."}
+                if not existing_breach:
+                    return {"success": False, "msg": "ACCESS DENIED: Active BREACH/EXPLOIT required (< 5m old) to bypass locks."}
 
             if is_owner: return {"success": False, "msg": "Self-Raid Blocked."}
+            
+            # Industry Targets (Task 038)
+            if raid_target:
+                # Replenish logic
+                now = datetime.now(timezone.utc)
+                if raid_target.last_raided_at and (now - raid_target.last_raided_at) > timedelta(hours=1):
+                    # Recover 50% per hour
+                    raid_target.credits_pool += 1000.0 * node.upgrade_level
+                    raid_target.data_pool += 250.0 * node.upgrade_level
+                    raid_target.last_raided_at = now
+                
+                if raid_target.credits_pool <= 0:
+                    return {"success": False, "msg": f"RAID FAILED: {raid_target.name} defenses have fortified. Resources depleted."}
+                
+                c_gain = raid_target.credits_pool * 0.4 # Extract 40%
+                d_gain = raid_target.data_pool * 0.4
+                raid_target.credits_pool -= c_gain
+                raid_target.data_pool -= d_gain
+                raid_target.last_raided_at = now
+                
+                char.credits += c_gain
+                char.data_units += d_gain
+                await session.commit()
+                return {
+                    "success": True, "msg": f"Industry Raid Successful on {raid_target.name}! Extracted {c_gain:.1f}c and {d_gain:.1f} data units.",
+                    "sigact": f"[SIGACT] RAID ALERT: Industry Target {raid_target.name} at {node.name} was raided by {char.name}!",
+                    "alert": None if is_silent else alert_data
+                }
+
+            # Standard Node Raid
             if not addons.get("NET"): return {"success": False, "msg": "NET_BRIDGE hardware required."}
 
             if random.random() < 0.20:

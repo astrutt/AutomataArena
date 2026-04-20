@@ -57,9 +57,9 @@ class ProgressionRepository(BaseRepository):
             elif stat_name == "alg": char.alg += 1
             else: return False
             
-            # v1.8.0: HP = (CPU + RAM + BND + SEC + ALG) * 4 + 10
+            # v1.8.1: HP = (TotalStats * 6) + 20
             total_stats = char.cpu + char.ram + char.bnd + char.sec + char.alg
-            char.current_hp = (total_stats * 4) + 10
+            char.current_hp = (total_stats * 6) + 20
             
             char.pending_stat_points -= 1
             await session.commit()

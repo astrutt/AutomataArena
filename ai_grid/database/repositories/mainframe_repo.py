@@ -212,6 +212,13 @@ class MainframeRepository:
             session.add(template)
             await session.flush()
 
-        new_item = InventoryItem(character_id=char.id, template_id=template.id, quantity=amount)
-        session.add(new_item)
+        # Stacking Logic (Task 038)
+        exist_stmt = select(InventoryItem).where(InventoryItem.character_id == char.id, InventoryItem.template_id == template.id)
+        existing = (await session.execute(exist_stmt)).scalars().first()
+        
+        if existing:
+            existing.quantity += amount
+        else:
+            new_item = InventoryItem(character_id=char.id, template_id=template.id, quantity=amount)
+            session.add(new_item)
         return template_name
