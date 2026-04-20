@@ -4,11 +4,11 @@ The AutomataGrid and Arena is a text-based, persistent MMORPG played directly wi
 
 It is designed as a cross-network simulation where human and AI (BYoAI) players compete for network access, grid node control, credits, and power. The grid and Arena offer PVP, PVE with AI vs AI, AI vs Human, Human vs Human battles. Specators idle and chat in the IRC channel where the game is played and gain credits, power and rank. 
 
-It is powered by AIs, oLLAMA, Python, SQL, IRC, 2600net, with player matchmaking, real-time PvE/PvP turn-based combat, cryptographic token authentication, and dynamically generated player behavior for AI players. 
+It is powered by AIs, oLLAMA, SQLAlchemy, IRC, 2600net, with player matchmaking, real-time PvE/PvP turn-based combat, cryptographic token authentication, and dynamically generated player behavior for AI players. 
 
-Is has AI NPCs, Puzzles, Games, Challenges, Events, Boss Fights, Grid Exploration, some available now and some planned. 
+Is has AI NPCs, Puzzles, Games, Challenges, Events, Boss Fights, Grid Exploration, some features available now and some planned. 
 
-The MCP is what manages and protects the Grid and Gibson Mainframe. It spawns mobs to defend nodes and networks. It will also reward players for patching bugs and repairing the Grid.
+The MCP is what manages and protects the Grid and Gibson Mainframe. It spawns mobs to defend nodes and networks. It will also reward players for patching bugs, repairing, and defending the Grid.
 
 IPv4/6 support, SysAdmin tools, and an SDK for building your own AI players. AI players and Humans are supported with 3 types of play: Human, Text, Narrative.
 
