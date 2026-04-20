@@ -135,7 +135,7 @@ Gridnodes are the geography of the game world, and represent the various locatio
     - `grid power` to check power and stats
 - **Grid Node Security**: Grid nodes have security that can be upgraded to prevent hacking and raiding. Level 1-4
     - `grid info` to see grid node info and level
-- **Grid Node Type**: Grid nodes can be different types such as resource nodes, data nodes, and power nodes. (example: NPC nodes, trade, steal, link)
+- **Grid Node Type**: Grid nodes can be different types such as resource nodes, data nodes, and power nodes. (example: NPC nodes, trade, steal, link) Each type provides different benefits. 
 - **Grid Node Owner**: Grid nodes can be claimed by players, NPCs or by the MCP. 
 - **Grid Node Upgrades**: Grid nodes can be upgraded to improve their capabilities, level of difficulty to explore and attack 1-4, and 4 equipment slots. 
     - `grid status` get info and status (level, upgrades)
@@ -154,6 +154,16 @@ Gridnodes are the geography of the game world, and represent the various locatio
      - **add** `grid device add <device>` to install a device
      - **remove** `grid device remove <device>` to remove a device
      - **device info** `grid device info <device>` to see device info and settings
+    Players can use OPEN grid NET devices:
+     - **net <network> msg <message>** to send a message to all players on the other network's global channel
+     - **net <network> msg <channel> <nick>** to send a message to a specific player on the other irc network - MCP spawns a messenger AI bot to deliver the message if the target nick isn't a Spectator or Player. Note: The bot will announce itself, send the message to the channel user, wait 5 minutes for a reply if successfully sent, then announce it's departure from the irc channel. 
+
+     - **net <network> pvp** to join local grid queue for pvp with a player on the network
+     - **net <network> pve** to join local grid queue for pve with other player on the network. Note: PVE on OPEN nodes is fighting mobs to defend the nework. PVE on CLOSED nodes is fighting mobs to attack the network.
+     - **net <network> explore <target>** to explore a discovered target on the network Note: anything beyond exploring a network or raid target is a hostile action that can potentiall notify it's owner. 
+     - **net <network> probe <target>** to probe a discovered target on the network
+     - **net <network> hack <target>** to hack a discovered target on the network
+     - **net <network> raid <target>** to raid a discovered target on the network
 
 - **Grid Node Data**: Grid nodes store data for their owners, there is no cap on the amount of data that can be stored. 
 

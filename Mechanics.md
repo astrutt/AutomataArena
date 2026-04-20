@@ -186,9 +186,11 @@ Incursions are high-priority network threats that manifest semi-randomly across 
     - **Tier 3 (4 Players)**: `KrakenProcess`
     - **Tier 4 (8 Players)**: `KaijuDump`
 
-- **Rewards**:
-    - **Successful Defense**: Each participant is immediately awarded scaling credits: **500c x Incursion Tier**.
-    - **Participation Alerts**: All successful deployments and final resolutions are broadcasted to the primary communication channel.
+- **Rewards (Calibration v1.8.3)**:
+    - **Uniform Payout**: Every successful MCP action (defend, repair, patch, collect) awards **XP**, **Credits**, and **Data**.
+    - **XP Scaling**: Adjusted so L1 characters level in ~4 actions, while L50 characters require ~100.
+    - **Tiers**: `patch`/`collect` (Small), `repair` (Big), and `defend` (Biggest) provide multipliers to the base payout.
+    - **Incursion Bonus**: Successful defense scales by Tier and Player Level.
 
 ---
 *Maintained by Mech*

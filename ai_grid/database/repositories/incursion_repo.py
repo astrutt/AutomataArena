@@ -95,16 +95,23 @@ class IncursionRepository(BaseRepository):
                 inc.status = 'RESOLVED'
                 victors = []
                 
-                # Pay out rewards
+                # Pay out rewards using v1.8.3 calibrated scaling
                 for d in inc.defenders:
-                    # Refresh char reference? Better to query them
                     stmt_d_char = select(Character).where(Character.id == d.character_id)
                     d_char = (await session.execute(stmt_d_char)).scalars().first()
                     if d_char:
-                        d_char.credits += inc.reward_val
+                        pkg = self.calculate_mcp_rewards(d_char.level, 'defend')
+                        # Scale by Tier
+                        pkg['credits'] *= inc.tier
+                        pkg['data'] *= inc.tier
+                        pkg['xp'] *= inc.tier
+                        
+                        d_char.credits += pkg['credits']
+                        d_char.data_units += pkg['data']
+                        await self.add_xp_to_char(d_char, pkg['xp'], session)
                         victors.append(d_char.name)
                         
-                msg = f"SUCCESS: The {inc.incursion_type} has been repelled! Vaulted {inc.reward_val:.1f}c."
+                msg = f"SUCCESS: The {inc.incursion_type} has been repelled! Rewards distributed to all defenders."
                 await session.commit()
                 return True, msg, victors
             else:

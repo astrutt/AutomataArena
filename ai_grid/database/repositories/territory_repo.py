@@ -155,24 +155,21 @@ class TerritoryRepository(BaseRepository):
             # Logic Choice: If user has 100c but low power, use credits. If they use it via 'grid repair', it's credit-based in the handler usually.
             # But the facade must handle both if needed. I'll maintain the two versions.
             
-            # Manual Power-based repair (Standardized)
-            cost_uP = 25.0
-            if char.power >= cost_uP:
-                char.power -= cost_uP
-                bonus = 20.0 if is_owner else 10.0
-                node.durability = min(100.0, node.durability + bonus)
-                await session.commit()
-                return True, f"Nodal integrity augmented (+{bonus}%). {'[OWNERSHIP BONUS APPLIED]' if is_owner else ''}"
-
-            # Fallback to credit-based repair if power is low
-            if char.credits >= 100.0 and node.owner_character_id:
-                char.credits -= 100.0
-                node.durability = 100.0
-                reward_msg = await increment_daily_task(session, char, "Repair a Node")
-                await session.commit()
-                return True, f"Grid repaired to 100% durability via credit injection. {reward_msg if reward_msg else ''}"
-
-            return False, "Insufficient resources (Power or Credits) for architectural resonance."
+            # v1.8.3 calibrated reward logic (Big Tier)
+            pkg = self.calculate_mcp_rewards(char.level, 'repair')
+            char.credits += pkg['credits']
+            char.data_units += pkg['data']
+            await self.add_xp_to_char(char, pkg['xp'], session)
+            
+            # Apply repair logic
+            char.power = max(0.0, char.power - 25.0) # Unified uP cost
+            bonus = 20.0 if is_owner else 10.0
+            node.durability = min(100.0, node.durability + bonus)
+            
+            reward_msg = await increment_daily_task(session, char, "Repair a Node")
+            await session.commit()
+            
+            return True, f"Nodal integrity augmented (+{bonus}%). Rewards: {pkg['credits']}c | {pkg['data']} Data | {pkg['xp']} XP. {reward_msg if reward_msg else ''}"
 
     async def grid_recharge(self, name: str, network: str, node_name: str = None) -> tuple[bool, str]:
         async with self.async_session() as session:

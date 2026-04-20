@@ -90,14 +90,14 @@ class PulseRepository(BaseRepository):
             if action == 'patch' and pulse.event_type != 'GLITCH':
                 return False, f"Invalid Action: Targeting a {pulse.event_type} with 'patch' protocols."
             
-            # Success logic
-            msg = ""
-            if pulse.event_type == 'PACKET':
-                char.credits += pulse.reward_val
-                msg = f"SUCCESS: Intercepted data packet! Vaulted {pulse.reward_val:.1f}c."
-            else: # GLITCH
-                char.data_units += 10.0 # Small bonus for patching
-                msg = f"SUCCESS: Nodal glitch patched. Signal integrity restabilized. (+10.0 Data)"
+            # Success logic using v1.8.3 calibrated scaling
+            pkg = self.calculate_mcp_rewards(char.level, action)
+            char.credits += pkg['credits']
+            char.data_units += pkg['data']
+            await self.add_xp_to_char(char, pkg['xp'], session)
+            
+            p_type = "Data packet intercepted" if pulse.event_type == 'PACKET' else "Nodal glitch patched"
+            msg = f"SUCCESS: {p_type}. Rewards: {pkg['credits']}c | {pkg['data']} Data | {pkg['xp']} XP."
             
             pulse.status = 'RESOLVED'
             await session.commit()

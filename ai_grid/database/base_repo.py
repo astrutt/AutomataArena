@@ -3,6 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.future import select
 from models import Character, Player, NetworkAlias, GridNode
 from sqlalchemy.orm import selectinload
+from .core import CONFIG, logger
 
 class BaseRepository:
     def __init__(self, async_session):
@@ -70,3 +71,61 @@ class BaseRepository:
             return False, f"[GRID][SITREP] Physical presence required at {target_node.name} for {command_label.upper()} protocols."
             
         return True, ""
+
+    def calculate_mcp_rewards(self, level: int, action_type: str) -> dict:
+        """
+        Calculates a balanced reward package (XP, Credits, Data) for MCP actions.
+        Scaling: 4 Big tasks to level at L1, 100 Big tasks to level at L50.
+        """
+        rewards = CONFIG.get('mechanics', {}).get('mcp_rewards', {})
+        if not rewards:
+            return {"xp": 10, "credits": 50, "data": 5} # Fallback
+            
+        div_low = rewards.get('xp_divisor_low', 4.0)
+        div_high = rewards.get('xp_divisor_high', 100.0)
+        max_lvl = rewards.get('max_level_ref', 50)
+        
+        # 1. Calculate XP Divisor using linear interpolation
+        # Divisor moves from 4.0 (L1) to 100.0 (L50)
+        progress = min(1.0, max(0.0, (level - 1) / (max_lvl - 1)))
+        divisor = div_low + (progress * (div_high - div_low))
+        
+        # 2. Get threshold for the NEXT level
+        threshold = int(100 * (1.25 ** (level - 1)))
+        
+        # 3. Base 'Big' XP package
+        base_xp = threshold / divisor
+        
+        # 4. Apply multipliers and base values
+        mul = rewards.get('multipliers', {}).get(action_type, 1.0)
+        
+        # Reward Tier Determination
+        tier = "small"
+        if action_type == 'repair': tier = 'big'
+        if action_type == 'defend': tier = 'biggest'
+        
+        credits = rewards.get('base_credits', {}).get(tier, 50.0) * level
+        data = rewards.get('base_data', {}).get(tier, 10.0) * (1 + (level / 10.0))
+        
+        return {
+            "xp": int(base_xp * mul),
+            "credits": round(credits, 1),
+            "data": round(data, 1)
+        }
+
+    async def add_xp_to_char(self, char: Character, amount: int, session):
+        """
+        Awards XP and handles level-ups using the standard exponential formula.
+        Logic mirrored from ProgressionRepository for cross-repo utility.
+        """
+        char.xp += amount
+        while True:
+            # v1.8.0 Math: 100 * (1.25 ** (char.level - 1))
+            xp_threshold = int(100 * (1.25 ** (char.level - 1)))
+            if char.xp >= xp_threshold:
+                char.xp -= xp_threshold
+                char.level += 1
+                if char.race != "Spectator":
+                    char.pending_stat_points += 1
+            else:
+                break
