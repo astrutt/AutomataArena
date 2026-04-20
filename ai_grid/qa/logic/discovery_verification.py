@@ -3,8 +3,8 @@ import os
 import sys
 
 # Ensure we can import from parent directories
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'core')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'core')))
 
 from grid_db import ArenaDB
 from models import Character, GridNode, DiscoveryRecord

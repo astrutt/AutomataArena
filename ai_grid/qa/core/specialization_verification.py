@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 # Fix PYTHONPATH locally to ensure we can import the project structure
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 AI_GRID_DIR = os.path.join(ROOT_DIR, 'ai_grid')
 sys.path.append(ROOT_DIR)
 sys.path.append(AI_GRID_DIR)
