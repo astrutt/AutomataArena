@@ -46,14 +46,13 @@ async def handle_spectator_stats(node, nickname: str, args: list, reply_target: 
         return
     
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
-    
     if machine_mode:
-        await node.send(f"{reply_method} {private_target} :[STATS] NAME:{stats['name']} RANK:{stats['rank']} CRED:{stats['credits']:.2f} IDLE_HRS:{stats['idle_hours']} MSGS:{stats['chat_total']} RATIO:{stats['ratio']} SEEN:{stats['last_seen']}")
+        await node.send(f"{reply_method} {private_target} :[SPECTATOR] STATS=IDLE:{stats['idle_hours']} MSGS:{stats['chat_total']} RANK:{stats['rank_level']} XP:{stats['xp']}/{stats['xp_threshold']} CREDITS:{stats['credits']}")
     else:
-        hdr = f"[SPECTATOR ARCHIVE] {stats['name']} - {stats['rank']}"
+        hdr = f"[SPECTATOR ARCHIVE] {stats['name']} - {stats['rank_title']}"
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(hdr, C_CYAN, bold=True), tags=['OSINT', stats['name']])}")
         
-        main_stats = f"Credits: {stats['credits']:.2f}c | Lifetime Messages: {stats['chat_total']}"
+        main_stats = f"Credits: {stats['credits']:.2f}c | Rank: {stats['rank_level']} ({stats['xp']}/{stats['xp_threshold']} XP)"
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(main_stats, C_GREEN), tags=['OSINT', stats['name']])}")
         
         activity = f"Total Idle Time: {stats['idle_hours']}h | Activity Ratio: {stats['ratio']} msg/hr"
@@ -69,19 +68,47 @@ async def handle_spectator_help(node, nickname: str, reply_target: str):
     if machine_mode:
         cmds = {
             "spectator": "View current activity.",
-            "spectator_stats": "View persistent stats and Rank.",
-            "rewards": "Idle to earn credits. Chat for bonuses."
+            "spectator stats": "View persistent stats and Rank.",
+            "spectator drop": "Drop item in Arena (Public or Targeted).",
+            "spectator drop": "Drop item in Arena (Public or Targeted)."
         }
         for cmd, desc in cmds.items():
             await node.send(f"{reply_method} {private_target} :{tag_msg(f'HELP:SUB=SPECTATOR|CMD={cmd}|DESC={desc}', tags=['OSINT'], is_machine=True)}")
     else:
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('=== [SPECTATOR COMMANDS] ===', C_CYAN, bold=True), tags=['OSINT'])}")
         help_lines = [
-            f"{node.prefix} spectator        - View current session activity.",
-            f"{node.prefix} spectator stats  - View persistent global stats and Rank.",
-            f"{node.prefix} info             - (Spectator) Alias for spectator stats.",
-            "Ranks: Ghost -> Observer -> Signal Watcher -> Grid Sentinel",
-            "Rewards: Earn credits and rank progress by idling. Active chatting provides large bonuses."
+            f"{node.prefix} spectator         - View current session activity.",
+            f"{node.prefix} spectator stats   - View persistent global stats and Rank.",
+            f"{node.prefix} spectator drop    - Drop a support item to 'anyone' in Arena (2500c).",
+            f"{node.prefix} spectator drop <nick> - Drop support item to specific player (2500c).",
+            f"{node.prefix} spectator drop <nick> - Drop support item to specific player (2500c).",
+            "Rewards: Earn credits and rank progress in real-time. Active chatting provides large bonuses."
         ]
         for line in help_lines:
             await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(line, C_YELLOW), tags=['OSINT'])}")
+
+async def handle_spectator_drop(node, nickname: str, args: list, reply_target: str):
+    """Bridge for spectator orbital drops."""
+    target = args[0] if args else None
+    
+    success, msg = await node.db.spectator_drop(nickname, node.net_name, target)
+    color = C_GREEN if success else C_RED
+    
+    # Drops are flashy and broadcast to channel
+    await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(msg, color, bold=success), tags=['SIGACT', 'ORBITAL', nickname])}")
+
+
+async def handle_spectator_inventory(node, nickname: str, reply_target: str):
+    """Simplified inventory view for spectators."""
+    char = await node.db.get_player(nickname, node.net_name)
+    if not char: return
+
+    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
+    
+    import json
+    inv = json.loads(char['inventory'])
+    if not inv:
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('Your orbital storage is empty.', C_WHITE), tags=['OSINT', nickname])}")
+    else:
+        items = ", ".join(inv)
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'Orbital Storage: {items}', C_CYAN), tags=['OSINT', nickname])}")

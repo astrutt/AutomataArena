@@ -29,6 +29,20 @@ class EconomyRepository:
                 char.credits += amt
                 await session.commit()
 
+    async def award_credits_bulk(self, payouts: dict, network: str):
+        """Awards credits to multiple nicknames in a single transaction."""
+        async with self.async_session() as session:
+            for nick, amt in payouts.items():
+                stmt = select(Character).join(Player).join(NetworkAlias).where(
+                    Character.name == nick,
+                    NetworkAlias.nickname == nick,
+                    NetworkAlias.network_name == network
+                )
+                char = (await session.execute(stmt)).scalars().first()
+                if char:
+                    char.credits += amt
+            await session.commit()
+
     async def award_data(self, nick: str, network: str, amt: float):
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(

@@ -96,7 +96,7 @@ class GridNode:
 
     async def add_xp(self, nickname: str, amount: int, reply_target: str):
         """Standard method to award XP and handle level-up interactions."""
-        res = await self.db.player.add_experience(nickname, self.net_name, amount)
+        res = await self.db.player.add_experience(nickname, self.net_name, amount, llm_client=self.llm)
         if "error" in res: return
         
         if res.get("levels_gained", 0) > 0:

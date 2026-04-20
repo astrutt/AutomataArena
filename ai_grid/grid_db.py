@@ -26,6 +26,7 @@ from database.repositories.mainframe_repo import MainframeRepository
 from database.repositories.minigame_repo import MiniGameRepository
 from database.repositories.combat_repo import CombatRepository
 from database.repositories.pulse_repo import PulseRepository
+from database.repositories.spectator_repo import SpectatorRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):
@@ -39,6 +40,7 @@ class ArenaDB:
         self.combat = CombatRepository(self.async_session)
         self.mainframe = MainframeRepository(self.async_session)
         self.minigame = MiniGameRepository(self.async_session)
+        self.spectator = SpectatorRepository(self.async_session)
         
         # Grid domains
         self.navigation = NavigationRepository(self.async_session)
@@ -402,6 +404,13 @@ class ArenaDB:
     async def start_compilation(self, name, network, amount): return await self.mainframe.start_compilation(name, network, amount)
     async def start_assembly(self, name, network): return await self.mainframe.start_assembly(name, network)
     async def tick_mainframe_tasks(self): return await self.mainframe.tick_mainframe_tasks()
+
+    # Spectator System (v1.8.0)
+    async def spectator_drop(self, name, net, target=None): return await self.spectator.spectator_drop(name, net, target)
+    async def trickle_spectator_power(self, net): return await self.spectator.trickle_power(net)
+    async def rename_spectator_rank(self, name, net, title): return await self.spectator.rename_rank(name, net, title)
+    async def collect_daily_spectator_bonus(self, name, net): return await self.spectator.award_daily_dividend(name, net)
+    async def award_daily_dividend(self, name, net): return await self.spectator.award_daily_dividend(name, net)
 
 async def async_main():
     parser = argparse.ArgumentParser(description="AutomataArena Async SQLAlchemy DB Manager")

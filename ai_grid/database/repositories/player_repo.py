@@ -85,8 +85,8 @@ class PlayerRepository:
             await session.commit()
             return True
 
-    async def add_experience(self, name: str, network: str, amount: int) -> dict:
-        """Awards XP and handles level-ups. Returns leveling status."""
+    async def add_experience(self, name: str, network: str, amount: int, llm_client=None) -> dict:
+        """Awards XP and handles level-ups using the exponential formula: 100 * 1.25^(Level-1)."""
         async with self.async_session() as session:
             char = await self.get_character_by_nick(name, network, session)
             if not char: return {"error": "Character not found"}
@@ -95,22 +95,33 @@ class PlayerRepository:
             levels_gained = 0
             
             while True:
-                xp_threshold = char.level * 1000
+                # v1.8.0 Math: 100 * (1.25 ** (char.level - 1))
+                xp_threshold = int(100 * (1.25 ** (char.level - 1)))
                 if char.xp >= xp_threshold:
                     char.xp -= xp_threshold
                     char.level += 1
-                    char.pending_stat_points += 1
+                    # Only registered 'Players' get stat points; spectators gain Rank.
+                    if char.race != "Spectator":
+                        char.pending_stat_points += 1
                     levels_gained += 1
                 else:
                     break
             
+            new_title = None
+            if levels_gained > 0 and char.race == "Spectator" and llm_client:
+                # Automated rank title generation for Spectators
+                new_title = await llm_client.generate_rank_title(char.name, char.level)
+                char.rank_title = new_title
+                
             await session.commit()
+            threshold = int(100 * (1.25 ** (char.level - 1)))
             return {
                 "new_xp": char.xp,
                 "new_level": char.level,
                 "levels_gained": levels_gained,
                 "pending_points": char.pending_stat_points,
-                "threshold": char.level * 1000
+                "threshold": threshold,
+                "new_rank_title": new_title
             }
 
     async def rank_up_stat(self, name: str, network: str, stat_name: str) -> bool:
@@ -374,7 +385,7 @@ class PlayerRepository:
                 await session.commit()
 
     async def get_spectator_stats(self, nick: str, network: str, config):
-        """Retrieve persistent stats and calculate ratio/rank."""
+        """Retrieve persistent stats and calculate rank based on Level/XP."""
         async with self.async_session() as session:
             nick_lower = nick.lower()
             stmt = select(Character).join(Player).join(NetworkAlias).where(
@@ -388,21 +399,17 @@ class PlayerRepository:
             idle_hours = char.total_idle_seconds / 3600.0
             ratio = char.total_chat_messages / max(1, idle_hours)
             
-            # Rank thresholds (configurable logic)
-            rank_idx = 0
-            if ratio > 2.0: rank_idx = 3
-            elif ratio > 0.5: rank_idx = 2
-            elif ratio > 0.1: rank_idx = 1
-            
-            ranks = config.get('mechanics', {}).get('spectator_ranks', ["Ghost", "Observer", "Signal Watcher", "Grid Sentinel"])
-            rank_name = ranks[min(rank_idx, len(ranks)-1)]
+            xp_threshold = int(100 * (1.25 ** (char.level - 1)))
             
             return {
                 'name': char.name,
                 'chat_total': char.total_chat_messages,
                 'idle_hours': round(idle_hours, 2),
                 'ratio': round(ratio, 2),
-                'rank': rank_name,
+                'rank_level': char.level,
+                'xp': char.xp,
+                'xp_threshold': xp_threshold,
+                'rank_title': char.rank_title or "Unranked",
                 'credits': char.credits,
                 'last_seen': char.last_seen_at.strftime("%Y-%m-%d %H:%M:%S") if char.last_seen_at else "Unknown"
             }

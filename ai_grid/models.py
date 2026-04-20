@@ -127,6 +127,10 @@ class Character(Base):
     last_surrender = Column(DateTime, nullable=True) # v1.8.0: PvP Ban tracking
     last_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
+    # v1.8.0: Spectator Specifics
+    rank_title = Column(String, nullable=True)
+    last_daily_bonus_at = Column(DateTime, nullable=True)
+    
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships

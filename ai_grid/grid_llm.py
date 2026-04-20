@@ -169,3 +169,13 @@ class ArenaLLM:
         except Exception as e:
             logger.error(f"Failed to parse node generation JSON: {e} - Raw: {raw}")
             return []
+    async def generate_rank_title(self, name: str, level: int) -> str:
+        """Generates a gritty, cyberpunk rank title for a spectator."""
+        logger.info(f"Generating rank title for {name} (Level {level})")
+        system = "You are the tactical AI for a gritty cyberpunk grid. Return ONLY the title."
+        user = f"Generate a short, two-word gritty tactical rank/title for a Level {level} digital observer named {name}. Examples: 'Neon Ghost', 'Void Watcher', 'Data Wraith'."
+        raw = await asyncio.to_thread(self._make_request, system, user)
+        if raw.startswith("ERROR"):
+            return "Unranked Observer"
+        # Clean up any quotes or extra periods
+        return raw.replace('"', '').replace('.', '').strip()[:30]

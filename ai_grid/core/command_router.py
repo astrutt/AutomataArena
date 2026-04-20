@@ -111,10 +111,18 @@ class CommandRouter:
 
             # --- PHASE 6: MAP ---
             elif verb == "spectator":
-                if args and args[0] == "stats":
-                    asyncio.create_task(handlers.handle_spectator_stats(self.node, source_nick, args[1:], reply_target))
-                else:
+                if not args:
                     asyncio.create_task(handlers.handle_spectator_view(self.node, source_nick, args, reply_target))
+                else:
+                    sub = args[0].lower()
+                    if sub == "stats":
+                        asyncio.create_task(handlers.handle_spectator_stats(self.node, source_nick, args[1:], reply_target))
+                    elif sub == "drop":
+                        asyncio.create_task(handlers.handle_spectator_drop(self.node, source_nick, args[1:], reply_target))
+                    elif sub == "inventory":
+                        asyncio.create_task(handlers.handle_spectator_inventory(self.node, source_nick, reply_target))
+                    else:
+                        asyncio.create_task(handlers.handle_spectator_view(self.node, source_nick, args, reply_target))
             elif verb == "help":
                 if args and args[0] == "grid": await handlers.handle_help(self.node, source_nick, ["grid"], reply_target)
                 elif args and args[0] == "spectator": await handlers.handle_spectator_help(self.node, source_nick, reply_target)
@@ -160,7 +168,7 @@ class CommandRouter:
             # 7. Information & Meta
             elif verb in ["info", "help", "?"]:
                 if verb == "info":
-                    asyncio.create_task(handlers.handle_info_view(self.node, source_nick, args, reply_target))
+                    asyncio.create_task(handlers.handle_info_nick(self.node, source_nick, args, reply_target))
                 else:
                     asyncio.create_task(handlers.handle_help(self.node, source_nick, args, reply_target))
             elif verb == "tasks":

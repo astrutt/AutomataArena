@@ -6,6 +6,26 @@ AutomataGrid is a text-based, persistent MMORPG played directly within IRC chann
 
 ## 🎮 Core Gameplay Loop
 
+### 0. Spectators
+
+Spectators can idle and chat in the IRC channel where the game is played and gain credits and ranks.
+
+1. Spectator players are automatically registered by idling in the IRC channel where the game is played. 
+2. Spectators gain XP, Credits, and Power per second of idling in the IRC channel where the game is played. Payouts happen daily. Bonuses are given for chatting in the IRC channel where the game is played, hourly, and for high activity.
+3. Ranks are given for XP and Credits. Ranks are AI generated and can be changed by the player using credits.
+4. Spectators can also drop items in the grid Arena, purchased with Credits. Spectators trickle power to the grid based on their rank, and chat activity.
+5. Can convert to Players by registering a character with the game. 
+    **`spectator`**	Displays the current session metrics: IDLE time, message count, and activity ratio (msg/hr).
+    **`spectator stats`**	Displays persistent archival data: Global Rank, total Credits, lifetime message count, and total idle hours.
+    **`spectator drop`** initiates a drop on the grid Arena.
+    **`spectator drop <nick>`** drops an item in the grid Arena.
+    **`spectator drop <item>`** drops an item to a specific player in the grid Arena.
+    **`spectator inventory`**	Displays the spectator's inventory.
+    **`info <nick>`**   Info command that shows public player info for all nicks.
+    **`help spectator`**	Provides help menu for spectator-specific mechanics and command tree. 
+
+---
+
 ### 1. The Discovery Loop
 The game follows a progressive intelligence-gathering model where technical prowess determines grid access:
 1.  **`map` (GEOINT)**: Displays Map for local player. 
@@ -25,22 +45,27 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 3. Players engaged in combat can flee, attack or do nothing. 
 4. Players can attack each other using kinetic or cyber attacks. 
 5. Player attacks are based off CPU, RAM, BND, SEC and Character Power Stored.
-6. Player Initiative CPU, RAM, BND, and SEC.  
+6. **Initiative**: Determined by `(CPU + RAM + BND + SEC) / 4 + roll(1-10)`. 
 7. Combat Turns are based off Initiative, and last 30 seconds.  
-8. Players in combat can use:
-    **`attack`** kinetic attack with or without weapons.
-    **`defend`** defend against an attack. 
-    **`hack`** cyber attack 
-    **`exploit`** cyber attack with zero-day exploit chains, if carried. 
-    **`flee`** flee from combat. 
-    **`evade`** evade an attack. 
-    **`speak`** speak to other players in combat. 
-    **`surrender`** surrender from combat. 
-    **`use`** use an item.
+8. Players in combat can use tactical actions which consume **Unit Power (uP)**:
+
+| Action | Description | uP Cost | Base Formula |
+|--------|-------------|---------|--------------|
+| **`attack`** | Kinetic strike | 10 | `(CPU * 5) + RAM` |
+| **`hack`** | Cyber injection | 15 | `(BND * 5) + SEC` |
+| **`exploit`**| Zero-Day Breach| 50 | `(ALG + SEC) * 15` (True Damage) |
+| **`evade`** | Boost Evasion | 5 | `+30%` Evasion Chance |
+| **`defend`**| Buffer damage | 5 | `-50%` Damage Taken |
+| **`flee`** | Extract (60%) | 20 | N/A |
+| **`surrender`**| Yield match | 0 | N/A |
+| **`use`** | Consume item | 5 | N/A |
+
 9. Combat continues until one player successfully flees, or is defeated, or surrenders.
-10. Players can **`surrender`** from combat at any time, by offering a percentage of their stored power and data to the victor. If a player surrenders they cannot PVP again for 10 minutes. 
-11. Defeated players lose all their stored power and data, and are ejected from the grid node being sent to the nearest grid node spawn. 
-12. Other players on the same grid node cannot engage others already engaged in combat.
+10. **Evasion**: Base evasion chance is `ALG * 1.0%`, capped at 60%. 
+11. **Criticals**: Critical hit chance is `ALG%`. Critical hits deal `200%` damage.
+12. Players can **`surrender`** from combat at any time by offering power/data. Surrendering invokes a 10-minute PvP ban.
+13. Defeated players lose all stored power/data and are ejected to the nearest spawn.
+14. Engaged players are locked from third-party interference.
 
 ---
 
@@ -69,7 +94,8 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 
 - **Player Generation**: New players provide 3 words that describe their character. These words are used to generate their starting AI personality. Players can modify their personality, but not their stats or inventory after generation. 
 
-- **Player Stat Points**: Starting stats are 1. As players gain levels from XP, they are awarded stat points to spend on their stats. Hit points are calculated as: $HP = (CPU + RAM + BND + SEC + ALG) \times 10$. 
+- **Player Stat Points**: Starting stats are 1. As players gain levels from XP, they are awarded stat points to spend on their stats. 
+- **Hit Points**: Calculated as $HP = (CPU + RAM + BND + SEC + ALG) \times 4 + 10$.
 
 - **Player Inventory**: Players have 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains. 
 
@@ -90,9 +116,12 @@ Gridnodes are the geography of the game world, and represent the various locatio
     - **AMP**: Increases the power generation of the grid node. 
     - **IDS**: Increases the security of the grid node. 
     - **FIREWALL**: Increases the security of the grid node. 
-    - **NET**: Ability to establish or connect to local networks (player or NPC networks) and remote networks (IRC channels on other IRC Networks)
+    - **NET**: Ability to connect grid node local networks (player or NPC networks) and remote networks (IRC channels on other IRC Networks)
        - **feature** hack and raid targets, and remote IRC networks with their own hack and raid targets.  
-       - **feature** pvp and pve opportunities. 
+       - **feature** pvp and pve opportunities.
+       - **feature** link grid nodes together to create networks.
+       - **feature** use !a grid link <gridnode> to travel to your grid nodes.
+
 - **Grid Node Data**: Grid nodes store data for their owners, there is no cap on the amount of data that can be stored. 
 
 --- 

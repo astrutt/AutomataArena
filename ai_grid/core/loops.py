@@ -88,6 +88,8 @@ async def power_tick_loop(node):
         try:
             await asyncio.sleep(600)  # 10 minute interval
             await node.db.tick_grid_power()
+            # v1.8.0 Power Trickle
+            await node.db.trickle_spectator_power(node.net_name)
             msg = format_text("Environmental Power levels restabilized based on organic loads.", C_CYAN)
             await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(msg, tags=['MAINT'])}")
         except asyncio.CancelledError:
@@ -100,21 +102,46 @@ async def idle_payout_loop(node):
     while True:
         try:
             await asyncio.sleep(3600)  # 60 minute interval
-            now = time.time()
+            import datetime
+            now_dt = datetime.datetime.now(datetime.timezone.utc)
+            now_ts = time.time()
             payouts = {}
+            
             for nick, data in list(node.channel_users.items()):
-                join_time = data.get('join_time', now)
+                join_time = data.get('join_time', now_ts)
                 chat_lines = data.get('chat_lines', 0)
-                idle_secs = now - join_time
-                earned = (idle_secs * 0.001) + (chat_lines * 0.1) # Boosted chat bonus
-                if earned > 0:
-                    payouts[nick] = round(earned, 3)
+                idle_secs = now_ts - join_time
                 
-                # PERSIST STATS
+                # 1. Hourly/Passive Accrual
+                earned = (idle_secs * 0.005) + (chat_lines * 0.5) 
+                xp_earned = int((idle_secs * 0.1) + (chat_lines * 10))
+                
+                if earned > 0: payouts[nick] = round(earned, 3)
+                if xp_earned > 0:
+                    await node.db.player.add_experience(nick, node.net_name, xp_earned, llm_client=node.llm)
+                
+                # 2. Automated Daily Dividend (v1.8.0)
+                char = await node.db.player.get_player(nick, node.net_name)
+                if char and char['race'] == "Spectator":
+                    last_bonus = char.get('last_daily_bonus_at')
+                    should_payout = False
+                    if not last_bonus:
+                        should_payout = True
+                    else:
+                        # Compare UTC days
+                        if last_bonus.date() < now_dt.date():
+                            should_payout = True
+                    
+                    if should_payout:
+                        success, log = await node.db.award_daily_dividend(nick, node.net_name)
+                        if success:
+                            logger.info(f"Automated Dividend for {nick}: {log}")
+                            await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'🏆 Automated Dividend: {nick} received a daily participation bonus!', C_YELLOW), tags=['ECONOMY', nick])}")
+
+                # 3. Persistence
                 await node.db.update_activity_stats(nick, node.net_name, chat_lines, idle_secs)
-                
                 if nick in node.channel_users:
-                    node.channel_users[nick]['join_time'] = now
+                    node.channel_users[nick]['join_time'] = now_ts
                     node.channel_users[nick]['chat_lines'] = 0
             
             if payouts:
@@ -122,7 +149,6 @@ async def idle_payout_loop(node):
                 await node.db.award_credits_bulk(payouts, node.net_name)
                 await node.db.tick_player_maintenance(node.net_name, idlers)
             
-            # Enforce Unified Retention Policy
             decayed, pruned = await node.db.tick_retention_policy(node.config)
             if decayed > 0 or pruned > 0:
                 logger.info(f"Retention Policy Enforced: {decayed} decayed, {pruned} pruned.")
