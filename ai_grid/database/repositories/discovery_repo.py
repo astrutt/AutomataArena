@@ -125,7 +125,7 @@ class DiscoveryRepository(BaseRepository):
                 if is_action_hostile('probe', node.availability_mode):
                     if addons.get("IDS") or node.upgrade_level > 2:
                         from models import Memo
-                        alert_msg = f"[GRID][ALARM] Target: {node.name} | Deep Probe Attempt by: {char.name}"
+                        alert_msg = f"DEEP_PROBE_DETECTION TARGET:{node.name} SOURCE:{char.name}"
                         session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
                         alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
             

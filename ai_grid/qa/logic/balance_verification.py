@@ -24,8 +24,8 @@ def verify_stk(stats_val):
     attacker = Entity("Attacker", db_record)
     defender = Entity("Defender", db_record)
     
-    # HP: (SumStats * 4) + 10
-    # For stats=10: 50 * 4 + 10 = 210
+    # HP: (SumStats * 6) + 20
+    # For stats=10: 50 * 6 + 20 = 320
     
     # Kinetic Damage: (CPU * 5 + RAM) - SEC
     # For stats=10: (50 + 10) - 10 = 50

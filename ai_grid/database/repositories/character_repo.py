@@ -93,7 +93,7 @@ class CharacterRepository(BaseRepository):
                     'losses': char.losses,
                     'credits': char.credits,
                     'current_hp': char.current_hp,
-                    'max_hp': char.ram * 5, # Legacy formula maintained per Task 034 scope
+                    'max_hp': (char.cpu + char.ram + char.bnd + char.sec + char.alg) * 6 + 20,
                     'data_units': char.data_units,
                     'pending_stat_points': char.pending_stat_points,
                     'territory_count': territory_count,

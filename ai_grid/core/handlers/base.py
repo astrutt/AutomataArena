@@ -72,28 +72,28 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
             verb = args[0].lower()
             if verb in registry:
                 info = registry[verb]
-                await node.send(f"{reply_method} {private_target} :[HELP] CMD:{verb.upper()} DESC:{info['desc']} SYNTAX:{node.prefix} {info['syntax']}")
+                await node.send(f"{reply_method} {private_target} :{tag_msg(f'CMD:{verb.upper()} DESC:{info['desc']} SYNTAX:{node.prefix} {info['syntax']}', action='HELP', is_machine=machine_mode)}")
             else:
-                await node.send(f"{reply_method} {private_target} :[HELP][ERR] CMD_NOT_FOUND:{verb}")
+                await node.send(f"{reply_method} {private_target} :{tag_msg(f'CMD_NOT_FOUND:{verb}', action='HELP', result='ERR', is_machine=machine_mode)}")
         else:
             # High-level overview only for AIs
             all_verbs = ",".join(sorted(registry.keys()))
-            await node.send(f"{reply_method} {private_target} :[HELP] VERBS:{all_verbs}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(f'VERBS:{all_verbs}', action='HELP', is_machine=machine_mode)}")
         return
 
     if args:
         verb = args[0].lower()
         if verb in registry:
             info = registry[verb]
-            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'[ COMMAND: {verb.upper()} ]', C_CYAN, True), tags=['OSINT'])}")
-            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('DESCRIPTION: ', C_YELLOW) + format_text(info['desc'], C_WHITE), tags=['OSINT'])}\n")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'[ COMMAND: {verb.upper()} ]', C_CYAN, True), action='OSINT')}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('DESCRIPTION: ', C_YELLOW) + format_text(info['desc'], C_WHITE), action='OSINT')}\n")
             syntax_str = f"{node.prefix} {info['syntax']}"
-            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('SYNTAX: ', C_YELLOW) + format_text(syntax_str, C_GREEN), tags=['OSINT'])}\n")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('SYNTAX: ', C_YELLOW) + format_text(syntax_str, C_GREEN), action='OSINT')}\n")
             if 'cost' in info:
-                await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('COST: ', C_YELLOW) + format_text(info['cost'], C_RED), tags=['OSINT'])}\n")
+                await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('COST: ', C_YELLOW) + format_text(info['cost'], C_RED), action='OSINT')}\n")
             return
         else:
-            await node.send(f"{reply_method} {private_target} :[ERR] Command '{verb}' not found in registry.")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(f'Command {verb} not found in registry.', action='OSINT', result='ERR')}")
         return
 
     # Generic Categorical Help (Human Mode Only)
@@ -108,12 +108,12 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "🎮 GAMES": ["cipher/guess", "dice", "top", "attack/rob", "queue/ready", "engage"]
     }
 
-    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ THE GRID v1.8.0 - PULSE PROTOCOL ]', C_CYAN, bold=True), tags=['OSINT'])}\n")
+    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ THE GRID v1.8.0 - PULSE PROTOCOL ]', C_CYAN, bold=True), action='OSINT')}\n")
     for cat, cmds in help_categories.items():
         cmd_str = ", ".join([f"{node.prefix} {c}" for c in cmds])
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(cat, C_YELLOW) + ': ' + format_text(cmd_str, C_WHITE), tags=['OSINT'])}\n")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(cat, C_YELLOW) + ': ' + format_text(cmd_str, C_WHITE), action='OSINT')}\n")
 
-    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'Type {node.prefix} help <command> for detailed syntax.', C_CYAN), tags=['OSINT'])}")
+    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'Type {node.prefix} help <command> for detailed syntax.', C_CYAN), action='OSINT')}")
 
 async def is_machine_mode(node, nick: str) -> bool:
     prefs = await node.db.get_prefs(nick, node.net_name)
@@ -131,8 +131,8 @@ async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 2
         if not record['warned']:
             record['warned'] = True
             private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
-            msg = format_text(f"Anti-flood MCP triggered. Please wait {cooldown:.1f}s between commands.", C_RED)
-            asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(msg, tags=['SIGACT', nick])}"))
+            msg = f"Anti-flood MCP triggered. Please wait {cooldown:.1f}s between commands."
+            asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_RED, is_machine=machine_mode), action='SIGACT', result='FAIL', nick=nick, is_machine=machine_mode)}"))
         return False
         
     record['last_action'] = now

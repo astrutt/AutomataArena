@@ -11,11 +11,9 @@ async def handle_incursion_defend(node, source_nick: str, args: list, current_ta
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source_nick, current_target)
 
     if not args:
-        # Default to player's current node if omitted
         loc = await node.db.get_location(source_nick, node.net_name)
         if not loc:
-            alert = format_text("Cannot locate your physical grid presence.", C_RED)
-            await node.send(f"{reply_method} {private_target} :{tag_msg(alert, tags=['ERR', source_nick])}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg('Cannot locate grid presence.', action='ERR', nick=source_nick, is_machine=machine_mode)}")
             return
         node_name = loc['name']
     else:
@@ -26,20 +24,13 @@ async def handle_incursion_defend(node, source_nick: str, args: list, current_ta
     if success:
         if victors:
             # Resolved successfully
-            alert = format_text(msg, C_GREEN, bold=True)
-            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(alert, tags=['SIGACT', 'INCURSION'])}")
-            
-            victors_str = ", ".join(victors)
-            v_msg = format_text(f"Defenders deployed: {victors_str}", C_CYAN)
-            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(v_msg, tags=['SIGINT'])}")
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(msg, action='SIGACT', result='SUCCESS')}")
+            v_msg = f"Defenders deployed: {', '.join(victors)}"
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(v_msg, action='SIGINT')}")
         else:
             # Successfully logged defense, still waiting for players
-            alert = format_text(msg, C_YELLOW)
-            await node.send(f"{reply_method} {private_target} :{tag_msg(alert, tags=['SIGACT', source_nick])}")
-            # Also notify the channel that someone deployed
-            chan_alert = format_text(f"{source_nick} has deployed defense protocols at {node_name}!", C_YELLOW)
-            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(chan_alert, tags=['SIGACT', 'DEFENSE'])}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='OK', nick=source_nick, is_machine=machine_mode)}")
+            chan_alert = f"{source_nick} deployed defense protocols at {node_name}!"
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(chan_alert, action='SIGACT', result='ALERT')}")
     else:
-        # Failed (not found, already defended, etc.)
-        alert = format_text(msg, C_RED)
-        await node.send(f"{reply_method} {private_target} :{tag_msg(alert, tags=['ERR', source_nick])}")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='FAIL', nick=source_nick, is_machine=machine_mode)}")

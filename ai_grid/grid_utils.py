@@ -87,10 +87,11 @@ def calculate_elo_change(winner_elo: int, loser_elo: int, k_factor: int = 32) ->
 def format_text(text: str, color_code: str = None, bold: bool = False, is_machine: bool = False) -> str:
     """
     Applies standard IRC color and bold control codes to a string.
-    If is_machine is True, returns plain text.
+    If is_machine is True, returns plain text stripped of all non-ASCII characters.
     """
     if is_machine:
-        return str(text)
+        # Aggressively strip non-ASCII (emojis, unicode symbols) for machine-mode parsability
+        return "".join(char for char in str(text) if ord(char) < 128)
     try:
         result = str(text)
         if bold:
@@ -100,60 +101,71 @@ def format_text(text: str, color_code: str = None, bold: bool = False, is_machin
         return result
     except Exception as e:
         logger.error(f"Failed to format text '{text}': {e}")
-        return str(text)
+        return "".join(char for char in str(text) if ord(char) < 128)
 
 def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool = False, nick: str = None, action: str = None, result: str = None) -> str:
     """
     Builds a structured [GRID] message with tactical intel tags and icons.
     Protocol: [GRID]<ico>[ACTION][RESULT][NICK] TEXT
+    Machine Mode: [GRID][ACTION:VAL][RESULT:VAL][NICK:VAL] TEXT (No icons, No IRC codes)
     """
     if tags is None: tags = []
     
-    # Standard Action/Result Color Mapping (Human Mode Only)
-    ACTION_COLORS = {
-        'GEOINT': C_CYAN, 'MAPPED': C_CYAN,
-        'OSINT': C_YELLOW, 'FOUND': C_YELLOW,
-        'RECON': C_PURPLE,
-        'SIGACT': C_GREEN, 'EXFIL': C_L_GREEN, 'EXPLOIT': C_ORANGE,
-        'SIGINT': C_BLUE, 'PROBE': C_BLUE, 'PREBREACH': C_BLUE,
-        'ERR': C_RED, 'FAIL': C_RED, 'ALARM': C_RED
-    }
-
-    # Identify primary icon from action or tags
-    icon = ""
+    # Identify primary icon source
     icon_source = action.upper() if action else (tags[0].upper() if tags else "DEFAULT")
-    icon = ICONS.get(icon_source, ICONS.get('Default', '⚙️'))
-            
-    # Human base colors
-    c_grid = C_YELLOW
     
-    # Construct Bracket Chain
-    p_grid = format_text("[GRID]", c_grid, is_machine=is_machine)
-    p_icon = icon if not is_machine else ""
+    # Human-only components
+    prefix = "[GRID]"
+    icon = ""
     
-    brackets = ""
-    
-    # 1. Action Bracket
-    if action:
-        color = ACTION_COLORS.get(action.upper(), C_CYAN)
-        brackets += format_text(f"[{action.upper()}]", color, is_machine=is_machine)
-    elif tags:
-        # Fallback for legacy tag support during transition
-        color = ACTION_COLORS.get(tags[0].upper(), C_CYAN)
-        brackets += format_text(f"[{tags[0].upper()}]", color, is_machine=is_machine)
+    if is_machine:
+        # Strictly structured KV pairs for AI parsability
+        brackets = ""
+        if action: brackets += f"[ACTION:{action.upper()}]"
+        elif tags:  brackets += f"[ACTION:{tags[0].upper()}]"
+        
+        if result:   brackets += f"[RESULT:{result.upper()}]"
+        if nick:     brackets += f"[NICK:{nick}]"
+        elif location: brackets += f"[LOC:{location.upper()}]"
+        
+        clean_text = "".join(char for char in str(text) if ord(char) < 128)
+        return f"{prefix}{brackets} {clean_text}"
+    else:
+        # Standard Action/Result Color Mapping (Human Mode)
+        ACTION_COLORS = {
+            'GEOINT': C_CYAN, 'MAPPED': C_CYAN, 'OSINT': C_YELLOW, 'FOUND': C_YELLOW,
+            'RECON': C_PURPLE, 'SIGACT': C_GREEN, 'EXFIL': C_L_GREEN, 'EXPLOIT': C_ORANGE,
+            'SIGINT': C_BLUE, 'PROBE': C_BLUE, 'PREBREACH': C_BLUE,
+            'MAINT': C_GREY, 'ERR': C_RED, 'FAIL': C_RED, 'ALARM': C_RED, 'INFO': C_WHITE
+        }
+        
+        icon = ICONS.get(icon_source, ICONS.get('Default', '⚙️'))
+        c_grid = C_YELLOW
+        
+        p_grid = format_text("[GRID]", c_grid, is_machine=False)
+        p_icon = icon
+        
+        brackets = ""
+        # 1. Action Bracket
+        if action:
+            color = ACTION_COLORS.get(action.upper(), C_CYAN)
+            brackets += format_text(f"[{action.upper()}]", color, is_machine=False)
+        elif tags:
+            color = ACTION_COLORS.get(tags[0].upper(), C_CYAN)
+            brackets += format_text(f"[{tags[0].upper()}]", color, is_machine=False)
 
-    # 2. Result/Status Bracket
-    if result:
-        color = ACTION_COLORS.get(result.upper(), C_GREEN if result.upper() in ['SUCCESS', 'OPEN', 'OK'] else C_CYAN)
-        brackets += format_text(f"[{result.upper()}]", color, is_machine=is_machine)
-    
-    # 3. Nick/Target Bracket
-    if nick:
-        brackets += format_text(f"[{nick}]", C_WHITE, is_machine=is_machine)
-    elif location: # Legacy location support
-        brackets += format_text(f"[{location}]", C_GREY, is_machine=is_machine)
+        # 2. Result/Status Bracket
+        if result:
+            color = ACTION_COLORS.get(result.upper(), C_GREEN if result.upper() in ['SUCCESS', 'OPEN', 'OK'] else C_CYAN)
+            brackets += format_text(f"[{result.upper()}]", color, is_machine=False)
+        
+        # 3. Nick/Target Bracket
+        if nick:
+            brackets += format_text(f"[{nick}]", C_WHITE, is_machine=False)
+        elif location:
+            brackets += format_text(f"[{location}]", C_GREY, is_machine=False)
 
-    return f"{p_grid}{p_icon}{brackets} {text}"
+        return f"{p_grid}{p_icon}{brackets} {text}"
 
 # --- Topic Aesthetics (Task 018) ---
 TOPIC_START = "『 "

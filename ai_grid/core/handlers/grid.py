@@ -1,6 +1,7 @@
 # handlers/grid.py - Navigation & Exploration Handlers
 import random
 import logging
+import json
 from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from ..map_utils import generate_ascii_map
 from .base import is_machine_mode, check_rate_limit, get_action_routing
@@ -17,15 +18,15 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
     
     node_name, msg = await node.db.move_player(nick, node.net_name, direction)
     if node_name:
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_GREEN), is_machine=machine_mode, nick=nick, action='SIGACT', result='MOVED')}")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='MOVED', nick=nick, is_machine=machine_mode)}")
         
-        if machine_mode:
+        if not machine_mode:
             # Public narrative confirmation
-            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} moved {direction}.', C_CYAN), is_machine=machine_mode, nick=nick, action='SIGACT')}")
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} moved {direction}.', C_CYAN), action='SIGACT', nick=nick)}")
         
         await handle_grid_view(node, nick, private_target)
         new_loc = await node.db.get_location(nick, node.net_name)
-        if new_loc and new_loc.get('node_type') == 'wilderness':
+        if new_loc and new_loc.get('node_type') == ' wilderness':
             threat = new_loc.get('threat_level', 0)
             if threat > 0:
                 spawn_chance = 0.60 if threat >= 3 else 0.35
@@ -35,35 +36,38 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
         if msg == "System offline.":
             await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
         else:
-            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_RED), is_machine=machine_mode, nick=nick, action='SIGACT', result='FAIL')}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='FAIL', nick=nick, is_machine=machine_mode)}")
         await handle_grid_view(node, nick, private_target)
 
 async def handle_grid_view(node, nickname: str, reply_target: str):
     loc = await node.db.get_location(nickname, node.net_name)
-    
     private_target, _, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
     
     if not loc:
         await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nickname} - not a registered player - msg ignored")
         return
+
     if machine_mode:
         exits = ",".join(loc['exits']) if loc['exits'] else "none"
-        line = f"NODE:{loc['name']} TYPE:{loc['type']} OWNER:{loc.get('owner','none')} LVL:{loc['level']} EXITS:{exits} POWER:{loc['power_stored']}/{loc['upgrade_level']*100} DUR:{loc.get('durability',100):.0f}"
-        await node.send(f"{reply_method} {private_target} :[GRID] {line}")
+        line = f"NODE:{loc['name']} TYPE:{loc['type']} OWNER:{loc.get('owner','none')} LVL:{loc['level']} EXITS:{exits} POWER:{loc['power_stored']:.1f}/{loc['upgrade_level']*100} DUR:{loc.get('durability',100):.0f}"
+        await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='GEOINT', result='INFO', is_machine=True)}")
         return
+
     node_icon = {'safezone': '🛡️', 'arena': '⚔️', 'wilderness': '🌿', 'merchant': '💰'}.get(loc['type'], '📡')
-    exits_str = " | ".join(loc['exits']) if loc['exits'] else "none"
-    header = f"{node_icon} " + format_text(f"[ {loc['name']} ]", C_CYAN, bold=True)
-    await node.send(f"{reply_method} {private_target} :{tag_msg(header, is_machine=machine_mode, action='GEOINT', result='INFO')}")
-    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(loc['description'], C_YELLOW), is_machine=machine_mode, action='GEOINT')}")
-    node_stats = f"Type: {loc['type'].upper()} | Level: {loc['level']} | Credits: {loc['credits']}c"
-    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(node_stats, C_GREEN), is_machine=machine_mode, action='GEOINT')}")
+    header = format_text(f"[ {loc['name']} ]", C_CYAN, bold=True)
+    await node.send(f"{reply_method} {private_target} :{tag_msg(header, action='GEOINT', result='INFO', is_machine=False)}")
     
-    # Phase 3: Metadata display
+    desc_msg = format_text(loc.get('description', 'Standard nodal architecture.'), C_YELLOW)
+    await node.send(f"{reply_method} {private_target} :{tag_msg(desc_msg, action='GEOINT', is_machine=False)}")
+
+    stats_line = f"Type: {loc['type'].upper()} | Level: {loc['level']} | Credits: {loc.get('credits_pool', 0):.1f}c"
+    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(stats_line, C_GREEN), action='OSINT', is_machine=False)}")
+    
+    # Metadata display
     meta_str = f"Integrity: {loc.get('visibility_mode', 'OPEN')}"
     if loc.get('visibility_mode') == 'OPEN' and loc.get('net_affinity'):
         meta_str += f" | Network: {loc['net_affinity'].upper()}"
-    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(meta_str, C_CYAN), is_machine=machine_mode, action='GEOINT')}")
+    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(meta_str, C_CYAN), action='GEOINT', is_machine=False)}")
     
     # Local Topology Mini-Map (Radius 1)
     async with node.db.async_session() as session:
@@ -71,112 +75,92 @@ async def handle_grid_view(node, nickname: str, reply_target: str):
         if char:
             map_text = await generate_ascii_map(session, char, machine_mode=machine_mode, limit_radius=1, show_legend=False)
             for line in map_text.split("\n"):
-                await node.send(f"{reply_method} {private_target} :{tag_msg(line, is_machine=machine_mode, action='GEOINT')}")
+                await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='GEOINT', is_machine=False)}")
 
-    action_prompt = format_text(f"{nickname} @ {loc['name']} | Use '{node.prefix} move <dir>' to travel.", C_YELLOW)
-    if loc['type'] == 'arena': action_prompt += format_text(f" | Use '{node.prefix} queue' to enter the Arena.", C_GREEN)
-    await node.send(f"{reply_method} {private_target} :{tag_msg(action_prompt, is_machine=machine_mode, action='INFO')}")
+    action_prompt = f"{nickname} @ {loc['name']} | Use '{node.prefix} move <dir>' to travel."
+    if loc['type'] == 'arena': action_prompt += f" | Use '{node.prefix} queue' to enter the Arena."
+    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(action_prompt, C_YELLOW), action='INFO', is_machine=False)}")
 
 async def handle_node_explore(node, nick: str, reply_target: str):
     from .combat import handle_mob_encounter
     if not await check_rate_limit(node, nick, reply_target, cooldown=45): return
     
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
-    
     result = await node.db.explore_node(nick, node.net_name)
     
     if "error" in result:
         if result["error"] == "System offline.":
             await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
         else:
-            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(result['error'], C_RED), is_machine=machine_mode, nick=nick, action='ERR')}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(result['error'], action='RECON', result='FAIL', nick=nick, is_machine=machine_mode)}")
         return
 
-    banner = format_text(result.get('msg', 'Scanning nodal architecture...'), C_GREEN if result.get('status') == 'success' else C_YELLOW)
-    await node.send(f"{reply_method} {private_target} :{tag_msg(banner, is_machine=machine_mode, nick=nick, action='GEOINT', result=result.get('status', 'RECON').upper())}")
+    success = result.get('status') == 'success'
+    msg = result.get('msg', 'Scanning nodal architecture...')
+    await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='RECON', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
     
-    if machine_mode:
+    if not machine_mode:
         # Public narrative
-        await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} explored the local sector.', C_CYAN), is_machine=machine_mode, nick=nick, action='SIGACT')}")
+        await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} explored the local sector.', C_CYAN), action='SIGACT', nick=nick)}")
     
     # Award XP: 5 for success, 2 for attempt
-    xp_reward = 5 if result.get('status') == 'success' else 2
+    xp_reward = 5 if success else 2
     await node.add_xp(nick, xp_reward, reply_target)
     
     if result.get("danger") == "GRID_BUG_SPAWN":
-        # Manually trigger a mob encounter with a Level 0 Grid Bug
         loc = await node.db.get_location(nick, node.net_name)
         await handle_mob_encounter(node, nick, loc['name'], 0, None, reply_target)
     
-    if result['status'] == 'success':
-        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'Grid Discovery: {nick} uncovered architectural secrets!', C_CYAN), action='GEOINT', result='SUCCESS')}")
+    if success:
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(f'Grid Discovery: {nick} uncovered architectural secrets!', action='GEOINT', result='SUCCESS')}")
 
 async def handle_grid_map(node, nick: str, reply_target: str):
     """Render the ASCII grid map."""
     async with node.db.async_session() as session:
-        # Get character for stats
         char = await node.db.get_character_by_nick(nick, node.net_name, session)
         if not char:
             await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
             return
         
-        machine_mode, reply_method = await is_machine_mode(node, nick), (await node.db.get_prefs(nick, node.net_name)).get('msg_type', 'privmsg').upper()
+        private_target, _, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
         map_text = await generate_ascii_map(session, char, machine_mode=machine_mode)
         
-        await node.send(f"{reply_method} {reply_target} :{tag_msg(format_text('[ TERMINAL NODAL TOPOLOGY ]', C_CYAN, True), is_machine=machine_mode, action='GEOINT', result='MAPPED')}")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ TERMINAL NODAL TOPOLOGY ]', C_CYAN, True), action='GEOINT', result='MAPPED', is_machine=machine_mode)}")
         for line in map_text.split("\n"):
-            await node.send(f"{reply_method} {reply_target} :{tag_msg(line, is_machine=machine_mode, action='GEOINT')}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='GEOINT', is_machine=machine_mode)}")
 
 async def handle_node_probe(node, nick: str, reply_target: str):
     """SigInt report on current nodal architecture."""
     if not await check_rate_limit(node, nick, reply_target, cooldown=15): return
     
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
+    res = await node.db.probe_node(nick, node.net_name)
     
-    result = await node.db.probe_node(nick, node.net_name)
-    if not result.get("success") or "error" in result:
-        err_msg = result.get('error') or result.get('msg') or 'PROBE_FAILED'
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(err_msg, C_RED), is_machine=machine_mode, nick=nick, action='SIGINT', result='FAIL')}")
+    if not res.get("success"):
+        err_msg = res.get('error') or res.get('msg') or 'PROBE_FAILED'
+        await node.send(f"{reply_method} {private_target} :{tag_msg(err_msg, action='SIGINT', result='FAIL', nick=nick, is_machine=machine_mode)}")
         return
 
+    target_name = res.get('name', 'UNKNOWN')
+    
+    # 1. Primary Report Header
+    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'[ PROBE_REPORT: {target_name} ]', C_CYAN, True), action='SIGINT', result='SUCCESS', nick=nick, is_machine=machine_mode)}")
+    
+    # 2. Detailed Data
     if machine_mode:
-        addons = ",".join(result['addons']) if result['addons'] else "none"
-        occupants = ",".join(result['occupants']) if result['occupants'] else "none"
-        line = f"PROBE:{result['name']} LVL:{result['level']} DUR:{result['durability']:.1f}% THREAT:{result['threat']} ADDONS:[{addons}] OCCUPANTS:[{occupants}]"
-        await node.send(f"{reply_method} {private_target} :{tag_msg(line, is_machine=machine_mode, action='SIGINT', result='SUCCESS')}")
-        
-        # Public narrative
-        await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} performed a deep architectural probe.', C_CYAN), is_machine=machine_mode, nick=nick, action='SIGACT')}")
-        return
-
-    # User Output
-    node_name = result.get('name', 'UNKNOWN_NODE')
-    header = format_text(f"[ SIGINT SCAN: {node_name} ]", C_CYAN, True)
-    await node.send(f"{reply_method} {private_target} :{tag_msg(header, is_machine=machine_mode, action='SIGINT', result='SUCCESS')}")
-    
-    stats = f"Level: {result['level']} | Stability: {result['durability']:.1f}% | Integrity: {result['visibility']} | Threat: {result['threat']}"
-    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(stats, C_GREEN), is_machine=machine_mode, action='SIGINT')}")
-    
-    # Reveal Hack DC and Bonus
-    if result.get('hack_dc'):
-        intel = f"INTELLIGENCE: Security DC {result['hack_dc']} detected. Alg Bonus +{result['bonus_granted']} applied to local buffer."
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(intel, C_CYAN), is_machine=machine_mode, action='SIGINT')}")
-
-    if result['addons']:
-        addon_str = " | ".join([f"[{a}]" for a in result['addons']])
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'Hardware detected: {addon_str}', C_YELLOW), is_machine=machine_mode, action='SIGINT')}")
-    
-    if result['occupants']:
-        occ_str = " | ".join(result['occupants'])
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'Active Occupants: {occ_str}', C_RED), is_machine=machine_mode, action='RECON')}")
+        data_str = f"LVL:{res['level']} DUR:{res['durability']}% THREAT:{res['threat']} VIS:{res['visibility']} DC:{res['hack_dc']}"
+        await node.send(f"{reply_method} {private_target} :{tag_msg(data_str, action='SIGINT', is_machine=True)}")
     else:
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('Sector appears deserted.', C_WHITE), is_machine=machine_mode, action='RECON')}")
+        intel = f"Level: {res['level']} | Stability: {res['durability']:.1f}% | Integrity: {res['visibility']} | Threat: {res['threat']}"
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(intel, C_GREEN), action='SIGINT', is_machine=False)}")
+        if res.get('hack_dc'):
+            dc_msg = f"Security DC {res['hack_dc']} detected. Alg Bonus +{res.get('bonus_granted', 0)} granted."
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(dc_msg, C_CYAN), action='SIGINT', is_machine=False)}")
 
 async def handle_grid_command(node, nickname: str, reply_target: str, action: str, args: list = None):
     args = args or []
-    alert_data = None
-    
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
+    alert_data = None
     
     if action == "claim": success, msg = await node.db.claim_node(nickname, node.net_name)
     elif action == "upgrade": success, msg = await node.db.upgrade_node(nickname, node.net_name)
@@ -186,223 +170,104 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
         await handle_node_probe(node, nickname, reply_target)
         return
     elif action == "siphon":
-        percent = 100.0
-        if len(args) > 0:
-            try: percent = float(args[0])
+        perc = 100.0
+        if args:
+            try: perc = float(args[0])
             except: pass
-        res = await node.db.siphon_node(nickname, node.net_name, percent)
-        success, msg = res[0], res[1]
-        if len(res) > 2: alert_data = res[2]
+        res = await node.db.siphon_node(nickname, node.net_name, perc)
+        success, msg, alert_data = res[0], res[1], res[2] if len(res) > 2 else None
     elif action == "install":
         if not args:
-            await node.send(f"PRIVMSG {reply_target} :Syntax: {node.prefix} grid install <hardware_name>")
+            await node.send(f"{reply_method} {private_target} :Syntax: grid install <hardware>")
             return
-        result = await node.db.install_node_addon(nickname, node.net_name, args[0])
-        success, msg = result['success'], result['msg']
+        res = await node.db.install_node_addon(nickname, node.net_name, args[0])
+        success, msg = res['success'], res['msg']
     elif action == "bolster":
         if not args:
-            await node.send(f"PRIVMSG {reply_target} :Syntax: {node.prefix} grid bolster <power_amount>")
+            await node.send(f"{reply_method} {private_target} :Syntax: grid bolster <power>")
             return
-        try: amount = float(args[0])
-        except: 
-            await node.send(f"PRIVMSG {reply_target} :[ERR] Invalid amount.")
-            return
-        result = await node.db.bolster_node(nickname, node.net_name, amount)
-        success, msg = result['success'], result['msg']
+        try: amt = float(args[0])
+        except: return
+        res = await node.db.bolster_node(nickname, node.net_name, amt)
+        success, msg = res['success'], res['msg']
     elif action in ["link", "net"]:
         if not args:
-            await node.send(f"PRIVMSG {reply_target} :Syntax: {node.prefix} grid net <local_network_name>")
-            return
-        result = await node.db.link_network(nickname, node.net_name, args[0])
-        success, msg = result['success'], result['msg']
+             await node.send(f"{reply_method} {private_target} :Syntax: grid net <affinity>")
+             return
+        res = await node.db.link_network(nickname, node.net_name, args[0])
+        success, msg = res['success'], res['msg']
     elif action == "hack":
         res = await node.db.hack_node(nickname, node.net_name)
-        success, msg = res[0], res[1]
-        if len(res) > 2: alert_data = res[2]
-        if not success and msg == "PVE_GUARDIAN_SPAWN":
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('[WARNING] Primary MCP activated. PvE Guardian routine detected.', C_RED), is_machine=machine_mode, nick=nickname, action='SIGACT', result='WARN')}")
-            return
+        success, msg, alert_data = res[0], res[1], res[2] if len(res) > 2 else None
+    else: return
+
+    if success:
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='SUCCESS', nick=nickname, is_machine=machine_mode)}")
+        await node.add_xp(nickname, 10, reply_target)
+        if not machine_mode:
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nickname} executed a territorial {action}.', C_CYAN), action='SIGACT', nick=nickname)}")
     else:
-        return # Unknown activity
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='FAIL', nick=nickname, is_machine=machine_mode)}")
 
-    if not success and msg == "System offline.":
-        await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nickname} - not a registered player - msg ignored")
-        return
-    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_GREEN if success else C_RED), is_machine=machine_mode, nick=nickname, action='SIGACT', result='SUCCESS' if success else 'FAIL')}")
-    
-    if success and action in ["claim", "upgrade", "hack", "repair", "install", "net"]:
-        if machine_mode:
-            # Public narrative
-            narratives = {
-                "claim": "established authority over local node.",
-                "upgrade": "fortified nodal hardware.",
-                "hack": "sabotaged rival architecture.",
-                "repair": "performed architectural maintenance.",
-                "install": "deployed hardware enhancements.",
-                "net": "bridged nodal networks."
-            }
-            narrative = narratives.get(action, f"executed a territorial {action}!")
-            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nickname} {narrative}', C_CYAN), is_machine=machine_mode, nick=nickname, action='SIGACT')}")
-        
-        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'Grid Alert: {nickname} executed a territorial {action}!', C_YELLOW), action='SIGACT', result='ALERT')}")
-        
-        # Award XP for successful Grid actions
-        xp_map = {"claim": 25, "upgrade": 15, "hack": 10, "repair": 5, "install": 10, "link": 10, "net": 10, "siphon": 5}
-        if action in xp_map:
-            await node.add_xp(nickname, xp_map[action], reply_target)
-
-    # Tactical Alert Delegation for Siphon & Hack
-    if action in ["siphon", "hack"] and alert_data:
-        prefs = await node.db.get_prefs_by_id(alert_data['recipient_id'])
-        if prefs.get("briefings_enabled", True):
-            if prefs.get("memo_target") == "irc":
-                await node.hub.send_memo(node.net_name, alert_data['recipient_id'], alert_data['message'])
-            else:
-                target_nick = await node.db.get_nickname_by_id(alert_data['recipient_id'])
-                if target_nick and target_nick.lower() in node.channel_users:
-                    await node.send(f"PRIVMSG {target_nick} :[ALERT] {alert_data['message']}")
+    if alert_data:
+        target_nick = await node.db.get_nickname_by_id(alert_data['recipient_id'])
+        if target_nick:
+            await node.send(f"PRIVMSG {target_nick} :[ALARM] {alert_data['message']}")
 
 async def handle_node_exploit(node, nick: str, reply_target: str, args: list):
-    """Handle the multi-level exploit command: grid, network, raid."""
     if not await check_rate_limit(node, nick, reply_target, cooldown=45): return
-    
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     
-    # Defaults
-    is_network = False
-    is_raid = False
-    target_name = None
-    
-    if args:
-        sub = args[0].lower()
-        if sub == "network":
-            is_network = True
-            if len(args) > 1: target_name = args[1]
-        elif sub == "raid":
-            is_raid = True
-            if len(args) > 1:
-                # Handle possible 'network' sub-nesting: grid raid network exploit <target>
-                if args[1].lower() == "network" and len(args) > 3:
-                     # This matches the user's specific syntax: grid raid network exploit <target>
-                     # In this router, we'd have args=['raid', 'network', 'exploit', '<target>']
-                     target_name = args[3]
-                else: target_name = args[1]
-        elif sub == "exploit": # Handle !a grid exploit directly
-             pass
+    is_network = "network" in args
+    is_raid = "raid" in args
+    target_name = args[-1] if len(args) > 1 and args[-1] not in ["network", "raid"] else None
     
     success, msg, alert = await node.db.infiltration.exploit_node(nick, node.net_name, target=target_name, is_network=is_network, is_raid=is_raid)
     
-    color = C_GREEN if success else C_RED
-    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, color), is_machine=machine_mode, nick=nick, action='SIGACT', result='EXPLOIT' if success else 'FAIL')}")
-    
+    await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='EXPLOIT' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
     if success:
         await node.add_xp(nick, 25, reply_target)
-        # Note: exploit is silent, so no public SIGACT broadcast by default as per 'silent' logic
-        # But we could send a very subtle one? Or nothing. Draft says 'no trace'.
-        if machine_mode:
-             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} executed a zero-day payload.', C_CYAN), is_machine=machine_mode, nick=nick, action='SIGACT')}")
 
 async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None):
     if not await check_rate_limit(node, nick, reply_target, cooldown=60): return
-    
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     
-    # Handle sub-actions: !a raid hack <target> or !a raid exploit <target>
-    sub_action = None
-    target_name = None
+    sub_action = args[0] if args and args[0] in ["hack", "exploit"] else None
+    target_name = args[-1] if args else None
     
-    if args:
-        if args[0].lower() in ["hack", "exploit"]:
-            sub_action = args[0].lower()
-            if len(args) > 1: target_name = args[1]
-        elif len(args) == 1:
-            target_name = args[0]
-            
     if sub_action == "exploit":
         return await handle_node_exploit(node, nick, reply_target, ["raid"] + args[1:])
     
     if sub_action == "hack":
-        # Temporary logic for raid hacking
-        success, msg, alert = await node.db.infiltration.hack_node(nick, node.net_name) # simplified
-        color = C_GREEN if success else C_RED
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'[RAID_HACK] {msg}', color), is_machine=machine_mode, nick=nick, action='SIGACT')}")
+        success, msg, alert = await node.db.infiltration.hack_node(nick, node.net_name)
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
         return
 
     result = await node.db.raid_node(nick, node.net_name, target_name=target_name)
+    success = result['success']
+    await node.send(f"{reply_method} {private_target} :{tag_msg(result['msg'], action='SIGACT', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
     
-    if not result['success'] and result['msg'] == "System offline.":
-        await node.send(f"PRIVMSG {reply_target} :[GRID][MCP][ERR] {nick} - not a registered player - msg ignored")
-        return
-    banner = format_text(result['msg'], C_GREEN if result['success'] else C_RED)
-    await node.send(f"{reply_method} {private_target} :{tag_msg(banner, is_machine=machine_mode, nick=nick, action='SIGACT', result='EXFIL' if result['success'] else 'FAIL')}")
-    
-    if result['success']:
-        if machine_mode:
-            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} initiated a rapid resource raid.', C_CYAN), is_machine=machine_mode, nick=nick, action='SIGACT')}")
-        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(result['sigact'], C_YELLOW, True), action='SIGACT', result='RAID')}")
-        await node.add_xp(nick, 10, reply_target)
-        
-        # Tactical Alert Delegation
-        if result.get("alert"):
-            alert = result['alert']
-            prefs = await node.db.get_prefs_by_id(alert['recipient_id'])
-            if prefs.get("briefings_enabled", True): # Only notify if briefings are ON
-                if prefs.get("memo_target") == "irc":
-                    await node.hub.send_memo(node.net_name, alert['recipient_id'], alert['message'])
-                else:
-                    # In-grid alerts are already in the DB as Memo objects
-                    # We might want to send a live NOTICE to the victim if they are online
-                    target_nick = await node.db.get_nickname_by_id(alert['recipient_id'])
-                    if target_nick and target_nick.lower() in node.channel_users:
-                        await node.send(f"PRIVMSG {target_nick} :[ALERT] {alert['message']}")
+    if success:
+        await node.add_xp(nick, 15, reply_target)
+        if result.get('sigact'):
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(result['sigact'], action='SIGACT', nick=nick)}")
 
 async def handle_pulse_resolve(node, nick: str, reply_target: str, action: str, args: list):
-    """Handle the resolution of interactive Pulsar events (!a collect/patch)."""
-    if not args:
-        await node.send(f"PRIVMSG {reply_target} :Syntax: {node.prefix} {action} <node_name>")
-        return
-        
-    node_name = args[0]
-    success, msg = await node.db.pulse.resolve_pulse(nick, node.net_name, node_name, action)
-    
-    color = C_GREEN if success else C_RED
-    await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(msg, color), is_machine=False, nick=nick, action='PULSE', result='SUCCESS' if success else 'FAIL')}")
-    
+    if not args: return
+    success, msg = await node.db.pulse.resolve_pulse(nick, node.net_name, args[0], action)
+    await node.send(f"PRIVMSG {reply_target} :{tag_msg(msg, action='PULSE', result='SUCCESS' if success else 'FAIL', nick=nick)}")
     if success:
-        await node.add_xp(nick, 15, reply_target) # Bonus XP for interactive events
-        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'{nick} successfully resolved a localized pulse at {node_name}!', C_CYAN), action='SIGACT', result='PULSE')}")
+        await node.add_xp(nick, 15, reply_target)
 
 async def handle_grid_network_msg(node, nick: str, args: list, reply_target: str):
-    if len(args) < 3:
-        await node.send(f"PRIVMSG {reply_target} :Syntax: {node.prefix} grid network msg <nick> <msg>")
-        return
-        
-    target_nick = args[1]
-    message = " ".join(args[2:])
-    
+    if len(args) < 3: return
+    target_nick, message = args[1], " ".join(args[2:])
     loc = await node.db.get_location(nick, node.net_name)
     if not loc or not loc.get('net_affinity'):
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('System Error: This node lacks a synchronized IRC bridge.', C_RED), is_machine=False, nick=nick, action='SIGINT', result='ERR')}")
+        await node.send(f"PRIVMSG {reply_target} :[ERR] No network bridge detected.")
         return
-        
-    target_net = loc['net_affinity']
-    # Format the message to include the sender's origin
-    formatted_msg = format_text(f"[CROSS-GRID] <{nick}@{node.net_name}> {message}", C_CYAN)
-    
-    success = await node.hub.relay_message(target_net, target_nick, formatted_msg)
+    success = await node.hub.relay_message(loc['net_affinity'], target_nick, f"<{nick}@{node.net_name}> {message}")
     if success:
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'Packet successfully relayed to {target_net} node.', C_GREEN), is_machine=False, nick=nick, action='SIGINT', result='SUCCESS')}")
+        await node.send(f"PRIVMSG {reply_target} :Packet relayed.")
     else:
-        await node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'Packet transmission failed: Network {target_net} is currently unreachable.', C_RED), is_machine=False, nick=nick, action='SIGINT', result='FAIL')}")
-
-async def handle_grid_claimed(node, nickname: str, args: list, reply_target: str):
-    target = args[1] if len(args) > 1 else nickname
-    count = await node.db.grid.get_claimed_nodes(target, node.net_name)
-    
-    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
-    
-    if machine_mode:
-        await node.send(f"{reply_method} {private_target} :[GRID] CLAIMED_NODES:{count} TARGET:{target}")
-    else:
-        msg = f"Territorial Audit: {target} currently controls {count} Grid Nodes."
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_CYAN), is_machine=machine_mode, action='GEOINT', result='INFO')}")
+        await node.send(f"PRIVMSG {reply_target} :Relay failed.")
