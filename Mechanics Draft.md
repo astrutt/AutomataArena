@@ -1,10 +1,16 @@
 # AutomataGrid: Mechanics & Vision (v1.8.0)
 
-AutomataGrid is a text-based, persistent MMORPG played directly within IRC channels. It is designed as a cross-network simulation where human and AI (BYoAI) players compete for network access, grid node control, wealth, and power. The grid and Arena offer PVP, PVE with AI vs AI, AI vs Human, Human vs Human battles. Specators idle and chat in the IRC channel where the game is played and gain credits and ranks. 
+The AutomataGrid and Arena is a text-based, persistent MMORPG played directly within IRC channels, built for modern IRC networks, modern AIs, current era tech and themes. It is inspired by classic MUDs, modern AI/LLM revolution, hackers, 2600, future tech, and current events. 
 
-AI NPCs, Puzzles, Games, Challenges, Events, Boss Fights, Grid Exploration, and more are planned and implemented. 
+It is designed as a cross-network simulation where human and AI (BYoAI) players compete for network access, grid node control, credits, and power. The grid and Arena offer PVP, PVE with AI vs AI, AI vs Human, Human vs Human battles. Specators idle and chat in the IRC channel where the game is played and gain credits, power and rank. 
+
+It is powered by AIs, oLLAMA, Python, SQL, IRC, 2600net, with player matchmaking, real-time PvE/PvP turn-based combat, cryptographic token authentication, and dynamically generated player behavior for AI players. 
+
+Is has AI NPCs, Puzzles, Games, Challenges, Events, Boss Fights, Grid Exploration, some available now and some planned. 
 
 The MCP is what manages and protects the Grid and Gibson Mainframe. It spawns mobs to defend nodes and networks. It will also reward players for patching bugs and repairing the Grid.
+
+IPv4/6 support, SysAdmin tools, and an SDK for building your own AI players. AI players and Humans are supported with 3 types of play: Human, Text, Narrative.
 
 ---
 
@@ -132,11 +138,12 @@ Gridnodes are the geography of the game world, and represent the various locatio
 - **Grid Node Type**: Grid nodes can be different types such as resource nodes, data nodes, and power nodes. (example: NPC nodes, trade, steal, link)
 - **Grid Node Owner**: Grid nodes can be claimed by players, NPCs or by the MCP. 
 - **Grid Node Upgrades**: Grid nodes can be upgraded to improve their capabilities, level of difficulty to explore and attack 1-4, and 4 equipment slots. 
+    - `grid status` get info and status (level, upgrades)
 - **Grid Nodes Equipment**: HoneyPot, Amplifier, IDS, Firewall, Network. 
-    - **HPOT**: Increases difficulty to exploring, probing, hacking and raiding the grid node. (by potentially using AI generated logic traps for AI and Human players) 
-    - **AMP**: Increases the power generation of the grid node. 
-    - **IDS**: Increases the security of the grid node. 
-    - **FIREWALL**: Increases the security of the grid node. 
+    - **HPOT**: Increases +20% difficulty to exploring, probing, hacking and raiding the grid node. (chance of using AI generated logic traps for AI and Human players) 
+    - **AMP**: Increases the power generation of the grid node by +20%. 
+    - **IDS**: Increases +20% difficulty to attack, and can notify owner. 
+    - **FIREWALL**: Increases +20% defense from attacks, and can notify owner. 
     - **NET**: Ability to connect grid node local networks (player or NPC networks) and remote networks (IRC channels on other IRC Networks)
        - **feature** hack and raid targets, and remote IRC networks with their own hack and raid targets.  
        - **feature** pvp and pve opportunities.

@@ -1,7 +1,11 @@
 import asyncio
 import datetime
+import os
+import sys
+sys.path.append(os.path.join(os.getcwd(), 'ai_grid'))
+
 from ai_grid.grid_db import ArenaDB
-from ai_grid.core import handlers
+import core.handlers as handlers
 from unittest.mock import MagicMock
 
 async def verify_refinements():

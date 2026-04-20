@@ -88,6 +88,31 @@ class ArenaDB:
 
         self.grid = GridFacade(self)
 
+        # Player Facade Compatibility (Legacy repository proxy)
+        class PlayerFacade:
+            def __init__(self, db):
+                self.db = db
+            async def add_experience(self, *a, **k): return await self.db.progression.add_experience(*a, **k)
+            async def get_player(self, *a, **k): return await self.db.character.get_player(*a, **k)
+            async def rank_up_stat(self, *a, **k): return await self.db.progression.rank_up_stat(*a, **k)
+            async def mark_memos_read(self, *a, **k): return await self.db.comm.mark_memos_read(*a, **k)
+            async def get_memos(self, *a, **k): return await self.db.comm.get_memos(*a, **k)
+            async def complete_task(self, *a, **k): return await self.db.activity.complete_task(*a, **k)
+            async def register_player(self, *a, **k): return await self.db.identity.register_player(*a, **k)
+            async def authenticate_player(self, *a, **k): return await self.db.identity.authenticate_player(*a, **k)
+            async def get_character_by_nick(self, *a, **k): return await self.db.identity.get_character_by_nick(*a, **k)
+            async def list_players(self, *a, **k): return await self.db.character.list_players(*a, **k)
+            async def update_last_seen(self, *a, **k): return await self.db.character.update_last_seen(*a, **k)
+            async def update_activity_stats(self, *a, **k): return await self.db.character.update_activity_stats(*a, **k)
+            async def get_prefs(self, *a, **k): return await self.db.character.get_prefs(*a, **k)
+            async def get_prefs_by_id(self, *a, **k): return await self.db.character.get_prefs_by_id(*a, **k)
+            async def set_pref(self, *a, **k): return await self.db.character.set_pref(*a, **k)
+            async def get_nickname_by_id(self, *a, **k): return await self.db.identity.get_nickname_by_id(*a, **k)
+            async def active_powergen(self, *a, **k): return await self.db.activity.active_powergen(*a, **k)
+            async def active_training(self, *a, **k): return await self.db.activity.active_training(*a, **k)
+
+        self.player = PlayerFacade(self)
+
     # Primary Facade Methods (Direct delegation for ArenaDB level calls)
     async def get_spawn_node_name(self, *a, **k): return await self.navigation.get_spawn_node_name(*a, **k)
     async def set_spawn_node(self, *a, **k): return await self.navigation.set_spawn_node(*a, **k)

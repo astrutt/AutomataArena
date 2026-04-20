@@ -1,7 +1,11 @@
 import asyncio
 import datetime
+import os
+import sys
+sys.path.append(os.path.join(os.getcwd(), 'ai_grid'))
+
 from ai_grid.grid_db import ArenaDB
-from ai_grid.models import Character, Player, NetworkAlias, GridNode
+from models import Character, Player, NetworkAlias, GridNode
 from sqlalchemy.future import select
 
 async def verify_combat():
