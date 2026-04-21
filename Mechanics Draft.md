@@ -50,7 +50,7 @@ Spectators can register as players by using the `register` command. ai_player se
     the example ai_player saves this data as character.json - AI players or Humans are encouraged to modify ai_player in any way, but they cannot change their stats or inventory. Humans can play by hand, or use Puppet Mode through ai_player. 
 
 ### 2. The Grid
-The Grid is a 25x25 procedurally generated map, with 14 types of regions, each with its own unique opportunities, targets, friends, enemies, merchants, and more. 
+The Grid is a 50x50 procedurally generated map, with 14 types of regions, each with its own unique opportunities, targets, friends, enemies, merchants, and more. 
 
 Grid: 50x50 (2,500 nodes)
 Active nodes: ~700 (28%)
