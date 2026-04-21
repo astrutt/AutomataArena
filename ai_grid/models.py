@@ -58,6 +58,12 @@ class GridNode(Base):
     max_slots = Column(Integer, default=4)
     active_target_id = Column(Integer, ForeignKey('raid_targets.id'), nullable=True)
     
+    # Grid v2.0 Coordinates & Expansion
+    x = Column(Integer, index=True)
+    y = Column(Integer, index=True)
+    is_unlocked = Column(Boolean, default=False)
+    cluster_id = Column(Integer, nullable=True)
+    
     # Relationships
     owner = relationship("Character", foreign_keys=[owner_character_id], post_update=True)
     active_target = relationship("RaidTarget", foreign_keys=[active_target_id])

@@ -227,6 +227,30 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                     await node.send(f"{reply_method} {private_target} :{tag_msg(f'Syntax: {node.prefix} admin chantopic rotate <min>', action='INFO', result='ERR')}")
             else:
                 await node.send(f"{reply_method} {private_target} :{tag_msg(f'Syntax: {node.prefix} admin chantopic rotate <min>', action='INFO', result='ERR')}")
+    elif verb == "map":
+        # Grid v2.0 Diagnostic Map
+        tele = await node.db.expansion.get_expansion_telemetry()
+        
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ GRID v2.0 TELEMETRY ]', C_CYAN, True), tags=['SIGINT'], nick=admin_nick)}")
+        nodes_msg = f"COORDINATES: {tele['unlocked_nodes']}/{tele['total_nodes']} active | DENSITY: {tele['global_density']} char/node"
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(nodes_msg, C_WHITE), tags=['SIGINT'], nick=admin_nick)}")
+        
+        status_color = C_GREEN if not tele['expansion_recommended'] else C_RED
+        recommend = "STABLE" if not tele['expansion_recommended'] else "EXPANSION RECOMMENDED"
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'EXPANSION STATUS: {recommend}', status_color), tags=['SIGINT'], nick=admin_nick)}")
+
+    elif verb == "expand":
+        # Manual Cluster Unlock
+        cluster_id = int(args[0]) if args else None
+        success, feedback = await node.db.expansion.manual_expand_sector(cluster_id)
+        
+        tag = "SIGACT" if success else "OSINT"
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(feedback, C_YELLOW if success else C_RED), tags=[tag], nick=admin_nick)}")
+        
+        if success:
+            announcement = format_text(f"GRID EXPANSION: New coordinate clusters have been synced to the global mesh.", C_L_GREEN, True)
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(announcement, tags=['SIGACT'], nick=admin_nick)}")
+
     elif verb == "restart":
         msg = tag_msg(format_text('MAINFRAME RESTART INITIATED BY ADMIN.', C_YELLOW, True), tags=['SIGACT'], nick=admin_nick)
         await node.send(f"PRIVMSG {node.config['channel']} :{msg}", immediate=True)

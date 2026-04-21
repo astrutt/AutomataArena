@@ -32,6 +32,7 @@ from database.repositories.combat_repo import CombatRepository
 from database.repositories.pulse_repo import PulseRepository
 from database.repositories.spectator_repo import SpectatorRepository
 from database.repositories.incursion_repo import IncursionRepository
+from database.repositories.expansion_repo import ExpansionRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):
@@ -59,6 +60,7 @@ class ArenaDB:
         self.maintenance = MaintenanceRepository(self.async_session)
         self.pulse = PulseRepository(self.async_session)
         self.incursion = IncursionRepository(self.async_session)
+        self.expansion = ExpansionRepository(self.async_session)
 
         # Legacy Facade Compatibility (grid object proxy)
         class GridFacade:
@@ -138,38 +140,108 @@ class ArenaDB:
     async def close(self):
         await self.engine.dispose()
 
+    async def generate_master_grid(self, width: int = 50, height: int = 50):
+        """
+        Procedurally generates a 50x50 coordinate map (2,500 nodes).
+        Distributes 700 'Active' nodes across 7 core clusters.
+        """
+        logger.info(f"Generating v2.0 Procedural Grid ({width}x{height})...")
+        async with self.async_session() as session:
+            # 1. Clear existing topology
+            await session.execute(text("DELETE FROM grid_nodes"))
+            await session.execute(text("DELETE FROM node_connections"))
+            await session.execute(text("DELETE FROM discovery_records"))
+            await session.flush()
+
+            # 2. Define Cluster Centers (x, y, name, cluster_id, node_type, net_affinity)
+            clusters = [
+                (25, 25, "Nexus", 0, "safezone", None),      # Spawn
+                (10, 40, "Rizon", 1, "wilderness", "rizon"), # Home
+                (40, 10, "2600net", 2, "wilderness", "2600net"), # Home
+                (25, 30, "Arena", 3, "arena", None),
+                (10, 10, "Edge_West", 4, "wilderness", None),
+                (40, 40, "Edge_East", 5, "wilderness", None),
+                (25, 45, "Vault", 6, "safezone", None)
+            ]
+            
+            cluster_targets = {}
+            for cx, cy, cname, cid, ctype, caff in clusters:
+                # Place Center Node
+                center = GridNode(
+                    name=cname if cid > 0 else "UpLink",
+                    x=cx, y=cy, cluster_id=cid, node_type=ctype,
+                    net_affinity=caff, is_spawn_node=(cid == 0),
+                    is_unlocked=(cid in [0, 3]), # Spawn and Arena unlocked by default
+                    upgrade_level=4 if cid > 0 else 1,
+                    power_stored=1000000.0 if cid > 0 else 100.0
+                )
+                if cid == 0: center.name = "UpLink"
+                session.add(center)
+                cluster_targets[cid] = (cx, cy)
+
+            await session.flush()
+
+            # 3. Procedural Fill (2,500 total)
+            import random
+            active_count = 0
+            for gy in range(height):
+                for gx in range(width):
+                    # Skip if already a cluster center
+                    if any(gx == c[0] and gy == c[1] for c in clusters): continue
+                    
+                    # Determine Cluster Affinity
+                    closest_cid = -1
+                    min_dist = 999
+                    for cid, (cx, cy) in cluster_targets.items():
+                        dist = abs(gx - cx) + abs(gy - cy) # Manhattan
+                        if dist < min_dist:
+                            min_dist = dist
+                            closest_cid = cid
+                    
+                    # Active Node probability (Higher near centers)
+                    # 700 / 2500 ~= 28% base
+                    is_active = False
+                    if min_dist < 5 and active_count < 700:
+                        is_active = True
+                        active_count += 1
+                    elif random.random() < 0.10 and active_count < 700:
+                        is_active = True
+                        active_count += 1
+                    
+                    node = GridNode(
+                        name=f"Sector_{gx}_{gy}",
+                        x=gx, y=gy,
+                        is_unlocked=any(gx == c[0] and gy == c[1] for c in clusters if c[3] in [0, 3]),
+                        cluster_id=closest_cid if is_active else None,
+                        node_type="wilderness",
+                        threat_level=random.randint(1, 3) if is_active else 0
+                    )
+                    
+                    # Special Case: Default Unlocked Area around Nexus (Radius 3)
+                    if abs(gx - 25) <= 3 and abs(gy - 25) <= 3:
+                        node.is_unlocked = True
+
+                    session.add(node)
+            
+            await session.commit()
+            logger.info(f"Grid Master generated. Active nodes: {active_count + len(clusters)}")
+
     async def init_schema(self):
-        logger.info("Initializing database schema via SQLAlchemy...")
+        logger.info("Initializing v2.0 database schema...")
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
         
+        # v2.0 Procedural Initialization
+        await self.generate_master_grid()
+        
         async with self.async_session() as session:
-            # 1. Initialize Nodes
-            uplink = GridNode(name="UpLink", description="The central nexus. A safezone where new connections manifest.", node_type="safezone", is_spawn_node=True)
-            arena_node = GridNode(name="The_Arena", description="The main fighting grounds. Blood and RAM are spilled here.", node_type="arena")
-            wilderness = GridNode(name="The_CPU_Socket", description="A vast wasteland of processing power. Danger lurks.", node_type="wilderness")
-            black_market = GridNode(
-                name="Black_Market_Port", 
-                description="Shadowy merchants peddle encrypted wares here.", 
-                node_type="merchant",
-                is_darknet=True,
-                availability_mode='CLOSED'
-            )
-            
-            session.add_all([uplink, arena_node, wilderness, black_market])
-            await session.flush()
-            
-            # 2. Topology and Items are seeded via seed_grid_expansion and seed_items_only
-            await session.commit()
-            
-            # 3. Item Templates
-            item_tpl = ItemTemplate(name="Basic_Ration", item_type="consumable", base_value=10, effects_json='{"heal": 15}')
-            rifle_tpl = ItemTemplate(name="Pulse_Rifle", item_type="weapon", base_value=1000, is_darknet=True, effects_json='{"damage": 25, "type": "kinetic"}')
-            session.add_all([item_tpl, rifle_tpl])
+            # Seed Item Templates (Task 021+)
+            for tpl_data in LOOT_TEMPLATES:
+                session.add(ItemTemplate(**tpl_data))
             
             await session.commit()
-        logger.info("Schema successfully initialized.")
+        logger.info("v2.0 Schema successfully initialized.")
 
     async def create_snapshot(self):
         """Creates a timestamped backup of the current database."""

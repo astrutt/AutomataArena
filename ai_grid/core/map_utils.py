@@ -100,69 +100,46 @@ def get_connector_symbol(source: GridNode, target: GridNode, vertical: bool = Fa
         return "--"
 
 async def generate_ascii_map(session, char: Character, machine_mode: bool = False, limit_radius: int = None, show_legend: bool = True) -> str:
-    """Generate a grid representation with 2-char paths and tiered intelligence."""
+    """Generate a grid representation using global coordinates and tiered intelligence."""
     
-    # 1. Calculate Radius Tier
+    # 1. Calculate Radius
     if limit_radius is not None:
         radius = limit_radius
     else:
-        total_stat = char.sec + char.alg
-        if total_stat >= 60: radius = 4
-        elif total_stat >= 40: radius = 3
-        elif total_stat >= 20: radius = 2
+        total_stat = (char.sec or 0) + (char.alg or 0)
+        if total_stat >= 60: radius = 3
+        elif total_stat >= 40: radius = 2
         else: radius = 1
     
-    # 1b. Fetch Discovery Records
+    # 2. Determine Bounding Box
+    center_x, center_y = char.current_node.x, char.current_node.y
+    min_x, max_x = center_x - radius, center_x + radius
+    min_y, max_y = center_y - radius, center_y + radius
+    
+    # Boundary Clamping (0-49)
+    min_x, max_x = max(0, min_x), min(49, max_x)
+    min_y, max_y = max(0, min_y), min(49, max_y)
+
+    # 3. Fetch Nodes in Box
+    stmt = select(GridNode).where(
+        GridNode.x >= min_x, GridNode.x <= max_x,
+        GridNode.y >= min_y, GridNode.y <= max_y
+    )
+    nodes = (await session.execute(stmt)).scalars().all()
+    grid = {(n.x, n.y): n for n in nodes}
+
+    # 4. Fetch Discovery Records for these nodes
     from models import DiscoveryRecord
-    disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id)
+    node_ids = [n.id for n in nodes]
+    disc_stmt = select(DiscoveryRecord).where(
+        DiscoveryRecord.character_id == char.id,
+        DiscoveryRecord.node_id.in_(node_ids)
+    )
     disc_recs = {d.node_id: d.intel_level for d in (await session.execute(disc_stmt)).scalars().all()}
     
-    grid = {} # (x, y) -> GridNode
-    queue = [(char.current_node, 0, 0, 0)] 
-    visited = {char.node_id}
-    grid[(0, 0)] = char.current_node
+    if not grid: return "MAP ERROR: Coordinate void detected."
     
-    # Breadth-first walk
-    idx = 0
-    while idx < len(queue):
-        curr_node, x, y, dist = queue[idx]
-        idx += 1
-        if dist >= radius: continue
-        
-        stmt = select(NodeConnection).where(NodeConnection.source_node_id == curr_node.id).options(selectinload(NodeConnection.target_node))
-        conns = (await session.execute(stmt)).scalars().all()
-        
-        for conn in conns:
-            if conn.is_hidden: continue
-            target = conn.target_node
-            tx, ty = x, y
-            d = conn.direction.lower()
-            if d == 'north': ty -= 1
-            elif d == 'south': ty += 1
-            elif d == 'east': tx += 1
-            elif d == 'west': tx -= 1
-            else: continue 
-            
-            if (tx, ty) not in grid:
-                grid[(tx, ty)] = target
-                if target.id not in visited:
-                    visited.add(target.id)
-                    queue.append((target, tx, ty, dist + 1))
-
-    if not grid: return "MAP ERROR: Matrix isolated."
-    
-    # Determine bounds
-    min_x = min(k[0] for k in grid.keys())
-    max_x = max(k[0] for k in grid.keys())
-    min_y = min(k[1] for k in grid.keys())
-    max_y = max(k[1] for k in grid.keys())
-    
-    min_x -= 1; max_x += 1; min_y -= 1; max_y += 1
-    
-    # Character Intelligence context
-    intel_level = "DEEP SCAN" if radius >= 4 else ("TACTICAL" if radius >= 3 else "BASIC")
-    
-    # Build text rows
+    # 5. Build Map Output
     output = []
     for gy in range(min_y, max_y + 1):
         row = ""
@@ -177,26 +154,34 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
                 node_sym = get_node_symbol(curr, char, machine_mode, intel)
                 row += node_sym
                 
-                # Check East connector
+                # Check East connector (Horizontal)
                 east = grid.get((gx+1, gy))
                 if east:
-                    conn_sym = get_connector_symbol(curr, east, vertical=False)
-                    row += format_text(conn_sym, C_GREY)
+                    # Gated by discovery of BOTH Source and Target
+                    east_intel = disc_recs.get(east.id, "NONE")
+                    if intel != "NONE" and east_intel != "NONE":
+                        conn_sym = get_connector_symbol(curr, east, vertical=False)
+                        row += format_text(conn_sym, C_GREY)
+                    else:
+                        row += "  "
                 else:
-                    row += "  " # 2 chars wide padding
+                    row += "  "
                 
-                # Check South connector
+                # Check South connector (Vertical)
                 south = grid.get((gx, gy+1))
                 if south:
-                    conn_sym = get_connector_symbol(curr, south, vertical=True)
-                    # Align with the node box (usually 3 chars wide: [X])
-                    # We want the connector under the center
-                    connector_row += f"  {format_text(conn_sym, C_GREY)}   "
-                    has_connectors = True
+                    # Gated by discovery of BOTH Source and Target
+                    south_intel = disc_recs.get(south.id, "NONE")
+                    if intel != "NONE" and south_intel != "NONE":
+                        conn_sym = get_connector_symbol(curr, south, vertical=True)
+                        connector_row += f"  {format_text(conn_sym, C_GREY)}   "
+                        has_connectors = True
+                    else:
+                        connector_row += "      "
                 else:
                     connector_row += "      "
             else:
-                row += "     " # 3 (node) + 2 (link)
+                row += "     "
                 connector_row += "      "
                 
         if row.strip():
@@ -208,6 +193,7 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
         return "\n".join(output)
             
     # Add legend
+    intel_level = "TACTICAL" if radius >= 3 else ("BASIC" if radius >= 2 else "LOCAL")
     mode_str = "MACHINE" if machine_mode else "HUMAN"
-    legend = format_text(f"Map: {mode_str} | Intel: {intel_level} | Radius: {radius}", C_WHITE)
+    legend = format_text(f"Grid: {mode_str} | Pos: ({center_x}, {center_y}) | Intel: {intel_level} | Depth: {radius}", C_WHITE)
     return "\n".join(output) + "\n" + legend

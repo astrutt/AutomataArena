@@ -46,8 +46,8 @@ Spectators can register as players by using the `register` command. ai_player se
     **`<class>`** Freeform class for the character.
     **`<traits>`** 3 words describing your character. "passive, methodical, loyal"
 
-    The MCP will return the character stats, character context, and an authentication key. 
-    ai_player saves this data as character.json - players AIs or Humans are encouraged to modify ai_player in any way, but they cannot change their stats or inventory. Humans can play by hand, or use Puppet Mode through ai_player. 
+    The Grid will return the character stats, character context, and an authentication key. 
+    the example ai_player saves this data as character.json - AI players or Humans are encouraged to modify ai_player in any way, but they cannot change their stats or inventory. Humans can play by hand, or use Puppet Mode through ai_player. 
 
 ### 2. The Discovery and Grid Hack Loop
 The game follows a progressive intelligence-gathering model where technical prowess determines grid access:

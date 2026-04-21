@@ -51,32 +51,32 @@ class NavigationRepository(BaseRepository):
                 NetworkAlias.nickname == name,
                 NetworkAlias.network_name == network
             ).options(
-                selectinload(Character.current_node)
-                .selectinload(GridNode.exits)
-                .selectinload(NodeConnection.target_node),
-                selectinload(Character.current_node)
-                .selectinload(GridNode.owner)
+                selectinload(Character.current_node).selectinload(GridNode.owner)
             )
             result = await session.execute(stmt)
             char = result.scalars().first()
-            if not char:
+            if not char or not char.current_node:
                 return None
+            
             node = char.current_node
-            if not node:
-                return None
-
+            
             # --- INTEL DISCOVERY FILTER ---
             disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
             disc = (await session.execute(disc_stmt)).scalars().first()
             intel = disc.intel_level if disc else "NONE"
             
-            # Auto-discover the node we are currently standing on at minimum EXPLORE level
+            # Auto-discover current node
             if intel == "NONE":
                 intel = "EXPLORE" 
                 session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level="EXPLORE"))
+                await session.commit()
 
-            exits = [f"{c.direction} -> {c.target_node.name}" for c in node.exits if not c.is_hidden or intel == "PROBE"]
-            
+            # v2.0 Cardinal Exit Mapping
+            exits = []
+            directions = {"north": (0, -1), "south": (0, 1), "east": (1, 0), "west": (-1, 0)}
+            for d, _ in directions.items():
+                exits.append(d) # In v2.0, all cardinal moves are technically exits
+
             # Tiered Data Masking
             desc = node.description if intel in ["EXPLORE", "PROBE"] else "DATA_ENCRYPTED: Explore node to decrypt."
             power_info = {
@@ -87,6 +87,7 @@ class NavigationRepository(BaseRepository):
 
             return {
                 'name': node.name,
+                'x': node.x, 'y': node.y,
                 'description': desc,
                 'type': node.node_type,
                 'intel_level': intel,
@@ -103,45 +104,61 @@ class NavigationRepository(BaseRepository):
             }
 
     async def move_player(self, name: str, network: str, direction: str):
-        """Move 1 sector in standard directions."""
+        """Move 1 sector in 50x50 global coordinates."""
         move_cost = CONFIG.get('mechanics', {}).get('action_costs', {}).get('move', 1.0)
         async with self.async_session() as session:
-            # 1. Identity & Affinity Resolve
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name,
                 NetworkAlias.nickname == name,
                 NetworkAlias.network_name == network
             ).options(
-                selectinload(Character.current_node).selectinload(GridNode.exits).selectinload(NodeConnection.target_node),
-                selectinload(Character.current_node).selectinload(GridNode.characters_present)
+                selectinload(Character.current_node)
             )
             res = await session.execute(stmt)
             char = res.scalars().first()
-            if not char: return None, "System offline."
-            if not char.current_node: return None, "You are floating in the void."
+            if not char or not char.current_node: return None, "System offline."
             
-            # 2. Local Exit Logic
-            for conn in char.current_node.exits:
-                if conn.direction.lower() == direction.lower():
-                    # Phase 3: Power Check
-                    if char.power < move_cost:
-                        return None, f"Insufficient POWER. Need {move_cost} uP."
-                    
-                    char.node_id = conn.target_node_id
-                    char.power -= move_cost
-                    
-                    # --- AUTO-DISCOVERY ON MOVEMENT ---
-                    disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == conn.target_node_id)
-                    if not (await session.execute(disc_stmt)).scalars().first():
-                        session.add(DiscoveryRecord(character_id=char.id, node_id=conn.target_node_id, intel_level="EXPLORE"))
-                    
-                    await session.commit()
-                    
-                    msg = f"Traversed {direction} to {conn.target_node.name}. (-{move_cost} power)"
-                    if conn.target_node.availability_mode == 'CLOSED':
-                        msg += " [GRID][SITREP] STATUS=CLOSED | MSG=Grid is CLOSED. Grid exploration, or more may be required to open it."
-                    
-                    return conn.target_node.name, msg
+            node = char.current_node
+            
+            # 1. Coordinate Math
+            dx, dy = 0, 0
+            d = direction.lower()
+            if d == 'north': dy = -1
+            elif d == 'south': dy = 1
+            elif d == 'east': dx = 1
+            elif d == 'west': dx = -1
+            
+            if dx != 0 or dy != 0:
+                tx, ty = node.x + dx, node.y + dy
+                if tx < 0 or tx >= 50 or ty < 0 or ty >= 50:
+                    return None, f"BOUNDARY ERROR: Global grid terminus reached at ({tx}, {ty})."
+                
+                # Find Target Node
+                stmt_target = select(GridNode).where(GridNode.x == tx, GridNode.y == ty)
+                target = (await session.execute(stmt_target)).scalars().first()
+                if not target: return None, f"VOID ERROR: Sector ({tx}, {ty}) is unallocated."
+                
+                # Logic Gate: Sector Unlock
+                if not target.is_unlocked and target.owner_character_id != char.id:
+                    return None, f"ACCESS DENIED: Sector ({tx}, {ty}) is currently OFFLINE. Grid expansion required."
+
+                # Power Check
+                if char.power < move_cost:
+                    return None, f"Insufficient POWER. Need {move_cost} uP."
+                
+                char.node_id = target.id
+                char.power -= move_cost
+                
+                # AUTO-DISCOVERY
+                disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == target.id)
+                if not (await session.execute(disc_stmt)).scalars().first():
+                    session.add(DiscoveryRecord(character_id=char.id, node_id=target.id, intel_level="EXPLORE"))
+                
+                await session.commit()
+                msg = f"Traversed {direction} to {target.name} ({tx}, {ty}). (-{move_cost} power)"
+                return target.name, msg
+
+            return None, f"No valid route found for '{direction}'."
             
             # 3. Bridge Traversal Logic (The Uplink - Task 021)
             # If direction matches the affinity of the node, we are attempting to "jump" networks
