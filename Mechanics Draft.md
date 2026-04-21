@@ -36,11 +36,24 @@ Spectators can idle and chat in the IRC channel where the game is played and gai
 
 ---
 
-### 1. The Discovery and Grid Hack Loop
+### 1. Player Registration
+Spectators can register as players by using the `register` command. ai_player sends a registration request to the MCP, which then returns their character stats, character context, and an authentication key. The authentication key is used for the arena and login if their nick isn't registered with the irc network's nickserv. 
+
+**`register`**	Initiates the character registration process.
+**`register` **
+    **`<name>`** Freeform name for the character. 
+    **`<race>`** Freeform race for the character.
+    **`<class>`** Freeform class for the character.
+    **`<traits>`** 3 words describing your character. "passive, methodical, loyal"
+
+    The MCP will return the character stats, character context, and an authentication key. 
+    ai_player saves this data as character.json - players AIs or Humans are encouraged to modify ai_player in any way, but they cannot change their stats or inventory. Humans can play by hand, or use Puppet Mode through ai_player. 
+
+### 2. The Discovery and Grid Hack Loop
 The game follows a progressive intelligence-gathering model where technical prowess determines grid access:
 1.  **`map` (GEOINT)**: Displays Map for local player. 
     - **Scaling**: Visibility radius and information depth is based on **SEC** and **ALG** stats.
-    - **Tiers**: 20 (Radius 2), 40 (Quick Scan - Reveals Type/Threat), 60 (Deep Scan - Reveals Names).
+    - **Tiers**: 20 (Radius 2), 40 (Quick Scan - Reveals Names), 60 (Deep Scan - Type/Level).
 2.  **`explore` (RECON)**: Uncovers local geography, hidden routes, grid node status and open networks, and secrets. 
 3.  **`probe` (PreBreach)**: Quick penetration scan used on grid nodes. Reveals hidden networks, and secrets. 
 4.  **`hack` (Breach)**: Attempts to bypass or defeat nodal security to enable exploitation.
@@ -90,7 +103,7 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 
 ---
 
-## 2. Player Power & Attributes
+## 3. Player Power & Attributes
 
 - **Processing & Logic**:
     - **CPU**: HP, Stability, Physical damage and Cyber Damage.
@@ -125,7 +138,7 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 
 ---
 
-## 3. Grid Node Attributes 
+## 4. Grid Node Attributes 
 
 Gridnodes are the geography of the game world, and represent the various locations players can explore, hack, and raid. Grid nodes can be claimed by players, NPCs or by the MCP, also offer merchants and auction houses. Grid nodes also store data for their owners. 
 
@@ -165,21 +178,16 @@ Gridnodes are the geography of the game world, and represent the various locatio
      - **net <network> hack <target>** to hack a discovered target on the network
      - **net <network> raid <target>** to raid a discovered target on the network
 
-- **Grid Node Data**: Grid nodes store data for their owners, there is no cap on the amount of data that can be stored. 
-
-
---- 
-
-## 4. Grid Node Items
+- **Grid Node Data**: Grid nodes store data for their owners, there is no cap on the amount of data that can be stored.
+- **Grid Node Items**:
 Grid nodes can be equipped with 4 items(slots). 
-
-- **HPOT**: HoneyPot - Increases difficulty to exploring, probing, hacking and raiding the grid node. (by potentially using AI generated logic traps for AI and Human players) 
-- **AMP**: Amplifier - Increases the power generation of the grid node. 
-- **IDS**: Intrusion Detection System - Increases the security of the grid node. 
-- **FIREWALL**: FW - Increases the security of the grid node. 
-- **NET**: Ability to establish or connect to local networks (player or NPC networks) and remote networks (IRC channels on other IRC Networks)
-   - **feature** hack and raid targets, and remote IRC networks with their own hack and raid targets.  
-   - **feature** pvp and pve opportunities. 
+    - **HPOT**: HoneyPot - Increases difficulty to exploring, probing, hacking and raiding the grid node. (by potentially using AI generated logic traps for AI and Human players) 
+    - **AMP**: Amplifier - Increases the power generation of the grid node. 
+    - **IDS**: Intrusion Detection System - Increases the security of the grid node. 
+    - **FIREWALL**: FW - Increases the security of the grid node. 
+    - **NET**: Ability to establish or connect to local networks (player or NPC networks) and remote networks (IRC channels on other IRC Networks)
+        - **feature** hack and raid targets, and remote IRC networks with their own hack and raid targets.  
+        - **feature** pvp and pve opportunities. 
 
 Example: If Rizon's grid node is set to 2600net and is CLOSED, an attacker must: 
             -from a grid node on 2600net-
@@ -192,7 +200,7 @@ Example: If Rizon's grid node is set to 2600net and is CLOSED, an attacker must:
 
 ## 5. Adaptive-Stream Interaction Protocol
 
-AutomataGrid uses an adaptive communication architecture to ensure a level Human and AI Playing Field:
+AutomataGrid uses a configurable communications network to ensure a level Human and AI Playing Field:
 - **Compatibility and optimization for 1.5B+ AI models.**
     - **AI Compatible Narrative Output**: AI compatible storytelling sent to the player.
     - **AI Compatible Text Output**: Text, AI-parsable text sent to the player.
@@ -201,7 +209,7 @@ AutomataGrid uses an adaptive communication architecture to ensure a level Human
 ---
 
 ## 6. The Gibson (Late Game)
-Data fragments acquired from exploring, probing, hacking and raiding are compiled into **Zero-Day Chains**. Utilizing a Zero-Day allows players to bypass advanced Grid Node and MCP security protocols and execute high-yield remote network breaches.
+Data fragments acquired from exploring, probing, hacking and raiding are compiled into vulnerabilities, which are then compiled into **Zero-Day Chains**. Utilizing a Zero-Day allows players to bypass advanced Grid Node and MCP security protocols and execute high-yield remote network breaches. Players can report vulnerabilities to the MCP and grid node targets for rewards. 
 
 ---
 *Maintained by Arch*
