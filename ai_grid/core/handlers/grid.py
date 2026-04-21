@@ -83,7 +83,7 @@ async def handle_grid_view(node, nickname: str, reply_target: str):
 
 async def handle_node_explore(node, nick: str, reply_target: str):
     from .combat import handle_mob_encounter
-    if not await check_rate_limit(node, nick, reply_target, cooldown=45): return
+    if not await check_rate_limit(node, nick, reply_target, cooldown=30, consume=False): return
     
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     result = await node.db.explore_node(nick, node.net_name)
@@ -131,7 +131,7 @@ async def handle_grid_map(node, nick: str, reply_target: str):
 
 async def handle_node_probe(node, nick: str, reply_target: str):
     """SigInt report on current nodal architecture."""
-    if not await check_rate_limit(node, nick, reply_target, cooldown=15): return
+    if not await check_rate_limit(node, nick, reply_target, cooldown=15, consume=False): return
     
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     res = await node.db.probe_node(nick, node.net_name)
@@ -226,7 +226,7 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
             await node.send(f"PRIVMSG {target_nick} :{tag_msg(alert_data['message'], action='ALARM')}")
 
 async def handle_node_exploit(node, nick: str, reply_target: str, args: list):
-    if not await check_rate_limit(node, nick, reply_target, cooldown=45): return
+    if not await check_rate_limit(node, nick, reply_target, cooldown=30, consume=False): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     
     is_network = "network" in args
@@ -240,7 +240,7 @@ async def handle_node_exploit(node, nick: str, reply_target: str, args: list):
         await node.add_xp(nick, 25, reply_target)
 
 async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None):
-    if not await check_rate_limit(node, nick, reply_target, cooldown=60): return
+    if not await check_rate_limit(node, nick, reply_target, cooldown=120, consume=False): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     
     sub_action = args[0] if args and args[0] in ["hack", "exploit"] else None

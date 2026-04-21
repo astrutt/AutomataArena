@@ -22,6 +22,12 @@ class CommandRouter:
             verb = parts[1].lower()
             args = parts[2:]
 
+            # --- CENTRAL ANTI-FLOOD ENFORCEMENT ---
+            # All game commands consume tokens immediately. Admin commands are exempt.
+            if not is_admin:
+                if not await handlers.base.check_rate_limit(self.node, source_nick, reply_target, consume=True):
+                    return
+
             # 1. Registration
             if verb == "register":
                 asyncio.create_task(handlers.handle_registration(self.node, source_nick, args, reply_target))

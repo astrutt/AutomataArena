@@ -13,7 +13,6 @@ logger = logging.getLogger("manager")
 
 async def handle_economy_osint(node, source, target):
     """Broadcasting global financial metrics."""
-    if not await check_rate_limit(node, source, target): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source, target)
     
     stats = await node.db.get_global_economy()
@@ -31,7 +30,6 @@ async def handle_economy_osint(node, source, target):
 
 async def handle_gridpower_osint(node, source, target):
     """Broadcasting energy logistics and generation metrics."""
-    if not await check_rate_limit(node, source, target): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source, target)
     
     tele = await node.db.get_grid_telemetry()
@@ -48,7 +46,6 @@ async def handle_gridpower_osint(node, source, target):
 
 async def handle_gridstability_osint(node, source, target):
     """Broadcasting mesh integrity and claim metrics."""
-    if not await check_rate_limit(node, source, target): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source, target)
     
     tele = await node.db.get_grid_telemetry()
@@ -62,7 +59,6 @@ async def handle_gridstability_osint(node, source, target):
 
 async def handle_networks_osint(node, source, target):
     """Broadcasting topological bridge statistics."""
-    if not await check_rate_limit(node, source, target): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source, target)
     
     all_nodes = list(node.hub.nodes.values())
@@ -82,7 +78,6 @@ async def handle_networks_osint(node, source, target):
 
 async def handle_about_osint(node, source, target):
     """Broadcasting core project metadata."""
-    if not await check_rate_limit(node, source, target): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, source, target)
     
     msg = "VER:1.8.0 SRC:https://github.com/astrutt/AutomataArena"

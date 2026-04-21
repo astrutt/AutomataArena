@@ -56,7 +56,13 @@ class GridNode:
         self.registered_bots = 0
         self.pending_pings = {}
         self.channel_users = {}
-        self.action_timestamps = {}
+        self.action_timestamps = {} # nick.lower() -> {tokens, last_refill, violations, lockout_until}
+        self.flood_config = {
+            'max_tokens': 4.0,
+            'refill_rate': 0.5, # 1 token per 2s
+            'violation_threshold': 5,
+            'lockout_duration': 30
+        }
         self.pending_registrations = {} 
         self.nickserv_verified = set()  
         self.hype_counter = 0

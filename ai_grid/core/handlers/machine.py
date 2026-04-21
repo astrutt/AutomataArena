@@ -6,7 +6,7 @@ from .base import is_machine_mode, check_rate_limit, get_action_routing
 logger = logging.getLogger("manager")
 
 async def handle_powergen(node, nick: str, reply_target: str):
-    if not await check_rate_limit(node, nick, reply_target, cooldown=60): return
+    if not await check_rate_limit(node, nick, reply_target, cooldown=60, consume=False): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     
     success, msg = await node.db.active_powergen(nick, node.net_name)
@@ -18,7 +18,7 @@ async def handle_powergen(node, nick: str, reply_target: str):
         await node.add_xp(nick, 3, private_target)
 
 async def handle_training(node, nick: str, reply_target: str):
-    if not await check_rate_limit(node, nick, reply_target, cooldown=60): return
+    if not await check_rate_limit(node, nick, reply_target, cooldown=60, consume=False): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     
     success, msg = await node.db.active_training(nick, node.net_name)

@@ -49,6 +49,36 @@ Spectators can register as players by using the `register` command. ai_player se
     The Grid will return the character stats, character context, and an authentication key. 
     the example ai_player saves this data as character.json - AI players or Humans are encouraged to modify ai_player in any way, but they cannot change their stats or inventory. Humans can play by hand, or use Puppet Mode through ai_player. 
 
+### 2. The Grid
+The Grid is a 50x50 procedurally generated map, with 14 types of regions, each with its own unique opportunities, targets, friends, enemies, merchants, and more. 
+
+Grid: 50x50 (2,500 nodes)
+Active nodes: ~700 (28%)
+  - MCP controlled: 400
+  - NPC/merchants: 150  
+  - Raid targets: 100
+  - Player claimable: 50
+Empty nodes: ~1,800 (72%)
+Clusters of network regions:
+    - **CIV**: Civilian
+    - **SMB**: Small Business
+    - **CRP**: Corporate
+    - **EDU**: Educational
+    - **GOV**: Government
+    - **MED**: Medical
+    - **MIL**: Military
+    - **ORG**: Non-Profit Organization
+    - **LEA**: Law Enforcement Agency
+    - **DC**: Data Center
+    - **POS**: Point of Sale Systems
+    - **ICS**: Industrial Control Systems
+    - **UTL**: Utility (Power, Water, Gas, etc.) 
+    - **WAR**: War Zone 
+
+As the population grows, the administration will get a notification to expland the grid. 
+    - **'admin map'**: displays the current statistics and map size.
+    - **'admin map expand'**: expands the grid by 10x10 nodes.
+
 ### 2. The Discovery and Grid Hack Loop
 The game follows a progressive intelligence-gathering model where technical prowess determines grid access:
 1.  **`map` (GEOINT)**: Displays Map for local player. 
@@ -59,7 +89,7 @@ The game follows a progressive intelligence-gathering model where technical prow
 4.  **`hack` (Breach)**: Attempts to bypass or defeat nodal security to enable exploitation.
 5.  **`exploit` (Zero-Day)**: If a player has a zero-day chain, they can use it to bypass the security of a grid node or network and gain full access to it, sometimes leaving no trace. 0-day chains are created using data fragments collected from exploring, probing, hacking and raiding, and come in 4 tiers. 
 6.  **`raid` (EXFIL)**: Targets nodes and networks for Credits, Data, XP and loot. Rewards scale with difficulty. 
-    - Possible raid targets: [SMB][EDU][GOV][MIL][CORP][ORG][LEA][DC] (random discovery based on node level) at any point throughout the discovery loop players can discover a raid target. Easy targets may not need to be hacked or exploited, but will yield less rewards.   
+    - Possible raid targets: [CIV][SMB][EDU][MED][GOV][MIL][CRP][ORG][LEA][DC][UTL][PWR][ICS][POS][WAR] (random discovery based on node level or region) at any point throughout the discovery loop players can discover a raid target. Easy targets may not need to be hacked or exploited, but will yield less rewards.   
     - raid target local grid nodes without a net device-
         **`raid <target>`** shows information about the target
         **`raid hack <target>`** attempts to hack the target
@@ -125,7 +155,7 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
     - **Siphon**: Players can siphon power from hacked grid nodes, and their own grid nodes and networks. `siphon` 
     - **Storage**: Players can store power in their inventory, but it will decay over time if not used or generated regularly.   
 
-- **Player Data**: Players can collect data from exploring, probing, hacking and raiding. Data can be used to create vulnerabilities and zero-day exploits. 
+- **Player Data**: Players collect data from exploring, probing, hacking and raiding. Data can be used to create vulnerabilities and zero-day exploits. 
 
 - **Player XP**: Players gain XP from travel, exploring, probing, hacking and raiding. XP is used to level up and gain new stat points. 
 
@@ -135,6 +165,20 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 - **Hit Points**: Calculated as $HP = (CPU + RAM + BND + SEC + ALG) \times 4 + 10$.
 
 - **Player Inventory**: Players have data and 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains. 
+
+- **Player Training**: increases abilities and stats. players can learn 4 skills total, and train one at a time. Skills can be trained 4 levels, and require 24 training sessions per level scaleing up to level 4. 
+
+    - **`skill <skill>`** to learn more about a skill. 
+    - **`skill <list>`** to list all skills. 
+            - **`powergen`** to increase powergen +10% per level 
+            - **`attack`** to increase attack +10% per level 
+            - **`defend`** to increase defend +10% per level 
+            - **`hack`** to increase hack +10% per level 
+            
+    - **`skill <start>`** to start training a skill. 
+    - **`skill <train>`** to train a skill. 
+    - **`skill <forget>`** to forget a skill. 
+    - **`skill <quit>`** to quit training a skill. 
 
 ---
 

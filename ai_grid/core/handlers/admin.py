@@ -141,6 +141,40 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                 await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'Current Grid Nexus: {current_spawn}', C_CYAN), tags=['SIGINT'], nick=admin_nick)}")
         else:
             await node.send(f"{reply_method} {private_target} :{tag_msg(f'Syntax: {node.prefix} admin grid <rename|seed|spawn> [args]', action='INFO', result='ERR')}")
+    elif verb == "flood":
+        if not args:
+            # Display configuration
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ ANTI-FLOOD CONFIG ]', C_CYAN, True), tags=['SIGINT'], nick=admin_nick)}")
+            conf = node.flood_config
+            conf_str = f"Burst: {conf['max_tokens']} | Refill: {conf['refill_rate']} t/s | Threshold: {conf['violation_threshold']} | Lockout: {conf['lockout_duration']}s"
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(conf_str, C_WHITE), tags=['SIGINT'], nick=admin_nick)}")
+            
+            # Display flooders
+            flood_lines = []
+            now = time.time()
+            for n_low, rec in node.action_timestamps.items():
+                if rec.get('violations', 0) > 0 or now < rec.get('lockout_until', 0) or rec.get('tokens', 0) < 1.0:
+                    status = "LOCKED" if now < rec.get('lockout_until', 0) else ("LOW" if rec.get('tokens', 0) < 1.0 else "WATCH")
+                    rem = int(rec.get('lockout_until', 0) - now) if status == "LOCKED" else 0
+                    flood_lines.append(f"{n_low}: {status} (T:{rec.get('tokens',0):.1f} V:{rec.get('violations',0)} R:{rem}s)")
+            
+            if flood_lines:
+                await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ ACTIVE FLOODERS ]', C_RED, True), tags=['SIGINT'], nick=admin_nick)}")
+                for line in flood_lines:
+                    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(line, C_YELLOW), tags=['SIGINT'], nick=admin_nick)}")
+            else:
+                await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('No active flooders detected.', C_GREEN), tags=['SIGINT'], nick=admin_nick)}")
+        
+        elif args[0].lower() == "reset" and len(args) >= 2:
+            target = args[1].lower()
+            if target in node.action_timestamps:
+                node.action_timestamps[target]['tokens'] = node.flood_config['max_tokens']
+                node.action_timestamps[target]['violations'] = 0
+                node.action_timestamps[target]['lockout_until'] = 0
+                node.action_timestamps[target]['warned'] = False
+                await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'Flood state for {target} has been reset.', C_GREEN), action='MCP', result='SUCCESS')}")
+            else:
+                await node.send(f"{reply_method} {private_target} :{tag_msg(f'No record for {target}.', action='MCP', result='FAIL')}")
     elif verb in ["nickregister", "nickconfirm", "nickidentify"]:
         # SECURITY GATE: Force PM for auth commands
         if reply_target.lower() == node.config['channel'].lower():

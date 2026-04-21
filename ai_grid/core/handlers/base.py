@@ -119,25 +119,89 @@ async def is_machine_mode(node, nick: str) -> bool:
     prefs = await node.db.get_prefs(nick, node.net_name)
     return prefs.get('output_mode', 'human') == 'machine'
 
-async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 2) -> bool:
+async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1, consume: bool = True) -> bool:
+    """
+    v2.0 Token Bucket Flood Protection.
+    Allows for bursty actions (e.g. movement) but enforces steady-state pacing.
+    If consume=True, decrements a token.
+    If cooldown > 1, enforces a minimum interval since last_action.
+    """
     now = time.time()
-    if nick not in node.action_timestamps:
-        node.action_timestamps[nick] = {'last_action': now, 'warned': False}
+    nick_low = nick.lower()
+    conf = node.flood_config
+    
+    if nick_low not in node.action_timestamps:
+        node.action_timestamps[nick_low] = {
+            'tokens': conf['max_tokens'] - (1.0 if consume else 0.0),
+            'last_refill': now,
+            'violations': 0,
+            'lockout_until': 0,
+            'last_action': now,
+            'warned': False
+        }
         return True
         
-    record = node.action_timestamps[nick]
-    elapsed = now - record['last_action']
-    if elapsed < cooldown:
+    record = node.action_timestamps[nick_low]
+    
+    # 1. Check Hard Lockout
+    if now < record['lockout_until']:
+        rem = int(record['lockout_until'] - now)
+        private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
+        msg = f"HARD LOCKOUT: Multiple flood violations detected. Terminal access suspended for {rem}s."
+        asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_RED, is_machine=machine_mode), action='ALARM', result='LOCKED', nick=nick)}"))
+        return False
+
+    # 2. Refill Tokens (Continuous)
+    elapsed_refill = now - record['last_refill']
+    added_tokens = elapsed_refill * conf['refill_rate']
+    record['tokens'] = min(conf['max_tokens'], record['tokens'] + added_tokens)
+    record['last_refill'] = now
+
+    # 3. Violation Decay (Good Behavior)
+    if now - record['last_action'] > 60:
+        record['violations'] = 0
+
+    # 4. Check Intervals & Capacity
+    passed_interval = (now - record['last_action']) >= (cooldown - 0.1) # 100ms grace for race conditions
+    has_token = record['tokens'] >= 1.0
+
+    if has_token and passed_interval:
+        if consume:
+            # Success: Consume Token
+            record['tokens'] -= 1.0
+            record['last_action'] = now
+            record['warned'] = False
+        return True
+    
+    # 5. Failure: Flood Detected
+    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
+    
+    # Check if failure is due to Interval or Tokens
+    if not passed_interval and cooldown > 1:
+        # Command-Specific Cooldown failure
         if not record['warned']:
             record['warned'] = True
-            private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
-            msg = f"Anti-flood MCP triggered. Please wait {cooldown:.1f}s between commands."
-            asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_RED, is_machine=machine_mode), action='SIGACT', result='FAIL', nick=nick, is_machine=machine_mode)}"))
+            rem = int(cooldown - (now - record['last_action']))
+            msg = f"COOLDOWN: Protocol initialization in progress. Please wait {rem}s."
+            asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_YELLOW, is_machine=machine_mode), action='SIGACT', result='FAIL', nick=nick)}"))
         return False
-        
-    record['last_action'] = now
-    record['warned'] = False # Reset on success
-    return True
+
+    # Token Exhaustion failure
+    record['violations'] += 1
+    if record['violations'] >= conf['violation_threshold']:
+        # Trigger Hard Lockout
+        record['lockout_until'] = now + conf['lockout_duration']
+        record['violations'] = 0 # Reset violations upon lockout trigger
+        msg = f"TERMINAL OVERFLOW: Flood threshold exceeded. LOCKOUT INITIATED ({conf['lockout_duration']}s)."
+        asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_RED, bold=True, is_machine=machine_mode), action='ALARM', result='LOCKED', nick=nick)}"))
+    else:
+        # Standard Pacing Warning
+        if not record['warned']:
+            record['warned'] = True
+            msg = f"FLOOD CONTROL: Bucket empty. Refilling... (Next token in {2.0 - (added_tokens % 2):.1f}s)"
+            asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_YELLOW, is_machine=machine_mode), action='SIGACT', result='FAIL', nick=nick)}"))
+            
+    return False
 
 async def get_action_routing(node, nickname: str, current_target: str):
     """
