@@ -41,13 +41,13 @@ class DiscoveryRepository(BaseRepository):
             roll = random.random()
             if roll < success_threshold:
                 occupants = [c.name for c in node.characters_present if c.name != name]
-                mob_msg = "" # Threat display removed
+
                 
                 # 1. Tiered Opening Logic
                 is_simple = node.owner_character_id is None and node.upgrade_level == 1 and node.power_stored < 100
                 if node.availability_mode == 'CLOSED' and is_simple:
                     node.availability_mode = 'OPEN'
-                    msg = f"Vulnerability found in local architecture! System protocols breached. The node is now OPEN.{mob_msg}"
+                    msg = f"Vulnerability found in local architecture! System protocols breached. The node is now OPEN."
                     char.credits += 5.0
                     char.data_units += 1.0
                     await session.commit()
@@ -57,7 +57,7 @@ class DiscoveryRepository(BaseRepository):
                 hidden_conns = [c for c in node.exits if c.is_hidden]
                 if hidden_conns:
                     target_conn = hidden_conns[0]
-                    msg = f"Vulnerability found in local architecture! Uncovering hidden route: {target_conn.direction} -> {target_conn.target_node.name}{mob_msg}"
+                    msg = f"Vulnerability found in local architecture! Uncovering hidden route: {target_conn.direction} -> {target_conn.target_node.name}"
                     char.credits += 10.0
                     char.data_units += 2.0
                     await session.commit()
@@ -85,12 +85,9 @@ class DiscoveryRepository(BaseRepository):
                         return {"status": "success", "discovery": "raid_target", "target": new_target.name, "occupants": occupants, "msg": f"Discovered an insecure local subnet: {new_target.name}. Resources detected."}
 
                 await session.commit()
-                return {"status": "success", "discovery": "data", "occupants": occupants, "msg": f"Found a discarded encrypted data packet. Extracted 25.0c.{mob_msg}"}
+                return {"status": "success", "discovery": "data", "occupants": occupants, "msg": f"Found a discarded encrypted data packet. Extracted 25.0c."}
             else:
                 node.noise += 1.0
-                if random.random() < 0.25:
-                    await session.commit()
-                    return {"status": "failure", "danger": "GUARDIAN_BUG_SPAWN", "msg": "Sensors detected structural corruption... A Guardian BUG has spawned!"}
                 await session.commit()
                 return {"status": "failure", "msg": "The exploration sequence yielded no actionable data."}
 

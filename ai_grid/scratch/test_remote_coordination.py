@@ -22,8 +22,8 @@ class TestRemoteCoordination(unittest.IsolatedAsyncioTestCase):
 
     async def _setup_basic_state(self):
         async with self.AsyncSession() as session:
-            node_a = GridNode(name="SectorA", net_affinity="2600net", node_type="wilderness")
-            node_b = GridNode(name="SectorB", net_affinity="2600net", node_type="wilderness")
+            node_a = GridNode(name="SectorA", net_affinity="2600net", node_type="void")
+            node_b = GridNode(name="SectorB", net_affinity="2600net", node_type="void")
             session.add_all([node_a, node_b])
             await session.commit()
             

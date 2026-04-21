@@ -25,11 +25,6 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} moved {direction}.', C_CYAN), action='SIGACT', nick=nick)}")
         
         await handle_grid_view(node, nick, private_target)
-        new_loc = await node.db.get_location(nick, node.net_name)
-        if new_loc and new_loc.get('node_type') == 'void':
-            # Base 20% mob encounter chance in void nodes (Task 049)
-            if random.random() < 0.20:
-                await handle_mob_encounter(node, nick, node_name, None, prev_node, private_target)
     else:
         if msg == "System offline.":
             await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{nick} - not a registered player - msg ignored', action='MCP', result='ERR')}")

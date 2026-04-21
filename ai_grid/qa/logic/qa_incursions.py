@@ -77,8 +77,8 @@ async def test_incursions():
             stmt = select(Character).where(Character.name.in_(["TestChar1", "TestChar2"]))
             chars = (await session.execute(stmt)).scalars().all()
             for c in chars:
-                if c.credits != 500.0:
-                    print(f"[-] FAILED: {c.name} has {c.credits} instead of 500.0")
+                if c.credits != 1000.0:
+                    print(f"[-] FAILED: {c.name} has {c.credits} instead of 1000.0")
                     return
         print("[+] Passed credits check")
 

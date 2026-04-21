@@ -78,7 +78,7 @@ def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False,
 
 def get_connector_symbol(source: GridNode, target: GridNode, vertical: bool = False) -> str:
     """Return a 1-2 character connector symbol based on connection health/status."""
-    # Logic: Hazard (Threat > 2) > Damaged (Durability < 70) > Closed > Normal
+    # Logic: Damaged (Durability < 70) > Closed > Normal
     
     is_closed = source.availability_mode == 'CLOSED' or target.availability_mode == 'CLOSED'
     is_damaged = source.durability < 70 or target.durability < 70
