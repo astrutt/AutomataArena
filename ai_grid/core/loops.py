@@ -107,6 +107,7 @@ async def idle_payout_loop(node):
             now_ts = time.time()
             payouts = {}
             
+            rewarded_entities = set()
             for nick, data in list(node.channel_users.items()):
                 join_time = data.get('join_time', now_ts)
                 chat_lines = data.get('chat_lines', 0)
@@ -116,9 +117,12 @@ async def idle_payout_loop(node):
                 earned = (idle_secs * 0.005) + (chat_lines * 0.5) 
                 xp_earned = int((idle_secs * 0.1) + (chat_lines * 10))
                 
-                if earned > 0: payouts[nick] = round(earned, 3)
+                if earned > 0: 
+                    payouts[nick] = round(earned, 3)
+                    rewarded_entities.add(nick)
                 if xp_earned > 0:
                     await node.db.player.add_experience(nick, node.net_name, xp_earned, llm_client=node.llm)
+                    rewarded_entities.add(nick)
                 
                 # 2. Automated Daily Dividend (v1.8.0)
                 char = await node.db.player.get_player(nick, node.net_name)
@@ -135,6 +139,7 @@ async def idle_payout_loop(node):
                     if should_payout:
                         success, log = await node.db.award_daily_dividend(nick, node.net_name)
                         if success:
+                            rewarded_entities.add(nick)
                             logger.info(f"Automated Dividend for {nick}: {log}")
                             await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(f'🏆 Automated Dividend: {nick} received a daily participation bonus!', C_YELLOW), tags=['ECONOMY', nick])}")
 
@@ -153,7 +158,21 @@ async def idle_payout_loop(node):
             if decayed > 0 or pruned > 0:
                 logger.info(f"Retention Policy Enforced: {decayed} decayed, {pruned} pruned.")
 
-            await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text('Hourly rewards distributed. Absence-based retention policy enforced.', C_GREEN), tags=['ECONOMY'])}")
+            # --- TASK 052: HUMANIZED HOURLY PAYOUT ---
+            entity_count = len(rewarded_entities)
+            if entity_count > 0:
+                announcement = await node.llm.generate_hourly_payout(entity_count)
+                if announcement.startswith("ERROR"):
+                    # Fallback Logic: User-specified message for delayed connections
+                    announcement = "...delayed neural connection, idle bonuses paid to spectators and players... ⚡💎"
+                    color = C_CYAN
+                else:
+                    color = C_GREEN
+                
+                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(announcement, color, bold=True), tags=['ECONOMY'])}")
+            else:
+                # Fallback for empty cycles
+                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text('The Grid remains quiet. No active entities detected for this cycle.', C_CYAN), tags=['ECONOMY'])}")
         except asyncio.CancelledError:
             break
         except Exception as e:

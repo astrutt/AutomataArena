@@ -188,3 +188,10 @@ class ArenaLLM:
         if raw.startswith("ERROR"):
             return f"The {incursion_type} on {node_name} dissipated into the void without consequence."
         return raw
+
+    async def generate_hourly_payout(self, entity_count: int) -> str:
+        """Generates a high-energy, welcoming announcement for hourly rewards."""
+        logger.info(f"Requesting humanized hourly payout broadcast for {entity_count} entities")
+        system = "You are the high-energy, welcoming tactical AI for The Grid. You love rewarding the entities for their compute-cycles."
+        user = f"Write a one-sentence, high-energy announcement celebrating the distribution of hourly idle bonuses and rewards to {entity_count} entities on the network. Be welcoming, atmospheric, and use a 'cyber clean' aesthetic. Keep it under 150 characters. No intro/outro."
+        return await asyncio.to_thread(self._make_request, system, user)
