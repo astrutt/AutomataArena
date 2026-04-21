@@ -32,7 +32,7 @@ class GridNode(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False, unique=True)
     description = Column(String)
-    node_type = Column(String, default="wilderness")  # wilderness, arena, merchant, safezone
+    node_type = Column(String, default="safezone")  # void, arena, merchant, safezone
     owner_character_id = Column(Integer, ForeignKey('characters.id', use_alter=True, name="fk_grid_owner"), nullable=True)
     upgrade_level = Column(Integer, default=1)
     
@@ -40,7 +40,6 @@ class GridNode(Base):
     power_consumed = Column(Float, default=0.0)
     power_generated = Column(Float, default=0.0)
     durability = Column(Float, default=100.0)
-    threat_level = Column(Integer, default=0)  # 0=safe, 1-3=wilderness mob tier
     is_spawn_node = Column(Boolean, default=False, index=True)
     noise = Column(Float, default=0.0) # SIGINT failure tracking (Heat)
     

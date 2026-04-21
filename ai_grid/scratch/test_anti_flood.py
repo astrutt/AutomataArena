@@ -38,61 +38,54 @@ base.get_action_routing = mock_routing
 
 async def run_test():
     node = MockNode()
-    nick = "Spammer"
+    nick = "Tester"
+    target = "#test"
     
-    print("[*] Starting Anti-Flood Verification...")
+    print("[*] Starting Remediation Verification (Centralized Pacing)...")
     
-    # 1. Burst Capacity (4 commands)
-    print("[*] Testing Burst Capacity (4 commands)...")
-    for i in range(4):
-        res = await base.check_rate_limit(node, nick, "#test")
-        if not res:
-            print(f"[!] FAILED: Command {i+1} blocked incorrectly.")
-            return
-    print("[+] Burst PASS.")
-    
-    # 2. Pacing Trigger (5th command)
-    print("[*] Testing Pacing Trigger...")
-    res = await base.check_rate_limit(node, nick, "#test")
-    if res:
-        print("[!] FAILED: 5th command should be blocked.")
-        return
-    print("[+] Pacing PASS (Blocked as expected).")
-    
-    # 3. Violation Accumulation (Commands 6-9)
-    print("[*] Testing Violation Accumulation...")
-    for i in range(3):
-        await base.check_rate_limit(node, nick, "#test")
+    # 1. Verify Central Consumption (Simulated Router Dispatch)
+    print("[*] Testing Global Protection (Simulated Move/Economy)...")
+    # All game commands consume 1 token immediately
+    res1 = await base.check_rate_limit(node, nick, target, consume=True)
+    res2 = await base.check_rate_limit(node, nick, target, consume=True)
+    res3 = await base.check_rate_limit(node, nick, target, consume=True)
+    res4 = await base.check_rate_limit(node, nick, target, consume=True)
     
     record = node.action_timestamps[nick.lower()]
-    print(f"[*] Current Violations: {record['violations']}")
+    print(f"[+] 4 actions consumed. Tokens remaining: {record['tokens']:.1f}")
     
-    # 4. Hard Lockout (10th/11th total action, hits threshold 5)
-    print("[*] Testing Hard Lockout (Hit threshold)...")
-    res = await base.check_rate_limit(node, nick, "#test")
-    if res:
-        print("[!] FAILED: Should be locked out.")
-    
-    if record['lockout_until'] > time.time():
-        print(f"[+] Hard Lockout PASS (Active for {int(record['lockout_until'] - time.time())}s).")
+    # 5th action should fail (Bucket Empty)
+    res5 = await base.check_rate_limit(node, nick, target, consume=True)
+    if not res5:
+        print("[+] SUCCESS: Central pacing correctly throttled the 5th command.")
     else:
-        print("[!] FAILED: Lockout timestamp not set.")
+        print("[!] FAILED: 5th command bypassed central pacing.")
+        return
 
-    # 5. Continuous Refill
-    print("[*] Testing Continuous Refill (Wait 4s for 2 tokens)...")
-    node.action_timestamps[nick.lower()]['lockout_until'] = 0 # manually clear for test
-    node.action_timestamps[nick.lower()]['tokens'] = 0
-    node.action_timestamps[nick.lower()]['last_refill'] = time.time()
+    # 2. Verify Synchronized Interval (Explore - 15s)
+    print("[*] Testing Handler Synchronization (Explore - 15s)...")
+    # Reset tokens for interval test
+    record['tokens'] = 4.0
+    record['last_action'] = time.time()
     
-    await asyncio.sleep(4.1) # Should get 2 tokens
-    res1 = await base.check_rate_limit(node, nick, "#test")
-    res2 = await base.check_rate_limit(node, nick, "#test")
-    res3 = await base.check_rate_limit(node, nick, "#test") # should fail
-    
-    if res1 and res2 and not res3:
-        print("[+] Refill PASS.")
+    # This should FAIL because last_action was 0s ago, even though tokens are full
+    # (Using cooldown=15 as per explore)
+    res_explore = await base.check_rate_limit(node, nick, target, cooldown=15, consume=False)
+    if not res_explore:
+        print("[+] SUCCESS: Explore correctly enforced 15s interval without consuming extra tokens.")
     else:
-        print(f"[!] FAILED: Refill logic error. (Res: {res1}, {res2}, {res3})")
+        print("[!] FAILED: Explore interval (15s) not enforced.")
+        return
+
+    # 3. Verify No Double Consumption
+    print("[*] Verifying No Double Consumption...")
+    pre_tokens = record['tokens']
+    # If we check again without consuming, tokens stay the same
+    await base.check_rate_limit(node, nick, target, cooldown=15, consume=False)
+    if record['tokens'] == pre_tokens:
+        print("[+] SUCCESS: Handler check (consume=False) did not tax the bucket.")
+    else:
+        print("[!] FAILED: Handler check double-consumed tokens.")
 
     print("[*] Verification Complete.")
 

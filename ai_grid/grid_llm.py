@@ -152,7 +152,7 @@ class ArenaLLM:
         logger.info(f"Requesting procedural generation of {count} nodes.")
         system = (
             "You are the structural architect of a cyberpunk grid. "
-            "Return ONLY valid JSON. Format: [{\"name\": \"<ONE_WORD>\", \"desc\": \"<GRITTY_TEXT>\", \"type\": \"wilderness\", \"threat\": 1}]. "
+            "Return ONLY valid JSON. Format: [{\"name\": \"<ONE_WORD>\", \"desc\": \"<GRITTY_TEXT>\", \"type\": \"void\"}]. "
             "Names must be exactly one word, capitalized (e.g., 'VAULT', 'VOID', 'SPIRE'). "
             "Descriptions should be one atmospheric sentence under 100 characters."
         )

@@ -73,7 +73,7 @@ async def test_spectator_system():
         # 6. Setup UpLink Node
         uplink = (await session.execute(select(GridNode).where(GridNode.name == 'UpLink'))).scalars().first()
         if not uplink:
-            uplink = GridNode(name="UpLink", node_type="wilderness", upgrade_level=1, durability=100.0)
+            uplink = GridNode(name="UpLink", node_type="void", upgrade_level=1, durability=100.0)
             session.add(uplink)
         
         await session.commit()

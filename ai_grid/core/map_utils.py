@@ -22,14 +22,12 @@ def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False,
             name_trunc = node.name[:5]
             return format_text(f"[{name_trunc}]", C_GREY)
         elif total_stat >= 40:
-            # Tier 3: Category & Threat
-            cat = node.node_type[0].upper()
-            threat = node.threat_level if hasattr(node, 'threat_level') else 0
-            return format_text(f"[{cat}:{threat}]", C_GREY)
-        elif total_stat >= 20:
-            # Tier 2: Generic Category
+            # Tier 3: Category
             cat = node.node_type[0].upper()
             return format_text(f"[{cat}]", C_GREY)
+        elif total_stat >= 20:
+            # Tier 2: Minimalist
+            return format_text("[.]", C_GREY)
         
         # Tier 1: Minimalist - CLOSED but known location
         return format_text("[X]", C_RED)
@@ -48,7 +46,7 @@ def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False,
             'safezone': '[S]',
             'arena': '[A]',
             'merchant': '[$]',
-            'wilderness': '[.]'
+            'void': '[.]'
         }
         symbol = symbol_map.get(node.node_type, '[-]')
         if node.id == char.node_id: symbol = '[@]'; color = C_CYAN
@@ -72,9 +70,9 @@ def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False,
         elif node.node_type == 'merchant':
             symbol = "[💰]"
             color = C_YELLOW
-        elif node.node_type == 'wilderness':
+        elif node.node_type == 'void':
             symbol = "[-]"
-            if node.threat_level > 2: color = C_RED
+            # Threat level removed from UI
 
     return format_text(symbol, color)
 
@@ -84,17 +82,13 @@ def get_connector_symbol(source: GridNode, target: GridNode, vertical: bool = Fa
     
     is_closed = source.availability_mode == 'CLOSED' or target.availability_mode == 'CLOSED'
     is_damaged = source.durability < 70 or target.durability < 70
-    is_hazard = (hasattr(source, 'threat_level') and source.threat_level > 2) or \
-                (hasattr(target, 'threat_level') and target.threat_level > 2)
     
     if vertical:
-        if is_hazard: return "S"
         if is_damaged: return "!"
         if is_closed: return "X"
         return "|"
     else:
         # Horizontal - 2 chars wide exactly
-        if is_hazard: return "~~"
         if is_damaged: return "!!"
         if is_closed: return "##"
         return "--"

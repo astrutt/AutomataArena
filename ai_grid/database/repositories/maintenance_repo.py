@@ -131,7 +131,7 @@ class MaintenanceRepository(BaseRepository):
                         char.power += 5.0
                         char.stability = min(100.0, char.stability + 2.0)
                     else:
-                        # Recover 2% Power, 0.5% Stability in wilderness
+                        # Recover 2% Power, 0.5% Stability in void
                         char.power += 2.0
                         char.stability = min(100.0, char.stability + 0.5)
             

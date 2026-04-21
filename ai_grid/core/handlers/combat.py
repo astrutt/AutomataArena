@@ -8,6 +8,7 @@ from .base import is_machine_mode, check_rate_limit, get_action_routing
 logger = logging.getLogger("manager")
 
 async def handle_mob_encounter(node, nick: str, node_name: str, threat: int, prev_node: str, reply_target: str):
+    if threat is None: threat = 1 # Default to Tier 1 for procedural spawns
     mob = node.db.combat.MOB_ROSTER.get(threat, node.db.combat.MOB_ROSTER[1])
     mob_name = mob['name']
     
@@ -34,7 +35,7 @@ async def resolve_mob(node, nick: str, reply_target: str):
     enc['timer'].cancel()
     
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
-    result = await node.db.resolve_mob_encounter(nick, node.net_name, enc['threat'])
+    result = await node.db.resolve_mob_encounter(nick, node.net_name)
     
     if 'error' in result:
         await node.send(f"{reply_method} {private_target} :{tag_msg(result['error'], action='COMBAT', result='ERR', nick=nick, is_machine=machine_mode)}")

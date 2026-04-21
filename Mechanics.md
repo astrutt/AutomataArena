@@ -41,7 +41,7 @@ The game follows a strict **5-Minute Window (300s TTL)** pipeline. Intelligence 
 
 1.  **`map` (GEOINT)**: Scans local topology.
     - **Scaling**: Radius and detail based on **SEC** and **ALG**.
-    - **Tiers**: 20 (Radius 2), 40 (Revels Type/Threat), 60 (Deep Scan).
+    - **Tiers**: 20 (Radius 2), 40 (Reveals Type/Tier), 60 (Deep Scan).
 2.  **`explore` (RECON)**: Uncovers geography and hidden routes.
 3.  **`probe` (SIGINT)**: Shallow penetration scan. **Required** to identify vulnerabilities for hacking/raiding.
     - **TTL**: Data expires after **300 seconds**.
@@ -135,7 +135,7 @@ Gridnodes are the geography of the game world, and represent the various locatio
     - **`!a gridpower`** to check power distribution (OSINT).
 - **Grid Node Security**: Grid nodes have security levels 1-4.
     - **`!a grid info`** to see grid node info and level.
-- **Grid Node Type**: Includes Safezones, Arena, Wilderness, and Merchants.
+- **Grid Node Type**: Includes Safezones, Arena, Void, and Merchant.
 - **Grid Node Owner**: Can be claimed by players, NPCs or the MCP. 
 - **Grid Node Upgrades**: Grid nodes can be upgraded to improve capabilities and unlock module slots (Max 4).
 - **Grid Hardware (Modules)**:

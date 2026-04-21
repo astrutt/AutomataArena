@@ -19,7 +19,7 @@ async def test_incursions():
         
         async with db.async_session() as session:
             # 1. Setup Test Network and Nodes
-            n1 = GridNode(name="TestNode1", node_type="wilderness", net_affinity="TestNet")
+            n1 = GridNode(name="TestNode1", node_type="void", net_affinity="TestNet")
             n2 = GridNode(name="TestNode2", node_type="merchant", net_affinity="TestNet")
             
             session.add_all([n1, n2])

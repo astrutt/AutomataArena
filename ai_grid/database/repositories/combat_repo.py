@@ -99,13 +99,15 @@ class CombatRepository:
             
             await session.commit()
 
-    async def resolve_mob_encounter(self, name: str, network: str, threat_level: int) -> dict:
-        mob = MOB_ROSTER.get(threat_level, MOB_ROSTER[1])
+    async def resolve_mob_encounter(self, name: str, network: str) -> dict:
+        spawn_tier = random.randint(1, 3) # Tiered challenge based on RNG
+        mob = self.MOB_ROSTER.get(spawn_tier, self.MOB_ROSTER[1])
 
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 func.lower(Character.name) == name.lower(),
-                func.lower(NetworkAlias.nickname) == name.lower(),
+                # Fix: Use char.name for match, not alias which might be different
+                func.lower(NetworkAlias.nickname) == name.lower(), 
                 NetworkAlias.network_name == network
             ).options(selectinload(Character.inventory).selectinload(InventoryItem.template))
             char = (await session.execute(stmt)).scalars().first()
@@ -113,12 +115,12 @@ class CombatRepository:
                 return {"error": "Character not found"}
 
             player_roll = random.randint(1, 20) + char.alg
-            mob_dc = 10 + threat_level * 2
+            mob_dc = 10 + spawn_tier * 2
             won = player_roll >= mob_dc
 
             result = {
                 "mob_name":    mob["name"],
-                "threat":      threat_level,
+                "threat":      spawn_tier,
                 "roll":        player_roll,
                 "dc":          mob_dc,
                 "won":         won,

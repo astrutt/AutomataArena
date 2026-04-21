@@ -28,7 +28,7 @@ async def test_datetime_snag():
             char = await db.identity.get_character_by_nick(nick, network, session)
         
         # Ensure we are on a node with a raid target
-        node_stmt = select(GridNode).where(GridNode.node_type == "wilderness").options(selectinload(GridNode.active_target))
+        node_stmt = select(GridNode).where(GridNode.node_type == "void").options(selectinload(GridNode.active_target))
         node = (await session.execute(node_stmt)).scalars().first()
         char.node_id = node.id
         

@@ -156,11 +156,11 @@ class ArenaDB:
             # 2. Define Cluster Centers (x, y, name, cluster_id, node_type, net_affinity)
             clusters = [
                 (25, 25, "Nexus", 0, "safezone", None),      # Spawn
-                (10, 40, "Rizon", 1, "wilderness", "rizon"), # Home
-                (40, 10, "2600net", 2, "wilderness", "2600net"), # Home
+                (10, 40, "Rizon", 1, "void", "rizon"),      # Home
+                (40, 10, "2600net", 2, "void", "2600net"), # Home
                 (25, 30, "Arena", 3, "arena", None),
-                (10, 10, "Edge_West", 4, "wilderness", None),
-                (40, 40, "Edge_East", 5, "wilderness", None),
+                (10, 10, "Edge_West", 4, "void", None),
+                (40, 40, "Edge_East", 5, "void", None),
                 (25, 45, "Vault", 6, "safezone", None)
             ]
             
@@ -213,8 +213,7 @@ class ArenaDB:
                         x=gx, y=gy,
                         is_unlocked=any(gx == c[0] and gy == c[1] for c in clusters if c[3] in [0, 3]),
                         cluster_id=closest_cid if is_active else None,
-                        node_type="wilderness",
-                        threat_level=random.randint(1, 3) if is_active else 0
+                        node_type="void"
                     )
                     
                     # Special Case: Default Unlocked Area around Nexus (Radius 3)
@@ -390,11 +389,11 @@ class ArenaDB:
         """Smart Seeding: Add missing expansion nodes and connections."""
         async with self.async_session() as session:
             # Seed nodes additively
-            for name, desc, node_type, threat in GRID_EXPANSION:
+            for name, desc, node_type in GRID_EXPANSION:
                 exists = (await session.execute(select(GridNode).where(GridNode.name == name))).scalars().first()
                 if not exists:
                     is_spawn = (name == "UpLink")
-                    session.add(GridNode(name=name, description=desc, node_type=node_type, threat_level=threat, is_spawn_node=is_spawn))
+                    session.add(GridNode(name=name, description=desc, node_type=node_type, is_spawn_node=is_spawn))
             
             await session.flush()
 
@@ -410,7 +409,7 @@ class ArenaDB:
                 node_stmt = select(GridNode).where(GridNode.name == net_name)
                 node = (await session.execute(node_stmt)).scalars().first()
                 if not node:
-                    node = GridNode(name=net_name, description=f"Entry point for the {net_name} local mesh.", node_type="wilderness")
+                    node = GridNode(name=net_name, description=f"Entry point for the {net_name} local mesh.", node_type="void")
                     session.add(node)
                     logger.info(f"Created Network Home Node: {net_name}")
                 
@@ -423,21 +422,17 @@ class ArenaDB:
 
             await session.commit()
 
-            # Seed connections
-            for src_name, tgt_name, direction in GRID_CONNECTIONS:
-                src = (await session.execute(select(GridNode).where(GridNode.name == src_name))).scalars().first()
-                tgt = (await session.execute(select(GridNode).where(GridNode.name == tgt_name))).scalars().first()
-                if not src or not tgt: continue
-                exists = (await session.execute(select(NodeConnection).where(
-                    NodeConnection.source_node_id == src.id, NodeConnection.target_node_id == tgt.id, NodeConnection.direction == direction
-                ))).scalars().first()
-                if not exists: session.add(NodeConnection(source_node_id=src.id, target_node_id=tgt.id, direction=direction))
-
-            # Threat level fixes
-            threat_map = {"The_CPU_Socket": 1, "Black_Market_Port": 0, "The_Arena": 0}
-            for node_name, threat in threat_map.items():
+            # Node Fixes (Merchant assignment & Cleanup)
+            type_map = {
+                "Black_Market_Port": "merchant",
+                "Dark_Web_Exchange": "merchant",
+                "Neural_Nexus": "safezone",
+                "The_Arena": "arena",
+                "Gladiator_Pit": "arena"
+            }
+            for node_name, n_type in type_map.items():
                 node = (await session.execute(select(GridNode).where(GridNode.name == node_name))).scalars().first()
-                if node and node.threat_level != threat: node.threat_level = threat
+                if node: node.node_type = n_type
 
             await session.commit()
             logger.info("Grid expansion seeded successfully.")
@@ -488,7 +483,8 @@ class ArenaDB:
 
     async def record_match_result(self, winner_name, loser_name, network, was_surrender=False, winner_up=None, loser_up=None): 
         return await self.combat.record_match_result(winner_name, loser_name, network, was_surrender=was_surrender, winner_up=winner_up, loser_up=loser_up)
-    async def resolve_mob_encounter(self, name, network, threat_level): return await self.combat.resolve_mob_encounter(name, network, threat_level)
+    async def resolve_mob_encounter(self, name, network): 
+        return await self.combat.resolve_mob_encounter(name, network)
     async def grid_attack(self, attacker_name, target_name, network): return await self.combat.grid_attack(attacker_name, target_name, network)
     async def grid_hack(self, attacker_name, target_name, network): return await self.combat.grid_hack(attacker_name, target_name, network)
     async def grid_rob(self, attacker_name, target_name, network): return await self.combat.grid_rob(attacker_name, target_name, network)

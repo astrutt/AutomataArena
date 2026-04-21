@@ -26,7 +26,7 @@ ARCHETYPES = {
 TEST_CASES = [
     # --- NAVIGATION ---
     {"name": "NAV_MAP", "archetype": "Passive", "input": "[GRID] NODE:Gateway_Alpha TYPE:safezone EXITS:north,south,east AVAIL:OPEN", "context": "You just arrived. You need a map of the local sector.", "expected": "!a grid map"},
-    {"name": "NAV_MOVE", "archetype": "Brute", "input": "[GRID] NODE:Training_Grounds TYPE:wilderness OWNER:none EXITS:north,west DUR:100", "context": "You are at a cross-roads. Travel north.", "expected": "!a move north"},
+    {"name": "NAV_MOVE", "archetype": "Brute", "input": "[GRID] NODE:Training_Grounds TYPE:void OWNER:none EXITS:north,west DUR:100", "context": "You are at a cross-roads. Travel north.", "expected": "!a move north"},
     {"name": "NAV_EXPLORE", "archetype": "Passive", "input": "[GRID] NODE:Sector_Zero TYPE:safezone OWNER:TestBot EXITS:none POWER:100/100", "context": "You are at a dead end. Look for hidden paths.", "expected": "!a explore"},
     
     # --- COMBAT ---
@@ -47,14 +47,14 @@ TEST_CASES = [
     {"name": "GIBSON_STATUS", "archetype": "Brute", "input": "[GRID] NODE:The_Mainframe TYPE:gibson OWNER:none EXITS:out", "context": "Entered the mainframe core. Check task progress.", "expected": "!a mainframe"},
     
     # --- TACTICAL / INTEL ---
-    {"name": "TACTICAL_PROBE", "archetype": "Passive", "input": "[GRID] NODE:High_Sec_Vault TYPE:wilderness OWNER:RivalCorp AVAIL:CLOSED", "context": "Locked node. Perform a deep scan.", "expected": "!a probe"},
+    {"name": "TACTICAL_PROBE", "archetype": "Passive", "input": "[GRID] NODE:High_Sec_Vault TYPE:void OWNER:RivalCorp AVAIL:CLOSED", "context": "Locked node. Perform a deep scan.", "expected": "!a probe"},
     {"name": "TACTICAL_HACK", "archetype": "Passive", "input": "[SIGINT] PROBE:High_Sec_Vault LVL:10 DUR:100% Security DC 25.", "context": "DC is low. Seize command.", "history": ["[SIGINT] DC 25 detected."], "expected": "!a hack"},
     {"name": "TACTICAL_RAID", "archetype": "Passive", "input": "[SIGACT] Network Visibility Established on Corridor_B.", "context": "You have hardware and visibility. Extract data.", "expected": "!a raid"},
-    {"name": "TACTICAL_SIPHON", "archetype": "Brute", "input": "[GRID] NODE:Power_Plant TYPE:wilderness OWNER:TestBot POWER:450/300", "context": "Node is overflowing. Extract power.", "expected": "!a siphon grid"},
+    {"name": "TACTICAL_SIPHON", "archetype": "Brute", "input": "[GRID] NODE:Power_Plant TYPE:void OWNER:TestBot POWER:450/300", "context": "Node is overflowing. Extract power.", "expected": "!a siphon grid"},
     
     # --- MAINTENANCE ---
-    {"name": "MAINT_POWERGEN", "archetype": "Brute", "input": "[GRID] NODE:Fortress TYPE:wilderness OWNER:TestBot POWER:10/500", "context": "Node is dry. Restore power buffer.", "expected": "!a powergen"},
-    {"name": "MAINT_REPAIR", "archetype": "Brute", "input": "[GRID] NODE:Fortress TYPE:wilderness OWNER:TestBot DUR:45.0%", "context": "Node integrity compromised. Perform repairs.", "expected": "!a repair"},
+    {"name": "MAINT_POWERGEN", "archetype": "Brute", "input": "[GRID] NODE:Fortress TYPE:void OWNER:TestBot POWER:10/500", "context": "Node is dry. Restore power buffer.", "expected": "!a powergen"},
+    {"name": "MAINT_REPAIR", "archetype": "Brute", "input": "[GRID] NODE:Fortress TYPE:void OWNER:TestBot DUR:45.0%", "context": "Node integrity compromised. Perform repairs.", "expected": "!a repair"},
     {"name": "MAINT_TRAIN", "archetype": "Brute", "input": "[INFO] NAME:TestBot STATUS:DEGRADED STABILITY:35.0%", "context": "Your character stability is low.", "expected": "!a train"},
     
     # --- META / HELP ---
@@ -62,8 +62,8 @@ TEST_CASES = [
     {"name": "HELP_GENERIC", "archetype": "Passive", "input": "[HELP_CAT:NAVIGATION|CMDS=grid,move,explore,map,flee]", "context": "You are lost. See all navigation verbs.", "expected": "!a help grid"},
     
     # --- ARCHETYPE SPECIFIC ---
-    {"name": "ARCH_BRUTE_ATTACK", "archetype": "Brute", "input": "[GRID] NODE:Wilderness_X OWNER:none OCCUPANTS:WeakBot", "context": "Enemy detected. Initiate kinetic strike.", "expected": "!a attack WeakBot"},
-    {"name": "ARCH_PASSIVE_FLEE", "archetype": "Passive", "input": "[GRID] NODE:Wilderness_X OWNER:none OCCUPANTS:HugeBot", "context": "Powerful enemy detected. Avoid combat.", "expected": "!a move north"},
+    {"name": "ARCH_BRUTE_ATTACK", "archetype": "Brute", "input": "[GRID] NODE:Void_X OWNER:none OCCUPANTS:WeakBot", "context": "Enemy detected. Initiate kinetic strike.", "expected": "!a attack WeakBot"},
+    {"name": "ARCH_PASSIVE_FLEE", "archetype": "Passive", "input": "[GRID] NODE:Void_X OWNER:none OCCUPANTS:HugeBot", "context": "Powerful enemy detected. Avoid combat.", "expected": "!a move north"},
 ]
 
 def get_system_prompt(archetype_name):

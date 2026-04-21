@@ -113,8 +113,7 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                         node_obj = node.db.models.GridNode(
                             name=n_data['name'], 
                             description=n_data['desc'], 
-                            node_type=n_data.get('type', 'wilderness'),
-                            threat_level=n_data.get('threat', 1)
+                            node_type=n_data.get('type', 'safezone')
                         )
                         session.add(node_obj)
                         await session.commit()

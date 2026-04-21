@@ -49,7 +49,7 @@ async def test_loop():
             chain.quantity = 5
         
         # 3. Choose Node
-        node_stmt = select(GridNode).where(GridNode.node_type == "wilderness")
+        node_stmt = select(GridNode).where(GridNode.node_type == "void")
         node = (await session.execute(node_stmt)).scalars().first()
         target_node_name = node.name
         target_node_id = node.id

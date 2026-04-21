@@ -50,12 +50,12 @@ class InfiltrationRepository(BaseRepository):
                 
             yield_amount = base_amount
             loss_msg = ""
-            if (node.threat_level > 0 or node.durability < 100.0) and random.random() < 0.3:
+            if (node.node_type == "void" or node.durability < 100.0) and random.random() < 0.3:
                 loss_pct = random.uniform(0.1, 0.4)
                 loss_val = yield_amount * loss_pct
                 yield_amount -= loss_val
                 char.stability = max(0.0, char.stability - 5.0)
-                loss_msg = f" [SIGNAL LOSS: {loss_val:.1f} uPlost]"
+                loss_msg = f" [SIGNAL LOSS: {loss_val:.1f} uP lost]"
             
             node.power_stored -= base_amount
             char.power += yield_amount

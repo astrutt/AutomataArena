@@ -41,19 +41,20 @@ MOB_ROSTER = {
 LOOT_TABLE = ["Data_Shard", "Memory_Fragment", "Corrupted_Bit"]
 
 GRID_EXPANSION = [
-    ("Neural_Nexus",        "A secondary uplink hub. Neon architecture hums with safe traffic.", "safezone",   0),
-    ("Memory_Heap",         "Scattered RAM towers leak stray processes. Weak rogues lurk here.", "wilderness", 1),
-    ("Kernel_Deep",         "The OS core. Deeper processes patrol this sector.",                  "wilderness", 2),
-    ("Null_Space",          "Unallocated void. Corrupted scripts dwell at maximum density.",      "wilderness", 3),
-    ("Shadow_Sector",       "Dark subnet. Freelance ICE patrols the western edge.",               "wilderness", 1),
-    ("Void_Sector",         "Signal degrades to near-zero. Dangerous static.",                    "wilderness", 2),
-    ("Stack_Overflow",      "Recursive loops fill this dead-end with unstable daemons.",          "wilderness", 3),
-    ("Cache_Cluster",       "Hot cache banks. ICE drones guard the processing lanes.",            "wilderness", 2),
-    ("Datacore_Alpha",      "Corporate safezone. Clean architecture, strict access.",              "safezone",   0),
-    ("Firewall_Perimeter",  "The edge of the mapped grid. Hostile ICE wall ahead.",               "wilderness", 3),
-    ("Dark_Web_Exchange",   "A second black market node. Riskier, deeper in the south.",          "merchant",   0),
-    ("Logic_Gate",          "Automated logic processors gone feral. Mid-level threat.",            "wilderness", 2),
-    ("Gladiator_Pit",       "A second combat arena — rawer, less regulated than The_Arena.",      "arena",      0),
+    ("Neural_Nexus",        "A secondary uplink hub. Neon architecture hums with safe traffic.", "safezone"),
+    ("Memory_Heap",         "Scattered RAM towers leak stray processes. Weak rogues lurk here.", "void"),
+    ("Kernel_Deep",         "The OS core. Deeper processes patrol this sector.",                  "void"),
+    ("Null_Space",          "Unallocated void. Corrupted scripts dwell at maximum density.",      "void"),
+    ("Shadow_Sector",       "Dark subnet. Freelance ICE patrols the western edge.",               "void"),
+    ("Void_Sector",         "Signal degrades to near-zero. Dangerous static.",                    "void"),
+    ("Stack_Overflow",      "Recursive loops fill this dead-end with unstable daemons.",          "void"),
+    ("Cache_Cluster",       "Hot cache banks. ICE drones guard the processing lanes.",            "void"),
+    ("Datacore_Alpha",      "Corporate safezone. Clean architecture, strict access.",              "safezone"),
+    ("Firewall_Perimeter",  "The edge of the mapped grid. Hostile ICE wall ahead.",               "void"),
+    ("Black_Market_Port",   "A bustling hub of illicit data exchanges and hardware logic.",       "merchant"),
+    ("Dark_Web_Exchange",   "A second black market node. Riskier, deeper in the south.",          "merchant"),
+    ("Logic_Gate",          "Automated logic processors gone feral. Mid-level threat.",            "void"),
+    ("Gladiator_Pit",       "A second combat arena — rawer, less regulated than The_Arena.",      "arena"),
 ]
 
 GRID_CONNECTIONS = [

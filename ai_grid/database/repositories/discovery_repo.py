@@ -41,7 +41,7 @@ class DiscoveryRepository(BaseRepository):
             roll = random.random()
             if roll < success_threshold:
                 occupants = [c.name for c in node.characters_present if c.name != name]
-                mob_msg = f" [Threat detected: {node.threat_level}]" if node.threat_level > 0 else ""
+                mob_msg = "" # Threat display removed
                 
                 # 1. Tiered Opening Logic
                 is_simple = node.owner_character_id is None and node.upgrade_level == 1 and node.power_stored < 100
@@ -67,14 +67,14 @@ class DiscoveryRepository(BaseRepository):
                 char.credits += 25.0
                 
                 # --- TASK 038: Procedural Raid Target Discovery ---
-                if node.threat_level >= 1 and not node.active_target_id:
+                if node.node_type == "void" and not node.active_target_id:
                     if random.random() < 0.25:
                         target_type = random.choice(["SMB", "EDU"])
                         new_target = RaidTarget(
                             node_id = node.id,
                             name = f"[{target_type}]",
                             target_type = target_type,
-                            difficulty = 12 + (node.threat_level * 2),
+                            difficulty = 12 + (node.upgrade_level * 2),
                             credits_pool = 500.0 * node.upgrade_level,
                             data_pool = 100.0 * node.upgrade_level
                         )
@@ -198,7 +198,7 @@ class DiscoveryRepository(BaseRepository):
             
             return {
                 "success": True, "name": node.name, "level": node.upgrade_level, "durability": node.durability,
-                "threat": node.threat_level, "noise": node.noise, "addons": [k for k, v in addons.items() if v],
+                "noise": node.noise, "addons": [k for k, v in addons.items() if v],
                 "occupants": occupants, "visibility": visibility_gate, "bridge": bridge, "hack_dc": hack_dc, "bonus_granted": 5,
                 "alert_data": alert_data, "raid_target": target_info
             }

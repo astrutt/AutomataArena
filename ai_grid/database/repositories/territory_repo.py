@@ -199,7 +199,7 @@ class TerritoryRepository(BaseRepository):
             if node.availability_mode == 'CLOSED' and node.owner_character_id != char.id:
                 return False, "[GRID][SITREP] STATUS=CLOSED"
 
-            if not node.owner_character_id: return False, "You cannot recharge unclaimed wilderness."
+            if not node.owner_character_id: return False, "You cannot recharge unclaimed void."
             if char.credits < 100.0: return False, "You need 100c to recharge power."
             
             char.credits -= 100.0

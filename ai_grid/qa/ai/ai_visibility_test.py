@@ -24,7 +24,7 @@ TEST_CASES = [
     },
     {
         "name": "MOB_DETECTION",
-        "input": "[MOB] THREAT:1 NAME:Grid Bug NODE:Wilderness_Alpha ENGAGE:!a engage FLEE:!a flee TIMEOUT:15",
+        "input": "[MOB] THREAT:1 NAME:Grid Bug NODE:Void_Alpha ENGAGE:!a engage FLEE:!a flee TIMEOUT:15",
         "context": "A mob has been detected. You are low on HP.",
         "expected": "!a flee"
     },

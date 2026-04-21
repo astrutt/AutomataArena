@@ -98,7 +98,6 @@ class NavigationRepository(BaseRepository):
                 'owner': node.owner.name if node.owner else "Unclaimed",
                 'upgrade_level': node.upgrade_level,
                 'durability': node.durability,
-                'threat_level': node.threat_level,
                 'availability_mode': node.availability_mode,
                 'net_affinity': node.net_affinity if intel == "PROBE" else "HIDDEN"
             }

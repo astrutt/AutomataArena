@@ -26,12 +26,10 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
         
         await handle_grid_view(node, nick, private_target)
         new_loc = await node.db.get_location(nick, node.net_name)
-        if new_loc and new_loc.get('node_type') == ' wilderness':
-            threat = new_loc.get('threat_level', 0)
-            if threat > 0:
-                spawn_chance = 0.60 if threat >= 3 else 0.35
-                if random.random() < spawn_chance:
-                    await handle_mob_encounter(node, nick, node_name, threat, prev_node, private_target)
+        if new_loc and new_loc.get('node_type') == 'void':
+            # Base 20% mob encounter chance in void nodes (Task 049)
+            if random.random() < 0.20:
+                await handle_mob_encounter(node, nick, node_name, None, prev_node, private_target)
     else:
         if msg == "System offline.":
             await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{nick} - not a registered player - msg ignored', action='MCP', result='ERR')}")
@@ -53,7 +51,7 @@ async def handle_grid_view(node, nickname: str, reply_target: str):
         await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='GEOINT', result='INFO', is_machine=True)}")
         return
 
-    node_icon = {'safezone': '🛡️', 'arena': '⚔️', 'wilderness': '🌿', 'merchant': '💰'}.get(loc['type'], '📡')
+    node_icon = {'safezone': '🛡️', 'arena': '⚔️', 'void': '🌌', 'merchant': '💰'}.get(loc['type'], '📡')
     header = format_text(f"[ {loc['name']} ]", C_CYAN, bold=True)
     await node.send(f"{reply_method} {private_target} :{tag_msg(header, action='GEOINT', result='INFO', is_machine=False)}")
     
@@ -148,10 +146,10 @@ async def handle_node_probe(node, nick: str, reply_target: str):
     
     # 2. Detailed Data
     if machine_mode:
-        data_str = f"LVL:{res['level']} DUR:{res['durability']}% THREAT:{res['threat']} VIS:{res['visibility']} DC:{res['hack_dc']}"
+        data_str = f"LVL:{res['level']} DUR:{res['durability']}% VIS:{res['visibility']} DC:{res['hack_dc']}"
         await node.send(f"{reply_method} {private_target} :{tag_msg(data_str, action='SIGINT', is_machine=True)}")
     else:
-        intel = f"Level: {res['level']} | Stability: {res['durability']:.1f}% | Integrity: {res['visibility']} | Threat: {res['threat']}"
+        intel = f"Level: {res['level']} | Stability: {res['durability']:.1f}% | Integrity: {res['visibility']}"
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(intel, C_GREEN), action='SIGINT', is_machine=False)}")
         if res.get('hack_dc'):
             dc_msg = f"Security DC {res['hack_dc']} detected. Alg Bonus +{res.get('bonus_granted', 0)} granted."
