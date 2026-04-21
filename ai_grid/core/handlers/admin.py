@@ -189,7 +189,8 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
             target_net = args[0].lower()
             target_node = node.hub.nodes.get(target_net)
             if not target_node:
-                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] ROUTING FAILURE: Network \'{target_net}\' not found.', tags=['OSINT'])}")
+                err_msg = f"[ERR] ROUTING FAILURE: Network '{target_net}' not found."
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(err_msg, tags=['OSINT'])}")
                 return
 
             # Report current +r status of TARGET node
@@ -207,7 +208,8 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                 target_net = args[0].lower()
                 target_node = node.hub.nodes.get(target_net)
                 if not target_node:
-                    await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] ROUTING FAILURE: Network \'{target_net}\' not found.', tags=['OSINT'])}")
+                    err_msg = f"[ERR] ROUTING FAILURE: Network '{target_net}' not found."
+                    await node.send(f"PRIVMSG {admin_nick} :{tag_msg(err_msg, tags=['OSINT'])}")
                     return
 
                 code = args[1]
@@ -221,7 +223,8 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                 target_net = args[0].lower()
                 target_node = node.hub.nodes.get(target_net)
                 if not target_node:
-                    await node.send(f"PRIVMSG {admin_nick} :{tag_msg(f'[ERR] ROUTING FAILURE: Network \'{target_net}\' not found.', tags=['OSINT'])}")
+                    err_msg = f"[ERR] ROUTING FAILURE: Network '{target_net}' not found."
+                    await node.send(f"PRIVMSG {admin_nick} :{tag_msg(err_msg, tags=['OSINT'])}")
                     return
 
                 password = args[1]

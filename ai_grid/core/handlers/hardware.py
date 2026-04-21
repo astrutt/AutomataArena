@@ -43,8 +43,8 @@ async def handle_grid_hardware(node, nick: str, reply_target: str, action: str =
             for mod in ["AMP", "IDS", "FIREWALL", "NET"]:
                 st = format_text(f"[{mod}]", C_GREEN) if addons.get(mod) else format_text("[OPEN]", C_WHITE)
                 slots.append(st)
-            
-            await node.send(f"{reply_method} {private_target} :{tag_msg(f'Chassis Slots: {' | '.join(slots)}', action='GEOINT')}")
+            slots_str = ' | '.join(slots)
+            await node.send(f"{reply_method} {private_target} :{tag_msg(f'Chassis Slots: {slots_str}', action='GEOINT')}")
             
             meters = []
             if addons.get("IDS") or gn.ids_alerts > 0: meters.append(f"IDS: {gn.ids_alerts}")

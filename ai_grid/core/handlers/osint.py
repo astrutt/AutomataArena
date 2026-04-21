@@ -38,8 +38,10 @@ async def handle_gridpower_osint(node, source, target):
     msg = f"STORED:{tele['total_power']:.0f} CAPACITY:{capacity} GEN:{tele['total_generation']:.0f}"
     if not machine_mode:
         p_meter = generate_meter(tele['total_power'], capacity)
-        storage = f"STORED: [{p_meter}] {format_text(f'{tele['total_power']:.0f}uP', C_WHITE)}"
-        gen = f"GEN: {format_text(f'{tele['total_generation']:.0f}uP/tick', C_L_GREEN)}"
+        p_val = f"{tele['total_power']:.0f}uP"
+        storage = f"STORED: [{p_meter}] {format_text(p_val, C_WHITE)}"
+        gen_val = f"{tele['total_generation']:.0f}uP/tick"
+        gen = f"GEN: {format_text(gen_val, C_L_GREEN)}"
         msg = f"{storage} | {gen}"
         
     await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='POWER', nick=source, is_machine=machine_mode)}")
@@ -52,7 +54,8 @@ async def handle_gridstability_osint(node, source, target):
     msg = f"CLAIMED:{tele['claimed_nodes']} TOTAL:{tele['total_nodes']} PERCENT:{tele['claimed_percent']:.1f}"
     if not machine_mode:
         m_meter = generate_meter(tele['claimed_nodes'], tele['total_nodes'])
-        claimed = f"CLAIMED: [{m_meter}] {format_text(f'{tele['claimed_percent']:.1f}%', C_GREEN)} ({tele['claimed_nodes']}/{tele['total_nodes']})"
+        claim_pct = f"{tele['claimed_percent']:.1f}%"
+        claimed = f"CLAIMED: [{m_meter}] {format_text(claim_pct, C_GREEN)} ({tele['claimed_nodes']}/{tele['total_nodes']})"
         msg = f"{claimed}"
 
     await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='OSINT', result='INFO', nick=source, is_machine=machine_mode)}")
@@ -138,4 +141,5 @@ async def handle_info_nick(node, nickname: str, args: list, reply_target: str):
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(attrs, C_YELLOW), action='HUMINT')}")
         
         if f.get('bio'):
-            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'Bio: {f['bio']}', C_WHITE), action='HUMINT')}")
+            bio_msg = f"Bio: {f['bio']}"
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(bio_msg, C_WHITE), action='HUMINT')}")

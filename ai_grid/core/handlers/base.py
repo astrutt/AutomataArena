@@ -71,8 +71,8 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         if args:
             verb = args[0].lower()
             if verb in registry:
-                info = registry[verb]
-                await node.send(f"{reply_method} {private_target} :{tag_msg(f'CMD:{verb.upper()} DESC:{info['desc']} SYNTAX:{node.prefix} {info['syntax']}', action='HELP', is_machine=machine_mode)}")
+                help_msg = f"CMD:{verb.upper()} DESC:{info['desc']} SYNTAX:{node.prefix} {info['syntax']}"
+                await node.send(f"{reply_method} {private_target} :{tag_msg(help_msg, action='HELP', is_machine=machine_mode)}")
             else:
                 await node.send(f"{reply_method} {private_target} :{tag_msg(f'CMD_NOT_FOUND:{verb}', action='HELP', result='ERR', is_machine=machine_mode)}")
         else:

@@ -91,7 +91,8 @@ async def handle_stats(node, nickname: str, args: list, reply_target: str):
             for n, v in stats:
                 await node.send(f"{reply_method} {private_target} :{tag_msg(f'{n}: {v}', action='STATS', is_machine=False)}")
             if char['pending_stat_points'] > 0:
-                await node.send(f"{reply_method} {private_target} :{tag_msg(f'PENDING POINTS: {char['pending_stat_points']}', action='STATS', result='INFO', is_machine=False)}")
+                pts_msg = f"PENDING POINTS: {char['pending_stat_points']}"
+                await node.send(f"{reply_method} {private_target} :{tag_msg(pts_msg, action='STATS', result='INFO', is_machine=False)}")
         return
     
     if args[0].lower() == "allocate" and len(args) > 1:
