@@ -1,118 +1,70 @@
+
 import asyncio
-import sys
-import os
+import unittest
 from datetime import datetime, timezone, timedelta
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
+from ai_grid.database.repositories.pulse_repo import PulseRepository
+from ai_grid.database.repositories.incursion_repo import IncursionRepository
+from ai_grid.database.repositories.territory_repo import TerritoryRepository
+from models import Character, GridNode, PulseEvent, IncursionEvent, Player, NetworkAlias, Base
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
 
-# Add root dir to path
-# __file__ is ai_grid/scratch/test_remote_coordination.py
-# parent is ai_grid/scratch
-# parent of parent is ai_grid
-# parent of parent of parent is the root
-root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(root_dir)
-sys.path.append(os.path.join(root_dir, "ai_grid"))
+class TestRemoteCoordination(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        
+        self.AsyncSession = sessionmaker(self.engine, expire_on_commit=False, class_=AsyncSession)
+        self.pulse_repo = PulseRepository(self.AsyncSession)
+        self.inc_repo = IncursionRepository(self.AsyncSession)
+        self.terr_repo = TerritoryRepository(self.AsyncSession)
 
-from ai_grid.grid_db import ArenaDB
-from ai_grid.models import Character, GridNode, PulseEvent, IncursionEvent
-
-async def verify_task_045():
-    db = ArenaDB()
-    nick = "PresenceTester"
-    network = "rizon"
-    
-    print("[*] Initializing Remote Coordination Test...")
-    
-    async with db.async_session() as session:
-        # 1. Setup Environment
-        # Find two nodes
-        stmt = select(GridNode).limit(2)
-        nodes = (await session.execute(stmt)).scalars().all()
-        if len(nodes) < 2:
-            print("[!] Not enough nodes for test. Skipping.")
-            return
+    async def _setup_basic_state(self):
+        async with self.AsyncSession() as session:
+            node_a = GridNode(name="SectorA", net_affinity="2600net", node_type="wilderness")
+            node_b = GridNode(name="SectorB", net_affinity="2600net", node_type="wilderness")
+            session.add_all([node_a, node_b])
+            await session.commit()
             
-        hub_node = nodes[0]
-        remote_node = nodes[1]
-        
-        # Ensure they are on the same network for event testing
-        remote_node.net_affinity = network
-        hub_node.net_affinity = network
-        
-        # Ensure character exists
-        char = await db.identity.get_character_by_nick(nick, network, session)
-        if not char:
-            await db.identity.register_player(nick, network, "Human", "Tester", "Bio", {"cpu": 5, "ram": 5, "bnd": 5, "sec": 5, "alg": 5})
-            char = await db.identity.get_character_by_nick(nick, network, session)
+            p = Player(global_name="ShortDiodes")
+            session.add(p)
+            await session.commit()
             
-        # Place player at Hub Node
-        char.node_id = hub_node.id
-        # Give enough resources
-        char.credits = 5000.0
-        char.power = 1000.0
-        
-        # Damage Remote Node
-        remote_node.durability = 50.0
-        remote_node.owner_character_id = char.id # Own it for repair test
-        hub_node.owner_character_id = None # Hub is unclaimed
-        
-        # Clear existing pulses/incursions on Remote Node for clean test
-        from sqlalchemy import delete
-        await session.execute(delete(PulseEvent).where(PulseEvent.node_id == remote_node.id))
-        await session.execute(delete(IncursionEvent).where(IncursionEvent.node_id == remote_node.id))
-        
-        await session.commit()
-        
-        print(f"[*] Player: {nick} @ {hub_node.name}")
-        print(f"[*] Target: {remote_node.name} (Remote)")
+            char = Character(
+                name="ShortDiodes", player_id=p.id, node_id=node_b.id, 
+                power=100.0, credits=100, level=1, xp=0, race="Human", char_class="Hacker"
+            )
+            session.add(char)
+            session.add(NetworkAlias(player_id=p.id, nickname="ShortDiodes", network_name="2600net"))
+            
+            pulse = PulseEvent(
+                node_id=node_a.id, network_name="2600net", event_type="GLITCH", 
+                status="ACTIVE", expires_at=datetime.now(timezone.utc) + timedelta(minutes=10)
+            )
+            session.add(pulse)
+            await session.commit()
 
-    # 2. Test Remote Repair
-    print(f"\n[1] Testing Remote Repair on {remote_node.name}...")
-    success, msg = await db.grid.grid_repair(nick, network, node_name=remote_node.name)
-    print(f"    Result: {'SUCCESS' if success else 'FAIL'} | Msg: {msg}")
-    
-    # 3. Test Presence Enforcement (Claim)
-    print(f"\n[2] Testing Presence Enforcement (Local Claim)...")
-    success, msg = await db.grid.claim_node(nick, network)
-    print(f"    Claim Local Hub Result: {'SUCCESS' if success else 'FAIL'} | Msg: {msg}")
-    
-    # Remote Claim (Physical presence required)
-    print(f"\n[2b] Testing Presence Enforcement (Remote Claim)...")
-    success, msg = await db.grid.claim_node(nick, network, node_name=remote_node.name)
-    print(f"    Claim Remote Result: {'SUCCESS' if success else 'FAIL'} | Msg: {msg}")
-    
-    # Now let's try to upgrade hub_node (physical presence required, player is THERE)
-    print(f"\n[3] Testing Presence Enforcement for Upgrade (Local)...")
-    success, msg = await db.grid.upgrade_node(nick, network)
-    print(f"    Upgrade Local Hub Result: {'SUCCESS' if success else 'FAIL'} | Msg: {msg}")
+    async def test_remote_patch_success(self):
+        """Verify !a patch works from a different node."""
+        await self._setup_basic_state()
+        success, msg = await self.pulse_repo.resolve_pulse("ShortDiodes", "2600net", "SectorA", "patch")
+        self.assertTrue(success, f"Remote patch failed: {msg}")
+        self.assertIn("SUCCESS", msg)
 
-    # 4. Test Remote Pulse (Patch)
-    print(f"\n[4] Testing Remote Patching...")
-    async with db.async_session() as session:
-        # Spawn a Glitch pulse at the remote node
-        expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
-        pulse = PulseEvent(node_id=remote_node.id, network_name=network, event_type='GLITCH', reward_val=100, expires_at=expiry, status='ACTIVE')
-        session.add(pulse)
-        await session.commit()
-        
-    success, msg = await db.pulse.resolve_pulse(nick, network, remote_node.name, "patch")
-    print(f"    Remote Patch Result: {'SUCCESS' if success else 'FAIL'} | Msg: {msg}")
+    async def test_remote_claim_failure(self):
+        """Verify !a claim fails when not physically present."""
+        await self._setup_basic_state()
+        success, msg = await self.terr_repo.claim_node("ShortDiodes", "2600net", "SectorA")
+        self.assertFalse(success, "Remote claim should have failed")
+        self.assertIn("Physical presence required", msg)
 
-    # 5. Test Remote Incursion (Defend)
-    print(f"\n[5] Testing Remote Defense...")
-    async with db.async_session() as session:
-        # Spawn an Incursion at the remote node
-        expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
-        inc = IncursionEvent(node_id=remote_node.id, network_name=network, incursion_type='RAID', tier=1, reward_val=100, expires_at=expiry, status='ACTIVE')
-        session.add(inc)
-        await session.commit()
-        
-    success, msg, victors = await db.incursion.register_defense(nick, network, remote_node.name)
-    print(f"    Remote Defend Result: {'SUCCESS' if success else 'FAIL'} | Msg: {msg}")
-
-    await db.close()
-    print("\n[*] Remote Coordination Verification Complete.")
+    async def test_remote_repair_success(self):
+        """Verify !a repair works from a different node (Targeted)."""
+        await self._setup_basic_state()
+        success, msg = await self.terr_repo.grid_repair("ShortDiodes", "2600net", "SectorA")
+        self.assertTrue(success, f"Remote repair failed: {msg}")
+        self.assertIn("Nodal integrity augmented", msg)
 
 if __name__ == "__main__":
-    asyncio.run(verify_task_045())
+    unittest.main()
