@@ -41,6 +41,10 @@ def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False,
 
     # 2. Base Symbol Logic (Visited/Open)
     color = C_WHITE
+    raid_symbol = None
+    if node.active_target and intel_level != "NONE":
+        t_type = node.active_target.target_type.upper()
+        raid_symbol = f"[{t_type[0]}]"
     if machine_mode:
         symbol_map = {
             'safezone': '[S]',
@@ -48,11 +52,11 @@ def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False,
             'merchant': '[$]',
             'void': '[.]'
         }
-        symbol = symbol_map.get(node.node_type, '[-]')
+        symbol = raid_symbol if raid_symbol else symbol_map.get(node.node_type, '[-]')
         if node.id == char.node_id: symbol = '[@]'; color = C_CYAN
         elif node.owner_character_id == char.id: color = C_GREEN
     else:
-        symbol = "[-]"
+        symbol = raid_symbol if raid_symbol else "[-]"
         if node.id == char.node_id:
             symbol = "[@]"
             color = C_CYAN
@@ -61,17 +65,18 @@ def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False,
             if node.durability < 50: symbol = "[🩹]"
             elif node.power_generated > 20: symbol = "[⚡]"
             else: symbol = "[O]"
-        elif node.node_type == 'safezone':
-            symbol = "[🛡️]"
-            color = C_YELLOW
-        elif node.node_type == 'arena':
-            symbol = "[🏟️]"
-            color = C_RED
-        elif node.node_type == 'merchant':
-            symbol = "[💰]"
-            color = C_YELLOW
-        elif node.node_type == 'void':
-            symbol = "[-]"
+        elif not raid_symbol:
+            if node.node_type == 'safezone':
+                symbol = "[🛡️]"
+                color = C_YELLOW
+            elif node.node_type == 'arena':
+                symbol = "[🏟️]"
+                color = C_RED
+            elif node.node_type == 'merchant':
+                symbol = "[💰]"
+                color = C_YELLOW
+            elif node.node_type == 'void':
+                symbol = "[-]"
             # Threat level removed from UI
 
     return format_text(symbol, color)
@@ -93,20 +98,28 @@ def get_connector_symbol(source: GridNode, target: GridNode, vertical: bool = Fa
         if is_closed: return "##"
         return "--"
 
-async def generate_ascii_map(session, char: Character, machine_mode: bool = False, limit_radius: int = None, show_legend: bool = True) -> str:
+async def generate_ascii_map(session, char: Character, machine_mode: bool = False, limit_radius: int = None, show_legend: bool = True, center_override: tuple = None) -> str:
     """Generate a grid representation using global coordinates and tiered intelligence."""
+    import json
     
     # 1. Calculate Radius
     if limit_radius is not None:
         radius = limit_radius
     else:
-        total_stat = (char.sec or 0) + (char.alg or 0)
-        if total_stat >= 60: radius = 3
-        elif total_stat >= 40: radius = 2
-        else: radius = 1
+        # Load from prefs, default to radius 2 (5x5) if not set
+        try:
+            prefs = json.loads(char.prefs or '{}')
+            radius_pref = prefs.get('radius', 5)
+            radius = radius_pref // 2
+        except:
+            radius = 2
     
     # 2. Determine Bounding Box
-    center_x, center_y = char.current_node.x, char.current_node.y
+    if center_override and len(center_override) == 2:
+        center_x, center_y = center_override
+    else:
+        center_x, center_y = char.current_node.x, char.current_node.y
+        
     min_x, max_x = center_x - radius, center_x + radius
     min_y, max_y = center_y - radius, center_y + radius
     

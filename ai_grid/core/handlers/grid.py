@@ -33,7 +33,7 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
         if msg == "System offline.":
             await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{nick} - not a registered player - msg ignored', action='MCP', result='ERR')}")
         else:
-            await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='FAIL', nick=nick, is_machine=machine_mode)}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='GEOINT', result='FAIL', nick=nick, is_machine=machine_mode)}")
         await handle_grid_view(node, nick, private_target)
 
 async def handle_grid_view(node, nickname: str, reply_target: str):
@@ -111,8 +111,9 @@ async def handle_node_explore(node, nick: str, reply_target: str):
     if success:
         await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(f'Grid Discovery: {nick} uncovered architectural secrets!', action='GEOINT', result='SUCCESS')}")
 
-async def handle_grid_map(node, nick: str, reply_target: str):
-    """Render the ASCII grid map."""
+async def handle_grid_map(node, nick: str, reply_target: str, args: list = None):
+    """Render the ASCII grid map with advanced controls."""
+    args = args or []
     async with node.db.async_session() as session:
         char = await node.db.get_character_by_nick(nick, node.net_name, session)
         if not char:
@@ -120,9 +121,33 @@ async def handle_grid_map(node, nick: str, reply_target: str):
             return
         
         private_target, _, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
-        map_text = await generate_ascii_map(session, char, machine_mode=machine_mode)
         
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ TERMINAL NODAL TOPOLOGY ]', C_CYAN, True), action='GEOINT', result='MAPPED', is_machine=machine_mode)}")
+        # 1. Sub-command: stats
+        if args and args[0].lower() == "stats":
+            stats = await node.db.get_grid_stats()
+            await node.send(f"{reply_method} {private_target} :{tag_msg(stats, action='GEOINT', result='INFO', nick=nick, is_machine=machine_mode)}")
+            return
+            
+        # 2. Sub-command: full
+        if args and args[0].lower() == "full":
+            url = node.config.get('web_url', 'https://grid.automata.io/map')
+            await node.send(f"{reply_method} {private_target} :{tag_msg(f'Global Topology Matrix: {url}', action='GEOINT', result='INFO', nick=nick, is_machine=machine_mode)}")
+            return
+
+        # 3. Handle Coordinate Override: grid map <x> <y>
+        center_override = None
+        if len(args) >= 2:
+            try:
+                center_override = (int(args[0]), int(args[1]))
+            except ValueError: pass
+
+        # 4. Generate & Display Map
+        map_text = await generate_ascii_map(session, char, machine_mode=machine_mode, center_override=center_override)
+        
+        header = "[ TERMINAL NODAL TOPOLOGY ]"
+        if center_override: header += f" - Center: ({center_override[0]}, {center_override[1]})"
+        
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(header, C_CYAN, True), action='GEOINT', result='MAPPED', is_machine=machine_mode)}")
         for line in map_text.split("\n"):
             await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='GEOINT', is_machine=machine_mode)}")
 

@@ -207,6 +207,20 @@ class NavigationRepository(BaseRepository):
 
             return None, f"No valid route found for '{direction}'."
 
+    async def get_grid_stats(self) -> str:
+        """Returns aggregate statistics for the entire grid."""
+        async with self.async_session() as session:
+            # 1. Total Nodes
+            total_nodes = await session.scalar(select(func.count(GridNode.id)))
+            # 2. Claimed Nodes
+            claimed_nodes = await session.scalar(select(func.count(GridNode.id)).where(GridNode.owner_character_id != None))
+            # 3. Total Stored Power
+            total_power = await session.scalar(select(func.sum(GridNode.power_stored)))
+            # 4. Total Credits Pool
+            total_credits = await session.scalar(select(func.sum(GridNode.credits_pool)))
+            
+            return f"GRID_STATS | Total_Nodes: {total_nodes} | Claimed: {claimed_nodes} | Global_Power: {total_power or 0.0:.1f} uP | Global_Credits: {total_credits or 0.0:.1f}c"
+
     async def move_player_to_node(self, name: str, network: str, node_name: str) -> bool:
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(

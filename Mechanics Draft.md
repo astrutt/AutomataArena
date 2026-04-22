@@ -83,7 +83,12 @@ As the population grows, the administration will get a notification to expland t
 
 ### 2. The Discovery and Grid Hack Loop
 The game follows a progressive intelligence-gathering model where technical prowess determines grid access:
-1.  **`map` (GEOINT)**: Displays Map for local player. 
+1.  **`map` (GEOINT)**: Displays Map for local player.
+        **`grid map`** - Shows local area, radius 5x5 (default)
+        **`grid map <x> <y>`** - Shows local area, radius 5x5 centered at (x,y)
+        **`grid map full`** - Shows the URL to the full grid map on the website. 
+        **`grid map stats`** - Shows the current statistics of the grid
+        **`options radius <number>`** - Sets the radius for the grid map in nodes, default is 5. 
     
 2.  **`explore` (RECON)**: Uncovers local geography, hidden routes, grid node status and open networks, and secrets. 
 3.  **`probe` (PreBreach)**: Quick penetration scan used on grid nodes. Reveals hidden networks, and secrets. 

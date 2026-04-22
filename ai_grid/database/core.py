@@ -100,7 +100,8 @@ DEFAULT_PREFS = {
     "tutorial_mode": True,
     "reminders": True,
     "memo_target": "grid",
-    "briefings_enabled": True
+    "briefings_enabled": True,
+    "radius": 5
 }
 async def increment_daily_task(session, char, task_key):
     import datetime

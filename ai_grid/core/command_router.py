@@ -35,7 +35,7 @@ class CommandRouter:
             # 2. Grid Navigation & Exploration
             elif verb == "grid":
                 if args and args[0].lower() == "map":
-                    asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target))
+                    asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target, args[1:]))
                 elif args and args[0].lower() == "claimed":
                     asyncio.create_task(handlers.handle_grid_claimed(self.node, source_nick, args, reply_target))
                 elif args and args[0].lower() in ["probe", "install", "bolster", "link", "siphon", "hardware", "hw", "hack", "exploit"]:
@@ -142,7 +142,7 @@ class CommandRouter:
                 elif args and args[0] == "spectator": await handlers.handle_spectator_help(self.node, source_nick, reply_target)
                 else: await handlers.handle_help(self.node, source_nick, args, reply_target)
             elif verb == "map":
-                asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target))
+                asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target, args))
 
             # 5. Combat & Mob Encounters
             elif verb in ["attack", "hack", "rob", "exploit"] and len(args) > 0 and args[0].lower() != "grid":
