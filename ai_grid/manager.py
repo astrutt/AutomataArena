@@ -61,7 +61,8 @@ class GridNode:
             'max_tokens': 4.0,
             'refill_rate': 0.5, # 1 token per 2s
             'violation_threshold': 5,
-            'lockout_duration': 30
+            'lockout_duration': 30,
+            'messages': CONFIG.get('flood_messages', {})
         }
         self.pending_registrations = {} 
         self.nickserv_verified = set()  

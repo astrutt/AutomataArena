@@ -147,7 +147,9 @@ async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1
     if now < record['lockout_until']:
         rem = int(record['lockout_until'] - now)
         private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
-        msg = f"HARD LOCKOUT: Multiple flood violations detected. Terminal access suspended for {rem}s."
+        default_msg = "HARD LOCKOUT: Multiple flood violations detected. Terminal access suspended for {rem}s."
+        msg_template = node.flood_config.get('messages', {}).get('hard_lockout', default_msg)
+        msg = msg_template.format(rem=rem)
         asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_RED, is_machine=machine_mode), action='ALARM', result='LOCKED', nick=nick)}"))
         return False
 
@@ -182,7 +184,9 @@ async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1
         if not record['warned']:
             record['warned'] = True
             rem = int(cooldown - (now - record['last_action']))
-            msg = f"COOLDOWN: Protocol initialization in progress. Please wait {rem}s."
+            default_msg = "COOLDOWN: Protocol initialization in progress. Please wait {rem}s."
+            msg_template = node.flood_config.get('messages', {}).get('cooldown', default_msg)
+            msg = msg_template.format(rem=rem)
             asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_YELLOW, is_machine=machine_mode), action='SIGACT', result='FAIL', nick=nick)}"))
         return False
 
@@ -192,13 +196,18 @@ async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1
         # Trigger Hard Lockout
         record['lockout_until'] = now + conf['lockout_duration']
         record['violations'] = 0 # Reset violations upon lockout trigger
-        msg = f"TERMINAL OVERFLOW: Flood threshold exceeded. LOCKOUT INITIATED ({conf['lockout_duration']}s)."
+        default_msg = "TERMINAL OVERFLOW: Flood threshold exceeded. LOCKOUT INITIATED ({lockout_duration}s)."
+        msg_template = node.flood_config.get('messages', {}).get('terminal_overflow', default_msg)
+        msg = msg_template.format(lockout_duration=conf['lockout_duration'])
         asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_RED, bold=True, is_machine=machine_mode), action='ALARM', result='LOCKED', nick=nick)}"))
     else:
         # Standard Pacing Warning
         if not record['warned']:
             record['warned'] = True
-            msg = f"FLOOD CONTROL: Bucket empty. Refilling... (Next token in {2.0 - (added_tokens % 2):.1f}s)"
+            rem_tokens = 2.0 - (added_tokens % 2)
+            default_msg = "FLOOD CONTROL: Bucket empty. Refilling... (Next token in {rem:.1f}s)"
+            msg_template = node.flood_config.get('messages', {}).get('pacing_warning', default_msg)
+            msg = msg_template.format(rem=rem_tokens)
             asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_YELLOW, is_machine=machine_mode), action='SIGACT', result='FAIL', nick=nick)}"))
             
     return False
