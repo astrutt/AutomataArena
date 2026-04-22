@@ -119,7 +119,7 @@ async def is_machine_mode(node, nick: str) -> bool:
     prefs = await node.db.get_prefs(nick, node.net_name)
     return prefs.get('output_mode', 'human') == 'machine'
 
-async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1, consume: bool = True) -> bool:
+async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1, consume: bool = True, verb: str = None) -> bool:
     """
     v2.0 Token Bucket Flood Protection.
     Allows for bursty actions (e.g. movement) but enforces steady-state pacing.
@@ -184,8 +184,16 @@ async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1
         if not record['warned']:
             record['warned'] = True
             rem = int(cooldown - (now - record['last_action']))
+            
+            # Use verb-specific message if available
+            msg_template = None
             default_msg = "COOLDOWN: Protocol initialization in progress. Please wait {rem}s."
-            msg_template = node.flood_config.get('messages', {}).get('cooldown', default_msg)
+            if verb:
+                msg_template = node.flood_config.get('messages', {}).get(f'cooldown_{verb}')
+            
+            if not msg_template:
+                msg_template = node.flood_config.get('messages', {}).get('cooldown', default_msg)
+            
             msg = msg_template.format(rem=rem)
             asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_YELLOW, is_machine=machine_mode), action='SIGACT', result='FAIL', nick=nick)}"))
         return False
