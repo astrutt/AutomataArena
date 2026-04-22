@@ -73,12 +73,12 @@ async def handle_options(node, nickname: str, args: list, reply_target: str):
     if s == "radius":
         try:
             val = int(v)
-            if not (1 <= val <= 15): raise ValueError
+            if not (1 <= val <= 10): raise ValueError
             await node.db.set_pref(nickname, node.net_name, "radius", val)
             await node.send(f"{reply_method} {private_target} :{tag_msg(f'Map radius set to {val} (Area: {val}x{val}).', action='SIGACT', result='SUCCESS', nick=nickname, is_machine=machine_mode)}")
             return
         except ValueError:
-            await node.send(f"{reply_method} {private_target} :{tag_msg('Radius must be a number between 1 and 15.', action='SIGACT', result='FAIL', nick=nickname, is_machine=machine_mode)}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg('Radius must be a number between 1 and 10.', action='SIGACT', result='FAIL', nick=nickname, is_machine=machine_mode)}")
             return
 
     if s not in VALID: return

@@ -75,8 +75,8 @@ Clusters of network regions:
     - **UTL**: Utility (Power, Water, Gas, etc.) 
     - **ARN**: Arena PVP, PVE, Bridged Raids, MCP and AI Battles. 
     - **WAR**: War Zone 
-    - **VOD**: Voids.  
-
+    - **VOD**: Voids -- (unknown effects)(random low level npc or mob spawn)
+ 
 As the population grows, the administration will get a notification to expland the grid. 
     - **'admin map'**: displays the current statistics and map size.
     - **'admin map expand'**: expands the grid by 10x10 nodes.
@@ -88,7 +88,7 @@ The game follows a progressive intelligence-gathering model where technical prow
         **`grid map <x> <y>`** - Shows local area, radius 5x5 centered at (x,y)
         **`grid map full`** - Shows the URL to the full grid map on the website. 
         **`grid map stats`** - Shows the current statistics of the grid
-        **`options radius <number>`** - Sets the radius for the grid map in nodes, default is 5. 
+        **`options radius <number>`** - Sets the player default map radius in nodes (default is 5, max is 10). 
     
 2.  **`explore` (RECON)**: Uncovers local geography, hidden routes, grid node status and open networks, and secrets. 
 3.  **`probe` (PreBreach)**: Quick penetration scan used on grid nodes. Reveals hidden networks, and secrets. 
