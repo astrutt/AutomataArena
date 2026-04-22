@@ -45,6 +45,7 @@ logger.addHandler(ch)
 class GridNode:
     def __init__(self, net_name, net_config, llm, db, hub):
         self.net_name = net_name
+        self.network_name = None # Task 061: Dynamic Network Naming
         self.config = net_config
         self.llm = llm
         self.db = db
@@ -225,6 +226,12 @@ class GridNode:
                     if ts_str in self.pending_pings:
                         self.pending_pings[ts_str]['server_latency'] = (time.time() - self.pending_pings[ts_str]['start']) * 1000
                         await self._check_ping_complete(ts_str)
+                elif command == "005":
+                    # RPL_ISUPPORT - Capture the dynamic IRC network name (Task 061)
+                    for part in line.split():
+                        if part.startswith("NETWORK="):
+                            self.network_name = part.split("=")[1]
+                            logger.info(f"[{self.net_name}] Network identified as: {self.network_name}")
                 elif command in ["307", "330"]:
                     # 307: RPL_WHOISREGNICK (is a registered nick)
                     # 330: RPL_WHOISACCOUNT (is logged in as account)
