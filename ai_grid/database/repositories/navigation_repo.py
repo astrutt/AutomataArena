@@ -3,7 +3,7 @@ import json
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
-from models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord
+from models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord, RaidTarget
 from ..core import CONFIG
 from ..base_repo import BaseRepository
 
@@ -221,7 +221,7 @@ class NavigationRepository(BaseRepository):
             claimed_nodes = await session.scalar(select(func.count(GridNode.id)).where(GridNode.owner_character_id != None))
             # 3. Total Stored Power
             total_power = await session.scalar(select(func.sum(GridNode.power_stored)))
-            from models import RaidTarget
+            # 4. Total Credits Pool
             total_credits = await session.scalar(select(func.sum(RaidTarget.credits_pool)))
             
             return f"GRID_STATS | Total_Nodes: {total_nodes} | Claimed: {claimed_nodes} | Global_Power: {total_power or 0.0:.1f} uP | Global_Credits: {total_credits or 0.0:.1f}c"

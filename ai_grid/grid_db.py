@@ -475,6 +475,7 @@ class ArenaDB:
     async def rename_node(self, old, new): return await self.grid.rename_node(old, new)
     async def get_prefs_by_id(self, char_id): return await self.character.get_prefs_by_id(char_id)
     async def get_nickname_by_id(self, char_id): return await self.identity.get_nickname_by_id(char_id)
+    async def get_grid_stats(self): return await self.navigation.get_grid_stats()
 
     async def list_shop_items(self): return await self.economy.list_shop_items()
     async def award_credits_bulk(self, payouts, network): return await self.economy.award_credits_bulk(payouts, network)
