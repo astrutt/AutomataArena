@@ -6,6 +6,11 @@ import asyncio
 import json
 import logging
 import sys
+import os
+
+# --- Path Injection (Allows running from within the package directory) ---
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from ai_grid.grid_utils import format_text, tag_msg, format_item, C_RED, C_GREEN, C_YELLOW, C_CYAN
 
 # --- Config & Logging Setup ---

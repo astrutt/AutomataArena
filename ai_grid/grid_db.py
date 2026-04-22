@@ -5,6 +5,11 @@ import os
 import shutil
 import json
 import datetime
+import sys
+
+# --- Path Injection (Allows running from within the package directory) ---
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from sqlalchemy import inspect, text, func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.future import select

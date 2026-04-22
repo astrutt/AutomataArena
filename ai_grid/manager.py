@@ -4,6 +4,10 @@ import asyncio
 import json
 import sys
 import os
+
+# --- Path Injection (Allows running from within the package directory) ---
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import logging
 from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from ai_grid.grid_llm import ArenaLLM
