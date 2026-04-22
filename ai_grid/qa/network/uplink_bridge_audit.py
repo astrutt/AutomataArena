@@ -5,9 +5,9 @@ import json
 
 # Root inclusion
 sys.path.append('ai_grid')
-import grid_db
+import ai_grid.grid_db as grid_db
 from database.core import CONFIG
-from models import Character, Player, NetworkAlias, GridNode, ItemTemplate
+from ai_grid.models import Character, Player, NetworkAlias, GridNode, ItemTemplate
 
 # Mock config for networks
 CONFIG['networks'] = {

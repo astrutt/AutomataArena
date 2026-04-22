@@ -5,9 +5,9 @@ import json
 from sqlalchemy.future import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
-from models import Character, Player, NetworkAlias, GridNode, ItemTemplate, InventoryItem, PulseEvent
+from ai_grid.models import Character, Player, NetworkAlias, GridNode, ItemTemplate, InventoryItem, PulseEvent
 from datetime import timedelta, timezone
-from ..core import logger
+from ai_grid.database.core import logger
 
 class SpectatorRepository:
     def __init__(self, async_session):

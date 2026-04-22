@@ -3,9 +3,9 @@ import json
 import datetime
 from sqlalchemy.future import select
 from sqlalchemy import func
-from models import Character, Player, NetworkAlias, GridNode
-from ..core import logger, increment_daily_task
-from ..base_repo import BaseRepository
+from ai_grid.models import Character, Player, NetworkAlias, GridNode
+from ai_grid.database.core import logger, increment_daily_task
+from ai_grid.database.base_repo import BaseRepository
 
 class ActivityRepository(BaseRepository):
     async def get_daily_tasks(self, name: str, network: str) -> str:

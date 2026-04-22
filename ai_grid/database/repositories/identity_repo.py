@@ -6,9 +6,9 @@ import logging
 from sqlalchemy import func
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from models import Player, NetworkAlias, Character, GridNode, ItemTemplate, InventoryItem
-from ..core import logger, DEFAULT_PREFS
-from ..base_repo import BaseRepository
+from ai_grid.models import Player, NetworkAlias, Character, GridNode, ItemTemplate, InventoryItem
+from ai_grid.database.core import logger, DEFAULT_PREFS
+from ai_grid.database.base_repo import BaseRepository
 
 logger = logging.getLogger("manager")
 

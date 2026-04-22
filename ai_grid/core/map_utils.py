@@ -3,8 +3,8 @@ import datetime
 import random
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from models import Character, GridNode, NodeConnection
-from grid_utils import C_CYAN, C_GREEN, C_RED, C_YELLOW, C_WHITE, C_GREY, format_text
+from ai_grid.models import Character, GridNode, NodeConnection
+from ai_grid.grid_utils import C_CYAN, C_GREEN, C_RED, C_YELLOW, C_WHITE, C_GREY, format_text
 
 def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False, intel_level: str = "NONE") -> str:
     """Determine the symbol and color for a node based on state and intelligence tiers."""
@@ -98,7 +98,7 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
     grid = {(n.x, n.y): n for n in nodes}
 
     # 4. Fetch Discovery Records for these nodes
-    from models import DiscoveryRecord
+    from ai_grid.models import DiscoveryRecord
     node_ids = [n.id for n in nodes]
     disc_stmt = select(DiscoveryRecord).where(
         DiscoveryRecord.character_id == char.id,
@@ -182,9 +182,9 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
     legend = ""
     # Use 3-char codes for legend types
     LEGEND_MAP = {
-        'safezone': 'SFZ',
+        'safezone': 'CIV',
         'arena': 'ARN',
-        'merchant': 'MCH',
+        'merchant': 'MKT',
         'void': 'VOD'
     }
     raw_type = center_node.active_target.target_type.upper() if center_node.active_target else center_node.node_type.lower()

@@ -7,7 +7,7 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(ROOT_DIR)
 sys.path.append(os.path.join(ROOT_DIR, 'ai_grid'))
 
-import grid_utils
+import ai_grid.grid_utils as grid_utils
 grid_utils.CONFIG = {'logging': {'level': 'DEBUG'}}
 
 from ai_grid.core.handlers.osint import (

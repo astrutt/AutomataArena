@@ -2,8 +2,8 @@
 from sqlalchemy.future import select
 import datetime
 from sqlalchemy.orm import selectinload
-from models import Character, Player, NetworkAlias, ItemTemplate, InventoryItem, GridNode, GlobalMarket, AuctionListing
-from ..core import logger
+from ai_grid.models import Character, Player, NetworkAlias, ItemTemplate, InventoryItem, GridNode, GlobalMarket, AuctionListing
+from ai_grid.database.core import logger
 
 class EconomyRepository:
     def __init__(self, async_session):

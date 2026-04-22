@@ -10,7 +10,7 @@ sys.path.append(ROOT_DIR)
 sys.path.append(os.path.join(ROOT_DIR, 'ai_grid'))
 
 from ai_grid.grid_combat import CombatEngine, Entity
-from grid_utils import C_CYAN, C_RED, C_GREEN, C_YELLOW
+from ai_grid.grid_utils import C_CYAN, C_RED, C_GREEN, C_YELLOW
 
 async def mock_send(msg):
     # print(f"  [SENT] {msg}")

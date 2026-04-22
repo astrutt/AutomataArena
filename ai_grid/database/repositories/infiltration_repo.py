@@ -4,9 +4,9 @@ import json
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from models import Character, Player, NetworkAlias, GridNode, BreachRecord, Memo, InventoryItem, DiscoveryRecord
-from ..core import CONFIG, increment_daily_task
-from ..base_repo import BaseRepository
+from ai_grid.models import Character, Player, NetworkAlias, GridNode, BreachRecord, Memo, InventoryItem, DiscoveryRecord
+from ai_grid.database.core import CONFIG, increment_daily_task
+from ai_grid.database.base_repo import BaseRepository
 
 class InfiltrationRepository(BaseRepository):
     async def siphon_node(self, name: str, network: str, percent: float = 100.0) -> tuple:

@@ -3,7 +3,7 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 from ai_grid.database.repositories.navigation_repo import NavigationRepository
-from models import Character, GridNode, DiscoveryRecord
+from ai_grid.models import Character, GridNode, DiscoveryRecord
 
 class TestUplink(unittest.IsolatedAsyncioTestCase):
     def setUp(self):

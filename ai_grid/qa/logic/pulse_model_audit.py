@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 # Root inclusion
 sys.path.append('ai_grid')
-import grid_db
-from models import PulseEvent, GridNode
+import ai_grid.grid_db as grid_db
+from ai_grid.models import PulseEvent, GridNode
 
 async def audit_pulse_model():
     db = grid_db.ArenaDB()

@@ -4,8 +4,8 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy.future import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
-from models import IncursionEvent, IncursionDefender, GridNode, Character
-from ..base_repo import BaseRepository
+from ai_grid.models import IncursionEvent, IncursionDefender, GridNode, Character
+from ai_grid.database.base_repo import BaseRepository
 
 logger = logging.getLogger("grid_db")
 

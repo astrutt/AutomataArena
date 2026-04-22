@@ -2,8 +2,8 @@
 import asyncio
 import logging
 import time
-from . import handlers
-from grid_utils import format_text, tag_msg, C_CYAN, C_YELLOW, C_GREEN, C_RED
+import ai_grid.core.handlers as handlers
+from ai_grid.grid_utils import format_text, tag_msg, C_CYAN, C_YELLOW, C_GREEN, C_RED
 
 logger = logging.getLogger("manager")
 

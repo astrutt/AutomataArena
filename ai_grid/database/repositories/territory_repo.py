@@ -3,9 +3,9 @@ import json
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
-from models import Character, Player, NetworkAlias, GridNode, InventoryItem
-from ..core import logger, CONFIG, increment_daily_task
-from ..base_repo import BaseRepository
+from ai_grid.models import Character, Player, NetworkAlias, GridNode, InventoryItem
+from ai_grid.database.core import logger, CONFIG, increment_daily_task
+from ai_grid.database.base_repo import BaseRepository
 
 class TerritoryRepository(BaseRepository):
     async def claim_node(self, name: str, network: str, node_name: str = None) -> tuple[bool, str]:
@@ -286,7 +286,7 @@ class TerritoryRepository(BaseRepository):
                 return {"success": False, "msg": f"Hardware module '{addon_type}' not found on core."}
             
             # Find Template
-            from models import ItemTemplate
+            from ai_grid.models import ItemTemplate
             tpl_stmt = select(ItemTemplate).where(ItemTemplate.name == addon_type, ItemTemplate.item_type == "node_addon")
             tpl = (await session.execute(tpl_stmt)).scalars().first()
             

@@ -5,8 +5,8 @@ import os
 sys.path.append(os.path.join(os.getcwd(), 'ai_grid'))
 
 async def test_incursions():
-    from grid_db import ArenaDB
-    from models import GridNode, Character, Player, NetworkAlias, IncursionEvent
+    from ai_grid.grid_db import ArenaDB
+    from ai_grid.models import GridNode, Character, Player, NetworkAlias, IncursionEvent
     from sqlalchemy.future import select
     from sqlalchemy import update, func
     

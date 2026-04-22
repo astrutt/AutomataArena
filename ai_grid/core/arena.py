@@ -1,14 +1,14 @@
 # arena.py - v1.5.0
 import asyncio
 import logging
-from grid_combat import CombatEngine, Entity
-from grid_combat import CombatEngine, Entity
-from grid_utils import (
+from ai_grid.grid_combat import CombatEngine, Entity
+from ai_grid.grid_combat import CombatEngine, Entity
+from ai_grid.grid_utils import (
     format_text, tag_msg, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_BLUE, C_PURPLE,
     C_ORANGE, C_L_GREEN, C_L_BLUE, C_PINK, generate_gradient, generate_meter,
     TOPIC_START, TOPIC_END, TOPIC_SEP
 )
-from grid_combat import CombatEngine, Entity
+from ai_grid.grid_combat import CombatEngine, Entity
 
 logger = logging.getLogger("manager")
 

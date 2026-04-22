@@ -5,16 +5,16 @@ import json
 import sys
 import os
 import logging
-from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
-from grid_llm import ArenaLLM
-from grid_db import ArenaDB
-from core.irc_client import IRCClient
-from core.command_router import CommandRouter
-import core.loops as loops
-import core.handlers as handlers
-import core.arena as arena
-import core.security as security
-from core.security import request_nickserv_check
+from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from ai_grid.grid_llm import ArenaLLM
+from ai_grid.grid_db import ArenaDB
+from ai_grid.core.irc_client import IRCClient
+from ai_grid.core.command_router import CommandRouter
+import ai_grid.core.loops as loops
+import ai_grid.core.handlers as handlers
+import ai_grid.core.arena as arena
+import ai_grid.core.security as security
+from ai_grid.core.security import request_nickserv_check
 
 # --- Config Load ---
 try:

@@ -55,7 +55,7 @@ class GridNode(Base):
     firewall_hits = Column(Integer, default=0)
     ids_alerts = Column(Integer, default=0)
     max_slots = Column(Integer, default=4)
-    active_target_id = Column(Integer, ForeignKey('raid_targets.id'), nullable=True)
+    active_target_id = Column(Integer, ForeignKey('raid_targets.id', use_alter=True, name="fk_active_target"), nullable=True)
     
     # Grid v2.0 Coordinates & Expansion
     x = Column(Integer, index=True)

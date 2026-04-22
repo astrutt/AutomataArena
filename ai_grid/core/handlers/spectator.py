@@ -2,7 +2,7 @@
 import time
 import logging
 import datetime
-from grid_utils import format_text, tag_msg, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from ai_grid.grid_utils import format_text, tag_msg, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from .base import is_machine_mode, get_action_routing
 
 logger = logging.getLogger("manager")

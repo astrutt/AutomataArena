@@ -1,8 +1,8 @@
 # database/repositories/communication_repo.py
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from models import Character, Player, NetworkAlias, Memo
-from ..base_repo import BaseRepository
+from ai_grid.models import Character, Player, NetworkAlias, Memo
+from ai_grid.database.base_repo import BaseRepository
 
 class CommunicationRepository(BaseRepository):
     async def get_memos(self, name: str, network: str, only_unread: bool = False) -> list:

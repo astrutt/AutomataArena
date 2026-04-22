@@ -2,7 +2,7 @@
 import random
 import logging
 import json
-from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from ..map_utils import generate_ascii_map
 from .base import is_machine_mode, check_rate_limit, get_action_routing
 
@@ -144,7 +144,7 @@ async def handle_grid_map(node, nick: str, reply_target: str, args: list = None)
         # 4. Generate & Display Map
         map_text = await generate_ascii_map(session, char, machine_mode=machine_mode, center_override=center_override)
         
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ TERMINAL NODAL TOPOLOGY ]', C_CYAN, True), action='GEOINT', result='MAPPED', is_machine=machine_mode)}")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'[ {node.net_name.upper()} NODAL TOPOLOGY ]', C_CYAN, True), action='GEOINT', result='MAP', is_machine=machine_mode)}")
         for line in map_text.split("\n"):
             await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='GEOINT', is_machine=machine_mode)}")
 

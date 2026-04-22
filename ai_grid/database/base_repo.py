@@ -1,9 +1,9 @@
 # ai_grid/database/base_repo.py
 from sqlalchemy import func
 from sqlalchemy.future import select
-from models import Character, Player, NetworkAlias, GridNode
+from ai_grid.models import Character, Player, NetworkAlias, GridNode
 from sqlalchemy.orm import selectinload
-from .core import CONFIG, logger
+from ai_grid.database.core import CONFIG, logger
 
 class BaseRepository:
     def __init__(self, async_session):

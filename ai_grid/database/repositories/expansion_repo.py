@@ -4,8 +4,8 @@ import logging
 from sqlalchemy import func
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from ..base_repo import BaseRepository
-from models import Character, GridNode, Player, NetworkAlias
+from ai_grid.database.base_repo import BaseRepository
+from ai_grid.models import Character, GridNode, Player, NetworkAlias
 
 logger = logging.getLogger("grid_db")
 

@@ -3,9 +3,9 @@ import json
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
-from models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord, RaidTarget
-from ..core import CONFIG
-from ..base_repo import BaseRepository
+from ai_grid.models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord, RaidTarget
+from ai_grid.database.core import CONFIG
+from ai_grid.database.base_repo import BaseRepository
 
 class NavigationRepository(BaseRepository):
     async def get_spawn_node_name(self) -> str:

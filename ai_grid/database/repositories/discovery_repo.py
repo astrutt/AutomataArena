@@ -6,9 +6,9 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from sqlalchemy import func, update
-from models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord, RaidTarget
-from ..core import CONFIG
-from ..base_repo import BaseRepository
+from ai_grid.models import Character, Player, NetworkAlias, GridNode, NodeConnection, DiscoveryRecord, RaidTarget
+from ai_grid.database.core import CONFIG
+from ai_grid.database.base_repo import BaseRepository
 
 class DiscoveryRepository(BaseRepository):
     async def explore_node(self, name: str, network: str) -> dict:
@@ -121,7 +121,7 @@ class DiscoveryRepository(BaseRepository):
                 from core.security_utils import is_action_hostile
                 if is_action_hostile('probe', node.availability_mode):
                     if addons.get("IDS") or node.upgrade_level > 2:
-                        from models import Memo
+                        from ai_grid.models import Memo
                         alert_msg = f"DEEP_PROBE_DETECTION TARGET:{node.name} SOURCE:{char.name}"
                         session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
                         alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}

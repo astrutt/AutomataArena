@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 import shlex
-from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from .base import get_action_routing
 
 logger = logging.getLogger("manager")
@@ -233,7 +233,7 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                 # Trigger a verification WHOIS after a short delay
                 async def delayed_check():
                     await asyncio.sleep(5)
-                    from core.security import request_nickserv_check
+                    from ai_grid.core.security import request_nickserv_check
                     await request_nickserv_check(target_node, target_node.config['nickname'])
                 asyncio.create_task(delayed_check())
             else:

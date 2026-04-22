@@ -8,9 +8,9 @@ from sqlalchemy import select, update
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'core')))
 
-from grid_db import ArenaDB
-from models import Character, GridNode, DiscoveryRecord, BreachRecord
-from grid_utils import tag_msg, C_CYAN, C_GREEN, C_WHITE
+from ai_grid.grid_db import ArenaDB
+from ai_grid.models import Character, GridNode, DiscoveryRecord, BreachRecord
+from ai_grid.grid_utils import tag_msg, C_CYAN, C_GREEN, C_WHITE
 
 TEST_DB = "task_028_qa.db"
 

@@ -1,7 +1,7 @@
 # database/repositories/progression_repo.py
 from sqlalchemy.future import select
-from models import Character
-from ..base_repo import BaseRepository
+from ai_grid.models import Character
+from ai_grid.database.base_repo import BaseRepository
 
 class ProgressionRepository(BaseRepository):
     async def add_experience(self, name: str, network: str, amount: int, llm_client=None) -> dict:

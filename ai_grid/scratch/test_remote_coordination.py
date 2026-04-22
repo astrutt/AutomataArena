@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from ai_grid.database.repositories.pulse_repo import PulseRepository
 from ai_grid.database.repositories.incursion_repo import IncursionRepository
 from ai_grid.database.repositories.territory_repo import TerritoryRepository
-from models import Character, GridNode, PulseEvent, IncursionEvent, Player, NetworkAlias, Base
+from ai_grid.models import Character, GridNode, PulseEvent, IncursionEvent, Player, NetworkAlias, Base
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 

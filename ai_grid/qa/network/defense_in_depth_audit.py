@@ -5,8 +5,8 @@ import json
 
 # Root inclusion
 sys.path.append('ai_grid')
-import grid_db
-from models import ItemTemplate
+import ai_grid.grid_db as grid_db
+from ai_grid.models import ItemTemplate
 
 async def audit_defense_in_depth():
     db = grid_db.ArenaDB()
@@ -22,7 +22,7 @@ async def audit_defense_in_depth():
     # 1. Setup Mock State
     async with db.async_session() as session:
         # Create a test node if it doesn't exist
-        from models import GridNode
+        from ai_grid.models import GridNode
         test_node = GridNode(name="QA_FORTRESS", description="A hardened test node.", node_type="safezone", max_slots=2)
         session.add(test_node)
         
@@ -41,7 +41,7 @@ async def audit_defense_in_depth():
     # Note: infiltration_repo.py increments firewall_hits when a breach fails.
     # For this audit, we'll manually check the implementation logic we saw in the audit.
     async with db.async_session() as session:
-        from models import GridNode
+        from ai_grid.models import GridNode
         node = (await session.execute(grid_db.select(GridNode).where(GridNode.name == "QA_FORTRESS"))).scalars().first()
         initial_hits = node.firewall_hits or 0
         node.firewall_hits += 1 # Mirroring the repo logic
@@ -61,7 +61,7 @@ async def audit_defense_in_depth():
     # but ArenaDB is better.
     
     # Mocking a character with hardware
-    from models import Character, Player, NetworkAlias, InventoryItem
+    from ai_grid.models import Character, Player, NetworkAlias, InventoryItem
     async with db.async_session() as session:
         p = Player(global_name="qa_admin_global")
         session.add(p)

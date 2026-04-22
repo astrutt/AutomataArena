@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import sys
-from grid_utils import format_text, tag_msg, format_item, C_RED, C_GREEN, C_YELLOW, C_CYAN
+from ai_grid.grid_utils import format_text, tag_msg, format_item, C_RED, C_GREEN, C_YELLOW, C_CYAN
 
 # --- Config & Logging Setup ---
 try:

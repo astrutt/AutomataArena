@@ -6,7 +6,7 @@ import sys
 # Ensure ai_grid is in path
 sys.path.append(os.path.join(os.getcwd(), 'ai_grid'))
 
-from grid_db import ArenaDB
+from ai_grid.grid_db import ArenaDB
 
 async def verify():
     db = ArenaDB()
@@ -41,7 +41,7 @@ async def verify():
         from core.map_utils import generate_ascii_map
         async with db.async_session() as session:
             # Need to fetch the character object
-            from models import Character
+            from ai_grid.models import Character
             from sqlalchemy.future import select
             from sqlalchemy.orm import selectinload
             stmt = select(Character).where(Character.name == nick).options(selectinload(Character.current_node))

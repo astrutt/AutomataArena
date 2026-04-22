@@ -6,10 +6,10 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'core')))
 
-from grid_db import ArenaDB
-from models import Character, GridNode, DiscoveryRecord
+from ai_grid.grid_db import ArenaDB
+from ai_grid.models import Character, GridNode, DiscoveryRecord
 from core.map_utils import generate_ascii_map
-from grid_utils import C_GREY, C_RED, format_text
+from ai_grid.grid_utils import C_GREY, C_RED, format_text
 
 TEST_DB = "discovery_test.db"
 

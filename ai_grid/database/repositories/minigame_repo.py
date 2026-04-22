@@ -5,8 +5,8 @@ import json
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
-from models import Character, Player, NetworkAlias, GridNode, Leaderboard, CipherSession
-from ..core import logger, CONFIG
+from ai_grid.models import Character, Player, NetworkAlias, GridNode, Leaderboard, CipherSession
+from ai_grid.database.core import logger, CONFIG
 
 class MiniGameRepository:
     def __init__(self, async_session):

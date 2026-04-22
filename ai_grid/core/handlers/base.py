@@ -1,7 +1,7 @@
 # handlers/base.py - Utility Handlers
 import asyncio
 import time
-from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 
 async def handle_help(node, nick: str, args: list, reply_target: str):
     """Displays a comprehensive list of all v1.7.9 commands or details for a specific verb."""

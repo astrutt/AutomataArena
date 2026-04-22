@@ -34,7 +34,7 @@ async def test_reward_calibration():
                 # Actually register_player handles Player creation.
                 player_id = char.player_id
                 await session.delete(char)
-                from models import NetworkAlias, Player
+                from ai_grid.models import NetworkAlias, Player
                 await session.execute(delete(NetworkAlias).where(NetworkAlias.player_id == player_id))
                 await session.execute(delete(Player).where(Player.id == player_id))
         await session.commit()

@@ -1,7 +1,7 @@
 # handlers/incursion.py - v1.0.0
 import asyncio
 import logging
-from grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW
+from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW
 from .base import get_action_routing
 
 logger = logging.getLogger("manager")

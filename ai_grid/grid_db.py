@@ -9,30 +9,30 @@ from sqlalchemy import inspect, text, func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.future import select
 
-from models import (
+from ai_grid.models import (
     Base, Player, NetworkAlias, Character, GridNode, NodeConnection, 
     PulseEvent, DiscoveryRecord, BreachRecord, ItemTemplate, InventoryItem, 
-    MainframeTask, AuctionListing, Leaderboard, CipherSession, GlobalMarket, Memo, Character
+    MainframeTask, AuctionListing, Leaderboard, CipherSession, GlobalMarket, Memo
 )
-from database.core import DB_FILE, logger, CONFIG, GRID_EXPANSION, GRID_CONNECTIONS, BRIDGE_MAPPING, LOOT_TEMPLATES
-from database.repositories.navigation_repo import NavigationRepository
-from database.repositories.territory_repo import TerritoryRepository
-from database.repositories.discovery_repo import DiscoveryRepository
-from database.repositories.infiltration_repo import InfiltrationRepository
-from database.repositories.maintenance_repo import MaintenanceRepository
-from database.repositories.identity_repo import IdentityRepository
-from database.repositories.character_repo import CharacterRepository
-from database.repositories.communication_repo import CommunicationRepository
-from database.repositories.activity_repo import ActivityRepository
-from database.repositories.progression_repo import ProgressionRepository
-from database.repositories.economy_repo import EconomyRepository
-from database.repositories.mainframe_repo import MainframeRepository
-from database.repositories.minigame_repo import MiniGameRepository
-from database.repositories.combat_repo import CombatRepository
-from database.repositories.pulse_repo import PulseRepository
-from database.repositories.spectator_repo import SpectatorRepository
-from database.repositories.incursion_repo import IncursionRepository
-from database.repositories.expansion_repo import ExpansionRepository
+from ai_grid.database.core import DB_FILE, logger, CONFIG, GRID_EXPANSION, GRID_CONNECTIONS, BRIDGE_MAPPING, LOOT_TEMPLATES
+from ai_grid.database.repositories.navigation_repo import NavigationRepository
+from ai_grid.database.repositories.territory_repo import TerritoryRepository
+from ai_grid.database.repositories.discovery_repo import DiscoveryRepository
+from ai_grid.database.repositories.infiltration_repo import InfiltrationRepository
+from ai_grid.database.repositories.maintenance_repo import MaintenanceRepository
+from ai_grid.database.repositories.identity_repo import IdentityRepository
+from ai_grid.database.repositories.character_repo import CharacterRepository
+from ai_grid.database.repositories.communication_repo import CommunicationRepository
+from ai_grid.database.repositories.activity_repo import ActivityRepository
+from ai_grid.database.repositories.progression_repo import ProgressionRepository
+from ai_grid.database.repositories.economy_repo import EconomyRepository
+from ai_grid.database.repositories.mainframe_repo import MainframeRepository
+from ai_grid.database.repositories.minigame_repo import MiniGameRepository
+from ai_grid.database.repositories.combat_repo import CombatRepository
+from ai_grid.database.repositories.pulse_repo import PulseRepository
+from ai_grid.database.repositories.spectator_repo import SpectatorRepository
+from ai_grid.database.repositories.incursion_repo import IncursionRepository
+from ai_grid.database.repositories.expansion_repo import ExpansionRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):

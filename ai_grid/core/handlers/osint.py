@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import time
-from grid_utils import (
+from ai_grid.grid_utils import (
     format_text, tag_msg, ICONS, C_CYAN, C_YELLOW, C_GREEN, C_RED, C_ORANGE,
     C_PURPLE, C_PINK, C_L_GREEN, C_BLUE, C_WHITE, generate_gradient, generate_meter
 )

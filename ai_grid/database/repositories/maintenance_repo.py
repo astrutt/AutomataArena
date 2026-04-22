@@ -3,9 +3,9 @@ import datetime
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
-from models import GridNode, Character, Player, NetworkAlias
-from ..core import logger
-from ..base_repo import BaseRepository
+from ai_grid.models import GridNode, Character, Player, NetworkAlias
+from ai_grid.database.core import logger
+from ai_grid.database.base_repo import BaseRepository
 
 class MaintenanceRepository(BaseRepository):
     async def tick_grid_power(self):
