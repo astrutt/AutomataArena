@@ -122,10 +122,14 @@ class NavigationRepository(BaseRepository):
             # 1. Coordinate Math
             dx, dy = 0, 0
             d = direction.lower()
-            if d == 'north': dy = -1
-            elif d == 'south': dy = 1
-            elif d == 'east': dx = 1
-            elif d == 'west': dx = -1
+            if d in ['north', 'n']: dy = -1
+            elif d in ['south', 's']: dy = 1
+            elif d in ['east', 'e']: dx = 1
+            elif d in ['west', 'w']: dx = -1
+            elif d in ['northeast', 'ne']: dx = 1; dy = -1
+            elif d in ['northwest', 'nw']: dx = -1; dy = -1
+            elif d in ['southeast', 'se']: dx = 1; dy = 1
+            elif d in ['southwest', 'sw']: dx = -1; dy = 1
             
             if dx != 0 or dy != 0:
                 tx, ty = node.x + dx, node.y + dy
@@ -157,8 +161,6 @@ class NavigationRepository(BaseRepository):
                 msg = f"Traversed {direction} to {target.name} ({tx}, {ty}). (-{move_cost} power)"
                 return target.name, msg
 
-            return None, f"No valid route found for '{direction}'."
-            
             # 3. Bridge Traversal Logic (The Uplink - Task 021)
             # If direction matches the affinity of the node, we are attempting to "jump" networks
             if char.current_node.net_affinity and direction.lower() == char.current_node.net_affinity.lower():

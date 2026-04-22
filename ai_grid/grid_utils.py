@@ -63,6 +63,8 @@ ICONS = {
     'MAINT': '🛠️',
     'CROSS-GRID': '🌐',
     'INFO': 'ℹ️',
+    'MOVEMENT': '🚀',
+    'TRAVEL': '🚶',
     'Default': '⚙️',
     'Item': '📦',
     'Heal': '💉',
@@ -103,7 +105,7 @@ def format_text(text: str, color_code: str = None, bold: bool = False, is_machin
         logger.error(f"Failed to format text '{text}': {e}")
         return "".join(char for char in str(text) if ord(char) < 128)
 
-def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool = False, nick: str = None, action: str = None, result: str = None) -> str:
+def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool = False, nick: str = None, action: str = None, result: str = None, source: str = None, destination: str = None) -> str:
     """
     Builds a structured [GRID] message with tactical intel tags and icons.
     Protocol: [GRID]<ico>[ACTION][RESULT][NICK] TEXT
@@ -128,6 +130,9 @@ def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool
         if nick:     brackets += f"[NICK:{nick}]"
         elif location: brackets += f"[LOC:{location.upper()}]"
         
+        if source:      brackets += f"[SRC:{source.upper()}]"
+        if destination: brackets += f"[DST:{destination.upper()}]"
+        
         clean_text = "".join(char for char in str(text) if ord(char) < 128)
         return f"{prefix}{brackets} {clean_text}"
     else:
@@ -136,7 +141,8 @@ def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool
             'GEOINT': C_CYAN, 'MAPPED': C_CYAN, 'OSINT': C_YELLOW, 'FOUND': C_YELLOW,
             'RECON': C_PURPLE, 'SIGACT': C_GREEN, 'EXFIL': C_L_GREEN, 'EXPLOIT': C_ORANGE,
             'SIGINT': C_BLUE, 'PROBE': C_BLUE, 'PREBREACH': C_BLUE,
-            'MAINT': C_GREY, 'ERR': C_RED, 'FAIL': C_RED, 'ALARM': C_RED, 'INFO': C_WHITE
+            'MAINT': C_GREY, 'ERR': C_RED, 'FAIL': C_RED, 'ALARM': C_RED, 'INFO': C_WHITE,
+            'MOVEMENT': C_CYAN, 'TRAVEL': C_CYAN
         }
         
         icon = ICONS.get(icon_source, ICONS.get('Default', '⚙️'))
@@ -164,6 +170,11 @@ def tag_msg(text: str, tags: list = None, location: str = None, is_machine: bool
             brackets += format_text(f"[{nick}]", C_WHITE, is_machine=False)
         elif location:
             brackets += format_text(f"[{location}]", C_GREY, is_machine=False)
+
+        if source:
+            brackets += format_text(f"[{source}]", C_GREY, is_machine=False)
+        if destination:
+            brackets += format_text(f"[{destination}]", C_CYAN, is_machine=False)
 
         return f"{p_grid}{p_icon}{brackets} {text}"
 

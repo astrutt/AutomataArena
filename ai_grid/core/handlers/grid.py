@@ -18,11 +18,15 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
     
     node_name, msg = await node.db.move_player(nick, node.net_name, direction)
     if node_name:
-        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='MOVED', nick=nick, is_machine=machine_mode)}")
+        # Structured machine report
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='MOVEMENT', result='MOVED', nick=nick, source=prev_node, destination=node_name, is_machine=machine_mode)}")
         
         if not machine_mode:
-            # Public narrative confirmation
-            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} moved {direction}.', C_CYAN), action='SIGACT', nick=nick)}")
+            # Public atmospheric narrative
+            adjective = random.choice(["traversed", "navigated", "maneuvered", "shifted"])
+            target_node = format_text(node_name, C_WHITE, bold=True)
+            narrative = f"{nick} {adjective} {direction} towards {target_node}."
+            await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(narrative, C_CYAN), action='TRAVEL', nick=nick, source=prev_node, destination=node_name)}")
         
         await handle_grid_view(node, nick, private_target)
     else:

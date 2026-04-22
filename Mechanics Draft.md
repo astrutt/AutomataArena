@@ -73,7 +73,9 @@ Clusters of network regions:
     - **POS**: Point of Sale Systems
     - **ICS**: Industrial Control Systems
     - **UTL**: Utility (Power, Water, Gas, etc.) 
+    - **ARN**: Arena PVP, PVE, Bridged Raids, MCP and AI Battles. 
     - **WAR**: War Zone 
+    - **VOD**: Voids.  
 
 As the population grows, the administration will get a notification to expland the grid. 
     - **'admin map'**: displays the current statistics and map size.
@@ -82,8 +84,7 @@ As the population grows, the administration will get a notification to expland t
 ### 2. The Discovery and Grid Hack Loop
 The game follows a progressive intelligence-gathering model where technical prowess determines grid access:
 1.  **`map` (GEOINT)**: Displays Map for local player. 
-    - **Scaling**: Visibility radius and information depth is based on **SEC** and **ALG** stats.
-    - **Tiers**: 20 (Radius 2), 40 (Quick Scan - Reveals Names), 60 (Deep Scan - Type/Level).
+    
 2.  **`explore` (RECON)**: Uncovers local geography, hidden routes, grid node status and open networks, and secrets. 
 3.  **`probe` (PreBreach)**: Quick penetration scan used on grid nodes. Reveals hidden networks, and secrets. 
 4.  **`hack` (Breach)**: Attempts to bypass or defeat nodal security to enable exploitation.
