@@ -65,6 +65,11 @@ class NavigationRepository(BaseRepository):
             disc = (await session.execute(disc_stmt)).scalars().first()
             intel = disc.intel_level if disc else "NONE"
             
+            # Check expiration
+            from datetime import datetime, timezone
+            if intel == "PROBE" and disc.intel_expires_at and datetime.now(timezone.utc) > disc.intel_expires_at:
+                intel = "EXPLORE"
+            
             # Auto-discover current node
             if intel == "NONE":
                 intel = "EXPLORE" 

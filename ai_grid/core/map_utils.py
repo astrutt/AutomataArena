@@ -9,77 +9,39 @@ from grid_utils import C_CYAN, C_GREEN, C_RED, C_YELLOW, C_WHITE, C_GREY, format
 def get_node_symbol(node: GridNode, char: Character, machine_mode: bool = False, intel_level: str = "NONE") -> str:
     """Determine the symbol and color for a node based on state and intelligence tiers."""
     
-    # 1. Fog of War / Intel Tiers
-    # Current node is always visible
+    # 0. Priority: Current node is always visible
     if node.id == char.node_id:
-        pass # Fall through to base symbol logic
-    
-    # Tiered Intelligence for CLOSED sectors
-    elif node.availability_mode == 'CLOSED' and node.owner_character_id != char.id:
-        total_stat = (char.sec or 0) + (char.alg or 0)
-        if total_stat >= 60:
-            # Tier 4: Full Node Name (Truncated to 5 chars for grid)
-            name_trunc = node.name[:5]
-            return format_text(f"[{name_trunc}]", C_GREY)
-        elif total_stat >= 40:
-            # Tier 3: Category
-            cat = node.node_type[0].upper()
-            return format_text(f"[{cat}]", C_GREY)
-        elif total_stat >= 20:
-            # Tier 2: Minimalist
-            return format_text("[.]", C_GREY)
-        
-        # Tier 1: Minimalist - CLOSED but known location
-        return format_text("[X]", C_RED)
+        return format_text("[@]", C_CYAN)
 
-    # Fog of War for unknown OPEN sectors
-    elif intel_level == "NONE":
+    # 1. Fog of War / Intel Tiers
+    if intel_level == "NONE":
         return format_text("[?]", C_GREY)
-
-    # 1.5 Unknown Node check (Hypothetical - for now use [?])
-    # if not node.is_discovered: return format_text("[?]", C_GREY)
 
     # 2. Base Symbol Logic (Visited/Open)
     color = C_WHITE
-    raid_symbol = None
-    if node.active_target and intel_level != "NONE":
-        t_type = node.active_target.target_type.upper()
-        raid_symbol = f"[{t_type[0]}]"
-    if machine_mode:
-        symbol_map = {
-            'safezone': '[S]',
-            'arena': '[A]',
-            'merchant': '[$]',
-            'void': '[.]'
-        }
-        symbol = raid_symbol if raid_symbol else symbol_map.get(node.node_type, '[-]')
-        if node.id == char.node_id: symbol = '[@]'; color = C_CYAN
-        elif node.owner_character_id == char.id: color = C_GREEN
+    if node.owner_character_id == char.id:
+        color = C_GREEN
+    
+    # Determine the single character symbol
+    if node.active_target:
+        char_sym = node.active_target.target_type[0].upper()
     else:
-        symbol = raid_symbol if raid_symbol else "[-]"
-        if node.id == char.node_id:
-            symbol = "[@]"
-            color = C_CYAN
-        elif node.owner_character_id == char.id:
-            color = C_GREEN
-            if node.durability < 50: symbol = "[🩹]"
-            elif node.power_generated > 20: symbol = "[⚡]"
-            else: symbol = "[O]"
-        elif not raid_symbol:
-            if node.node_type == 'safezone':
-                symbol = "[🛡️]"
-                color = C_YELLOW
-            elif node.node_type == 'arena':
-                symbol = "[🏟️]"
-                color = C_RED
-            elif node.node_type == 'merchant':
-                symbol = "[💰]"
-                color = C_YELLOW
-            elif node.node_type == 'void':
-                symbol = "[-]"
-            # Threat level removed from UI
+        # Map node types to single characters
+        type_map = {
+            'safezone': 'S',
+            'arena': 'A',
+            'merchant': '$',
+            'void': 'V'
+        }
+        char_sym = type_map.get(node.node_type, 'V')
+    
+    # Special coloring for certain types if not owned
+    if node.owner_character_id != char.id:
+        if node.node_type == 'safezone': color = C_YELLOW
+        elif node.node_type == 'arena': color = C_RED
+        elif node.node_type == 'merchant': color = C_YELLOW
 
-    return format_text(symbol, color)
+    return format_text(f"[{char_sym}]", color)
 
 def get_connector_symbol(source: GridNode, target: GridNode, vertical: bool = False) -> str:
     """Return a 1-2 character connector symbol based on connection health/status."""
@@ -142,7 +104,10 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
         DiscoveryRecord.character_id == char.id,
         DiscoveryRecord.node_id.in_(node_ids)
     )
-    disc_recs = {d.node_id: d.intel_level for d in (await session.execute(disc_stmt)).scalars().all()}
+    res = await session.execute(disc_stmt)
+    records = res.scalars().all()
+    disc_recs = {d.node_id: d.intel_level for d in records}
+    disc_expires = {d.node_id: d.intel_expires_at for d in records}
     
     if not grid: return "MAP ERROR: Coordinate void detected."
     
@@ -199,8 +164,38 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
     if not show_legend:
         return "\n".join(output)
             
-    # Add legend
-    intel_level = "TACTICAL" if radius >= 3 else ("BASIC" if radius >= 2 else "LOCAL")
-    mode_str = "MACHINE" if machine_mode else "HUMAN"
-    legend = format_text(f"Grid: {mode_str} | Pos: ({center_x}, {center_y}) | Intel: {intel_level} | Depth: {radius}", C_WHITE)
-    return "\n".join(output) + "\n" + legend
+    # 6. Build Legend for Center Node
+    center_node = grid.get((center_x, center_y))
+    if not center_node:
+        return "\n".join(output) + "\n" + format_text(f"Grid: ({center_x}, {center_y}) | Intel: [UNK]", C_WHITE)
+
+    intel = disc_recs.get(center_node.id, "NONE")
+    expires_at = disc_expires.get(center_node.id)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    # Check expiration
+    is_probed = (intel == "PROBE")
+    if is_probed and expires_at and now > expires_at:
+        is_probed = False
+        intel = "EXPLORE"
+
+    legend = ""
+    # Use 3-char codes for legend types
+    LEGEND_MAP = {
+        'safezone': 'SFZ',
+        'arena': 'ARN',
+        'merchant': 'MCH',
+        'void': 'VOD'
+    }
+    raw_type = center_node.active_target.target_type.upper() if center_node.active_target else center_node.node_type.lower()
+    t_name = raw_type if center_node.active_target else LEGEND_MAP.get(raw_type, raw_type.upper())
+    
+    if intel == "NONE":
+        legend = f"[GRID]🛰️[GEOINT] Grid: ({center_x}, {center_y}) | Intel: [UNK]"
+    elif is_probed:
+        mins = max(0, int((expires_at - now).total_seconds() / 60))
+        legend = f"[GRID]🛰️[GEOINT] Grid: ({center_x}, {center_y}) | Intel: [PRB:{mins}] | Type: [{t_name}:{center_node.upgrade_level}]"
+    else:
+        legend = f"[GRID]🛰️[GEOINT] Grid: ({center_x}, {center_y}) | Intel: [EXP] | Type: [{t_name}]"
+
+    return "\n".join(output) + "\n" + format_text(legend, C_WHITE)

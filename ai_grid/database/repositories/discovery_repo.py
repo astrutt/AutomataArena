@@ -147,13 +147,18 @@ class DiscoveryRepository(BaseRepository):
                 return {"success": False, "msg": f"PROBE FAILED: Signals reflect too noisy."}
 
             # --- PERSISTENT DISCOVERY & TTL REFRESH ---
+            duration = CONFIG.get('mechanics', {}).get('probe_duration_seconds', 3600)
+            from datetime import timedelta
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration)
+            
             disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
             existing_disc = (await session.execute(disc_stmt)).scalars().first()
             if existing_disc:
                 existing_disc.intel_level = 'PROBE'
-                existing_disc.discovered_at = datetime.now(timezone.utc) # Refresh TTL
+                existing_disc.intel_expires_at = expires_at
+                existing_disc.discovered_at = datetime.now(timezone.utc)
             else:
-                session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level='PROBE'))
+                session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level='PROBE', intel_expires_at=expires_at))
 
             addons = json.loads(node.addons_json or "{}")
             occupants = [c.name for c in node.characters_present if c.name != name]

@@ -144,10 +144,7 @@ async def handle_grid_map(node, nick: str, reply_target: str, args: list = None)
         # 4. Generate & Display Map
         map_text = await generate_ascii_map(session, char, machine_mode=machine_mode, center_override=center_override)
         
-        header = "[ TERMINAL NODAL TOPOLOGY ]"
-        if center_override: header += f" - Center: ({center_override[0]}, {center_override[1]})"
-        
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(header, C_CYAN, True), action='GEOINT', result='MAPPED', is_machine=machine_mode)}")
+        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ TERMINAL NODAL TOPOLOGY ]', C_CYAN, True), action='GEOINT', result='MAPPED', is_machine=machine_mode)}")
         for line in map_text.split("\n"):
             await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='GEOINT', is_machine=machine_mode)}")
 

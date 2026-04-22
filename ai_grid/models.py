@@ -231,6 +231,7 @@ class DiscoveryRecord(Base):
     character_id = Column(Integer, ForeignKey('characters.id'), index=True)
     node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
     intel_level = Column(String) # 'EXPLORE' (Topological), 'PROBE' (Deep)
+    intel_expires_at = Column(AwareDateTime, nullable=True) # TTL for PROBE intel
     discovered_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
     character = relationship("Character", foreign_keys=[character_id])
