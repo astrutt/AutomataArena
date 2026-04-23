@@ -16,23 +16,48 @@ async def test_target_intel_isolation():
     db = ArenaDB()
     
     async with db.async_session() as session:
+        from ai_grid.models import Player, NetworkAlias, Character, GridNode
         # 1. Setup Test Data
-        char = await db.character.get_player("Antigravity", "2600net")
-        if not char:
-            print("[!] Character not found, skipping deep repo test.")
-            return
-
+        char_data = await db.character.get_player("Antigravity", "2600net")
+        if not char_data:
+            print("[*] Creating test character 'Antigravity'...")
+            p = Player(global_name="Antigravity")
+            session.add(p)
+            await session.flush()
+            na = NetworkAlias(player_id=p.id, network_name="2600net", nickname="Antigravity")
+            session.add(na)
+            await session.flush()
+            # Find a node
+            node_stmt = select(GridNode).limit(1)
+            node = (await session.execute(node_stmt)).scalars().first()
+            if not node:
+                print("[!] No nodes found in DB. Run a seed script first.")
+                return
+            c = Character(player_id=p.id, name="Antigravity", node_id=node.id, race="Synth", char_class="Hacker")
+            session.add(c)
+            await session.commit()
+        
+        # Reload to get fresh IDs
+        stmt = select(Character).where(Character.name == "Antigravity")
+        char = (await session.execute(stmt)).scalars().first()
+        char_id = char.id
+        node_id = char.node_id
+        
         # Ensure node is explored
         await db.discovery.explore_node("Antigravity", "2600net")
         
-        # Create a raid target
-        node_id = char['current_node_id']
         target = RaidTarget(node_id=node_id, name="[QA_TARGET]", target_type="SMB", difficulty=15)
         session.add(target)
         await session.commit()
         await session.refresh(target)
         
-        print(f"[1] Target created: {target.name} (ID: {target.id})")
+        # LINK TO NODE
+        stmt = select(GridNode).where(GridNode.id == node_id)
+        node_obj = (await session.execute(stmt)).scalars().first()
+        node_obj.active_target_id = target.id
+        await session.commit()
+        
+        print(f"[1] Target created: {target.name} (ID: {target.id}) and linked to Node {node_id}")
 
         # 2. Probe the target
         print("[2] Probing target...")
@@ -45,7 +70,7 @@ async def test_target_intel_isolation():
 
         # 3. Verify DiscoveryRecord
         print("[3] Verifying DiscoveryRecords...")
-        stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char['id'], DiscoveryRecord.node_id == node_id)
+        stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char_id, DiscoveryRecord.node_id == node_id)
         records = (await session.execute(stmt)).scalars().all()
         
         target_records = [r for r in records if r.raid_target_id == target.id]
