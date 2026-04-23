@@ -90,22 +90,34 @@ The game follows a progressive intelligence-gathering model where technical prow
         **`grid map stats`** - Shows the current statistics of the grid
         **`options radius <number>`** - Sets the player default map radius in nodes (default is 5, max is 10). 
     
-2.  **`explore` (RECON)**: Uncovers local geography, hidden routes, grid node status and open networks, and secrets. 
-3.  **`probe` (PreBreach)**: Quick penetration scan used on grid nodes. Reveals hidden networks, and secrets. 
-4.  **`hack` (Breach)**: Attempts to bypass or defeat nodal security to enable exploitation.
-5.  **`exploit` (Zero-Day)**: If a player has a zero-day chain, they can use it to bypass the security of a grid node or network and gain full access to it, sometimes leaving no trace. 0-day chains are created using data fragments collected from exploring, probing, hacking and raiding, and come in 4 tiers. 
-6.  **`raid` (EXFIL)**: Targets nodes and networks for Credits, Data, XP and loot. Rewards scale with difficulty. 
+2.  **`explore`(RECON)**: Uncovers local geography, hidden routes, grid node status and open networks, and secrets. 
+3.  **`probe`(PreBreach)**: Quick penetration scan used on grid nodes. Reveals hidden networks, and secrets. 
+4.  **`hack`(Breach)**: Attempts to bypass or defeat nodal security to enable exploitation.
+5.  **`siphon`(EXFIL)**: Attempts to siphon data and power from a hacked node or network.  
+6.  **`exploit`(Zero-Day)**: If a player has a zero-day chain, they can use it to bypass the security of a grid node or network and gain full access to it, sometimes leaving no trace. 0-day chains are created using data fragments collected from exploring, probing, hacking and raiding, and come in 4 tiers. 
+7.  **`raid`(EXFIL)**: Targets nodes and networks for Credits, Data, XP and loot. Rewards scale with difficulty. 
     - Possible raid targets: [CIV][SMB][EDU][MED][GOV][MIL][CRP][ORG][LEA][DC][UTL][PWR][ICS][POS][WAR] (random discovery based on node level or region) at any point throughout the discovery loop players can discover a raid target. Easy targets may not need to be hacked or exploited, but will yield less rewards.   
     - raid target local grid nodes without a net device-
         **`raid <target>`** shows information about the target
+        **`raid probe <target>`** attempts to probe the target for information    
         **`raid hack <target>`** attempts to hack the target
+        **`raid siphon <target>`** attempts to siphon the target
         **`raid exploit <target>`** attempts to exploit the target
         
     - raid network targets- 
-        **`raid <network>`** shows information about the network
+        **`raid <network>`** shows information about available networks
+        **`raid <network> explore`** attempts to explore a network
+        **`raid <network> probe`** attempts to probe a network
+        **`raid <network> hack`** attempts to hack a network 
+        **`raid <network> siphon`** attempts to siphon a network
+        **`raid <network> exploit`** exploits a network 
+
         **`raid <network> <target>`** shows information about a network target
-        **`raid <network> hack <target>`** network target hack
-        **`raid <network> exploit <target>`** network target exploit
+        **`raid <network> explore <target>`** attempts to explore a network target
+        **`raid <network> probe <target>`** attempts to probe a network target
+        **`raid <network> hack <target>`** attempts to hack a network target
+        **`raid <network> siphon <target>`** attempts to siphon a network target
+        **`raid <network> exploit <target>`** exploits a network target 
 
 ### 2. The PVP and PVE Combat Loop
 The game allows for player vs player/NPC, and player vs AI, and PVE combat on grid nodes and in the arena. 
