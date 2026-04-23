@@ -2,6 +2,7 @@
 Server = irc.2600.net
 Port = 6667
 UseSSL = False
+VerifySSL = True
 Nickname = TestHound
 NickServPass = MySecretPassword
 Channel = #AutomataArena
