@@ -199,10 +199,21 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
         return
     elif action == "siphon":
         perc = 100.0
+        target_name = None
         if args:
-            try: perc = float(args[0])
-            except: pass
-        res = await node.db.siphon_node(nickname, node.net_name, perc)
+            # Check if first arg is a percentage or a target
+            if args[0].startswith('[') or args[0].endswith(']'):
+                target_name = args[0]
+            else:
+                try: perc = float(args[0])
+                except: pass
+            
+            # Check if second arg is a percentage (if first was target)
+            if target_name and len(args) > 1:
+                try: perc = float(args[1])
+                except: pass
+
+        res = await node.db.siphon_node(nickname, node.net_name, percent=perc, target_name=target_name)
         success, msg, alert_data = res[0], res[1], res[2] if len(res) > 2 else None
     elif action == "install":
         if not args:
@@ -260,23 +271,80 @@ async def handle_node_exploit(node, nick: str, reply_target: str, args: list):
         await node.add_xp(nick, 25, reply_target)
 
 async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None):
+    """
+    Raid Hub: Handles the compromise loop and extractions.
+    Syntax: !a raid [network] [subaction] [target]
+    """
     if not await check_rate_limit(node, nick, reply_target, cooldown=120, consume=False, verb="loot"): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     
-    sub_action = args[0] if args and args[0] in ["hack", "exploit"] else None
-    target_name = args[-1] if args else None
+    # --- ARGUMENT PARSING ---
+    # Expected args: [network] [subaction] [target]
+    sub_actions = ["explore", "probe", "hack", "siphon", "exploit", "breach"]
+    network = None
+    sub_action = None
+    target = None
     
-    if sub_action == "exploit":
-        return await handle_node_exploit(node, nick, reply_target, ["raid"] + args[1:])
+    # Very basic parsing logic
+    remaining_args = list(args) if args else []
     
-    if sub_action == "hack":
-        success, msg, alert = await node.db.infiltration.hack_node(nick, node.net_name)
-        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
+    # 1. Check for network (optional)
+    if remaining_args and remaining_args[0].lower() not in sub_actions and not (remaining_args[0].startswith('[') or remaining_args[0].endswith(']')):
+        # Assume it's a network if it doesn't look like a subaction or a target
+        network = remaining_args.pop(0)
+    
+    # 2. Check for subaction
+    if remaining_args and remaining_args[0].lower() in sub_actions:
+        sub_action = remaining_args.pop(0).lower()
+        if sub_action == "breach": sub_action = "hack" # Alias
+    
+    # 3. Check for target
+    if remaining_args:
+        target = remaining_args.pop(0)
+    
+    # --- DISPATCHING ---
+    effective_network = network if network else node.net_name
+    
+    if sub_action == "explore":
+        # Placeholder for network exploration (Task 064)
+        await node.send(f"{reply_method} {private_target} :[ERR] Network exploration protocols pending v2.0 update.")
         return
 
-    result = await node.db.raid_node(nick, node.net_name, target_name=target_name)
+    if sub_action == "probe":
+        result = await node.db.discovery.probe_node(nick, effective_network, target_name=target)
+        if result['success']:
+            msg = f"PROBE SUCCESS: {result['name']} | Status: {result['visibility']} | DC: {result['hack_dc']}"
+            if result.get('raid_target'):
+                t = result['raid_target']
+                msg += f" | Detected Subnet: {t['name']} ({t['status']})"
+            await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='PROBE', result='SUCCESS', nick=nick, is_machine=machine_mode)}")
+            await node.add_xp(nick, 15, reply_target)
+        else:
+            await node.send(f"{reply_method} {private_target} :{tag_msg(result['msg'], action='PROBE', result='FAIL', nick=nick, is_machine=machine_mode)}")
+        return
+
+    if sub_action == "hack":
+        success, msg, alert = await node.db.infiltration.hack_node(nick, effective_network, target_name=target)
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='HACK', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
+        if success: await node.add_xp(nick, 25, reply_target)
+        return
+
+    if sub_action == "exploit":
+        success, msg, alert = await node.db.infiltration.exploit_node(nick, effective_network, target=target)
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='EXPLOIT', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
+        if success: await node.add_xp(nick, 50, reply_target)
+        return
+        
+    if sub_action == "siphon":
+        success, msg, alert = await node.db.infiltration.siphon_node(nick, effective_network, target_name=target)
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIPHON', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
+        if success: await node.add_xp(nick, 20, reply_target)
+        return
+
+    # Default: RAID (Extraction or Info)
+    result = await node.db.infiltration.raid_node(nick, effective_network, target_name=target)
     success = result['success']
-    await node.send(f"{reply_method} {private_target} :{tag_msg(result['msg'], action='SIGACT', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
+    await node.send(f"{reply_method} {private_target} :{tag_msg(result['msg'], action='RAID', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
     
     if success:
         await node.add_xp(nick, 15, reply_target)

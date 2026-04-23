@@ -69,12 +69,12 @@ Clusters of network regions:
     - **MIL**: Military
     - **ORG**: Non-Profit Organization
     - **LEA**: Law Enforcement Agency
-    - **DC**: Data Center
+    - **DTC**: Data Center
     - **POS**: Point of Sale Systems
     - **ICS**: Industrial Control Systems
-    - **UTL**: Utility (Power, Water, Gas, etc.) 
+    - **UTL**: Utilities (Power, Water, Gas, etc.) 
     - **ARN**: Arena PVP, PVE, Bridged Raids, MCP and AI Battles. 
-    - **WAR**: War Zone 
+    - **WAR**: War Zones -- (conflict networks and targets, bosses, events)
     - **VOD**: Voids -- (unknown effects)(random low level npc or mob spawn)
  
 As the population grows, the administration will get a notification to expland the grid. 
@@ -82,7 +82,7 @@ As the population grows, the administration will get a notification to expland t
     - **'admin map expand'**: expands the grid by 10x10 nodes.
 
 ### 2. The Discovery and Grid Hack Loop
-The game follows a progressive intelligence-gathering model where technical prowess determines grid access:
+The game follows a progressive data-gathering model where technical prowess determines grid access:
 1.  **`map` (GEOINT)**: Displays Map for local player.
         **`grid map`** - Shows local area, radius 5x5 (default)
         **`grid map <x> <y>`** - Shows local area, radius 5x5 centered at (x,y)
@@ -128,8 +128,7 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 4. Players can attack each other using kinetic or cyber attacks. 
 5. Player attacks are based off CPU, RAM, BND, SEC and Character Power Stored.
 6. **Initiative**: Determined by `(CPU + RAM + BND + SEC) / 4 + roll(1-10)`. 
-7. Combat Turns are based off Initiative, and last 30 seconds.  
-8. Players in combat can use tactical actions which consume **Unit Power (uP)**:
+7. Combat Turns are based off Initiative, and last 30 seconds. 
 
 | Action | Description | uP Cost | Base Formula |
 |--------|-------------|---------|--------------|
@@ -170,7 +169,10 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 
 - **Player Power**: Players can generate power solo and get a bonus on claimed grid nodes. Players can siphon power from hacked grid nodes, and their own grid nodes and networks. While on a gain an idle bonus to power generation. 
     - **Generation**: Players can generate power solo and get a bonus on claimed grid nodes. `powergen` 
+        -lvl 1 player regens 0.50% of their stored power per 30 seconds. 
+        -grid node powergen bonus is 10% while claimed and player is present. 
     - **Siphon**: Players can siphon power from hacked grid nodes, and their own grid nodes and networks. `siphon` 
+        -
     - **Storage**: Players can store power in their inventory, but it will decay over time if not used or generated regularly.   
 
 - **Player Data**: Players collect data from exploring, probing, hacking and raiding. Data can be used to create vulnerabilities and zero-day exploits. 

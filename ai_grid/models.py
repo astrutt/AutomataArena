@@ -159,6 +159,10 @@ class Character(Base):
     
     created_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
+    # Task 064: Nodal Compromise Window
+    last_breach_node_id = Column(Integer, ForeignKey('grid_nodes.id'), nullable=True)
+    last_breach_target_id = Column(Integer, ForeignKey('raid_targets.id'), nullable=True)
+    
     # Relationships
     player = relationship("Player", back_populates="characters")
     current_node = relationship("GridNode", foreign_keys=[node_id], back_populates="characters_present")
@@ -219,6 +223,7 @@ class RaidTarget(Base):
     credits_pool = Column(Float, default=0.0)
     data_pool = Column(Float, default=0.0)
     is_active = Column(Boolean, default=True)
+    availability_mode = Column(String, default='CLOSED') # Task 064: OPEN, CLOSED
     last_raided_at = Column(AwareDateTime, nullable=True)
     created_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
@@ -232,10 +237,12 @@ class DiscoveryRecord(Base):
     node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
     intel_level = Column(String) # 'EXPLORE' (Topological), 'PROBE' (Deep)
     intel_expires_at = Column(AwareDateTime, nullable=True) # TTL for PROBE intel
+    raid_target_id = Column(Integer, ForeignKey('raid_targets.id'), index=True, nullable=True)
     discovered_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
     character = relationship("Character", foreign_keys=[character_id])
     node = relationship("GridNode", foreign_keys=[node_id])
+    raid_target = relationship("RaidTarget", foreign_keys=[raid_target_id])
 
 class BreachRecord(Base):
     __tablename__ = 'breach_records'
@@ -244,10 +251,12 @@ class BreachRecord(Base):
     character_id = Column(Integer, ForeignKey('characters.id'), index=True)
     node_id = Column(Integer, ForeignKey('grid_nodes.id'), index=True)
     is_silent = Column(Boolean, default=False) # True if via 'exploit'
+    raid_target_id = Column(Integer, ForeignKey('raid_targets.id'), index=True, nullable=True)
     breached_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
     
     character = relationship("Character", foreign_keys=[character_id])
     node = relationship("GridNode", foreign_keys=[node_id])
+    raid_target = relationship("RaidTarget", foreign_keys=[raid_target_id])
 
 # ==========================================
 # 4. INVENTORY SYSTEM
