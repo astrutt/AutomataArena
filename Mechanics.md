@@ -43,19 +43,19 @@ The game follows a strict **5-Minute Window (300s TTL)** pipeline. Intelligence 
     - **Scaling**: Radius and detail based on **SEC** and **ALG**.
     - **Tiers**: 20 (Radius 2), 40 (Reveals Type/Tier), 60 (Deep Scan).
 2.  **`explore` (RECON)**: Uncovers geography and hidden routes.
-3.  **`probe` (SIGINT)**: Shallow penetration scan. **Required** to identify vulnerabilities for hacking/raiding.
-    - **TTL**: Data expires after **300 seconds**.
+3.  **`probe` (SIGINT)**: Deep scan for hardware and occupants. **Required** to identify vulnerabilities for hacking/raiding.
+    - **TTL**: Deep intel persists for **1 hour**, but the functional "Breach Window" for actions is **300 seconds**.
 4.  **`hack` (Breach)**: Attempts to crack nodal security.
     - **Hacking DC**: `10 + (NodeLvl * 5) + (PowerStored / 1000) + (10 - Durability / 10)`.
     - **Success**: `1d20 + ALG + ALG_BONUS >= DC`.
-    - **TTL**: Breach status expires after **300 seconds**.
+    - **TTL**: Active breach window expires after **300 seconds**.
 5.  **`exploit` (Zero-Day)**: Silent breach using a **Zero-Day Chain**.
     - **Consumable**: Consumes 1 Zero-Day Chain payload.
     - **Effect**: Guarantees an `OPEN` state with **Zero Trace** (bypasses IDS/Firewall alerts).
 6.  **`raid` (EXFIL)**: Final exfiltration of Credits and Data.
     - **Targeted Raids**: Use `!a raid <target>` (e.g., SMB, MIL, CORP) on discovered industry targets.
     - **Economics**: Industry raids extract **40%** of the target pool.
-    - **Replenishment**: Target pools recover 50% per hour.
+    - **Replenishment**: Target pools recover via a fixed injection (1000 * Level) if untouched for 1 hour.
     - **Hardware**: Requires `NET` hardware for remote/networked raiding.
 
 ### 2. The PVP and PVE Combat Loop
@@ -79,7 +79,7 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 | **`defend`**| Buffer damage | 5 | `-50%` Damage Taken |
 | **`flee`** | Extract (60%) | 20 | N/A |
 | **`surrender`**| Yield match | 0 | N/A |
-| **`use`** | Consume item | 5 | N/A |
+| **`use`** | Consume item | 5 | `(RAM + ALG) * 5` HP Restore |
 
 9. Combat continues until one player successfully flees, or is defeated, or surrenders.
 10. **Evasion**: Base evasion chance is `ALG * 1.0%`, capped at 60%. 
@@ -105,10 +105,10 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
     - **Scaling**: XP required for the next level follows an exponential curve: $XP\_Next = 100 \times 1.25^{(Level-1)}$.
     - **Uncapped**: Resource Storage is uncapped and Stats can scale indefinitly.
 
-- **Player Stability**: Actions consume Unit Power (uP). Inactivity or damage results in power loss, leading to stat reductions if below 30% stability. Stability decay goes down to 0% over time if the player has 0 Power. Without damage or idling, stability will not decay. Idling prevents players and grid node power stability decay. 
+- **Player Stability**: Actions consume Unit Power (uP). Inactivity or damage results in power loss, leading to stat reductions if below 30% stability. Stability decay is approximately **1% per 24h**. Recovery occurs hourly: **+5.0 Power / +2.0 Stability** in Safezones/Owned nodes, or **+2.0 Power / +0.5 Stability** in the Void. 
 
 - **Player Power**: Players can generate power solo and get a bonus on claimed grid nodes. Players can siphon power from hacked grid nodes, and their own grid nodes and networks. 
-    - **Generation**: `powergen` awards uP. Claims provide scaling bonuses.
+    - **Generation**: Automated power recovery happens in 60-minute maintenance cycles.
     - **Siphon**: `!a grid siphon <%>` extracts power from controlled or breached logic nodes.
     - **Storage**: Uncapped unit storage.
 
@@ -118,7 +118,7 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 
 - **Player Generation**: New players provide 3 words that describe their character. These words are used to generate their starting AI personality. Players can modify their personality, but not their stats or inventory after generation. 
 
-- **Player Stat Points**: Starting stats are 1. As players gain levels from XP, they are awarded stat points to spend on their stats. 
+- **Player Stat Points**: Starting stats are **5**. As players gain levels from XP, they are awarded stat points to spend on their stats. 
 - **Hit Points**: Calculated as $HP = (CPU + RAM + BND + SEC + ALG) \times 6 + 20$.
 
 - **Player Inventory**: Players have data and 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains. 
@@ -129,8 +129,8 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 
 Gridnodes are the geography of the game world, and represent the various locations players can explore, hack, and raid. Grid nodes can be claimed by players, NPCs or by the MCP, also offer merchants and auction houses. Grid nodes also store data for their owners. 
 
-- **Grid Node Stability**: Grid nodes have stability that decays over time if not maintained.
-    - **`!a gridstability`** to check global node health (OSINT).
+- **Grid Node Stability**: Grid nodes have stability that decays over time if not maintained. Power generation and stability maintenance occur on a **10-Minute Loop**.
+    - **`!a grid stats`** to check global node health (OSINT).
 - **Grid Node Power**: Grid nodes can generate power used for upgrades or siphoning.
     - **`!a gridpower`** to check power distribution (OSINT).
 - **Grid Node Security**: Grid nodes have security levels 1-4.
@@ -139,9 +139,9 @@ Gridnodes are the geography of the game world, and represent the various locatio
 - **Grid Node Owner**: Can be claimed by players, NPCs or the MCP. 
 - **Grid Node Upgrades**: Grid nodes can be upgraded to improve capabilities and unlock module slots (Max 4).
 - **Grid Hardware (Modules)**:
-    - **AMP**: Amplifier - Increases power generation by +20%. 
-    - **IDS**: Intrusion Detection System - Increases +20% attack difficulty; notifies owner. 
-    - **FIREWALL**: Increases +20% defense; notifies owner. 
+    - **AMP**: Amplifier - Increases power generation by **2x (L1)** or **3x (L2+)**. 
+    - **IDS**: Intrusion Detection System - Monitors sector activity; notifies owner of probes, hacks, and raids. 
+    - **FIREWALL**: Increases security difficulty by **+50%**; notifies owner of breaches. 
     - **NET**: Enables cross-grid bridging and remote raiding.
 - **Module Commands**:
     - **`!a grid hardware`** (or `hw`) to list modules and status.

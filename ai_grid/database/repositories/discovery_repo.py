@@ -159,7 +159,7 @@ class DiscoveryRepository(BaseRepository):
                 return {"success": False, "msg": f"PROBE FAILED: Signals reflect too noisy."}
 
             # --- PERSISTENT DISCOVERY & TTL REFRESH ---
-            duration = CONFIG.get('mechanics', {}).get('probe_duration_seconds', 3600)
+            duration = CONFIG.get('mechanics', {}).get('probe_duration_seconds', 300)
             from datetime import timedelta
             expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration)
             
