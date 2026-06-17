@@ -15,12 +15,13 @@ config.read('config.ini')
 
 IRC_SERVER = config['IRC']['Server']
 IRC_PORT = int(config['IRC']['Port'])
+IRC_PASSWD = config['IRC']['Password']
 USE_SSL = config['IRC'].getboolean('UseSSL')
+VERIFY_SSL = config['IRC'].getboolean('VerifySSL')
 NICK = config['IRC']['Nickname']
 CHANNEL = config['IRC']['Channel']
 MANAGER = config['IRC']['ManagerNick'].strip().lower()
 PREFIX = config['IRC'].get('Prefix', 'x').strip().lower()
-USE_SSL = config['IRC'].getboolean('UseSSL')
 NICK = config['IRC']['Nickname']
 CHANNEL = config['IRC']['Channel']
 MANAGER = config['IRC']['ManagerNick'].strip().lower()
@@ -257,6 +258,8 @@ class AutomataBot:
     async def connect(self):
         logger.info(f"Booting AI Core for {NICK}...")
         ssl_ctx = ssl.create_default_context() if USE_SSL else None
+        ssl_ctx.check_hostname = False if ssl_ctx and not VERIFY_SSL else None
+        ssl_ctx.verify_mode = ssl.CERT_NONE if ssl_ctx and not VERIFY_SSL else None
         self.reader, self.writer = await asyncio.open_connection(IRC_SERVER, IRC_PORT, ssl=ssl_ctx)
 
         await self.send(f"NICK {NICK}")
@@ -375,6 +378,10 @@ class AutomataBot:
 
             if command in ["376", "422"]:
                 await self.send(f"JOIN {CHANNEL}")
+                continue
+
+            if command == "464":
+                await self.send(f"PASS :{IRC_PASSWD}")
                 continue
 
             if command == "JOIN":
