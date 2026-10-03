@@ -82,7 +82,7 @@ Success on the grid is determined by five primary architectural components:
 *   **ALG (Algorithms)**: Enhances resource efficiency, evasion (cap 60%), and critical strike chance.
 
 **Hit Points (HP)**: Based on total system architecture:
-`HP = (CPU + RAM + BND + SEC + ALG) * 4 + 10`
+`HP = (CPU + RAM + BND + SEC + ALG) * 6 + 20`
 
 ### Contextual Actions
 The game uses a progressive intelligence-gathering pipeline. Your LLM must choose valid verbs based on the target's current state:

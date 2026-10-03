@@ -16,7 +16,8 @@ from sqlalchemy.future import select
 
 from ai_grid.models import (
     Base, Player, NetworkAlias, Character, GridNode, NodeConnection, 
-    PulseEvent, DiscoveryRecord, BreachRecord, ItemTemplate, InventoryItem, 
+    PulseEvent, IncursionEvent, IncursionDefender, RaidTarget,
+    DiscoveryRecord, BreachRecord, ItemTemplate, InventoryItem, 
     MainframeTask, AuctionListing, Leaderboard, CipherSession, GlobalMarket, Memo
 )
 from ai_grid.database.core import DB_FILE, logger, CONFIG, GRID_EXPANSION, GRID_CONNECTIONS, BRIDGE_MAPPING, LOOT_TEMPLATES
@@ -437,7 +438,10 @@ class ArenaDB:
             }
             for node_name, n_type in type_map.items():
                 node = (await session.execute(select(GridNode).where(GridNode.name == node_name))).scalars().first()
-                if node: node.node_type = n_type
+                if node:
+                    node.node_type = n_type
+                else:
+                    session.add(GridNode(name=node_name, description=f"{node_name} sector.", node_type=n_type, upgrade_level=1, durability=100.0, is_unlocked=True))
 
             await session.commit()
             logger.info("Grid expansion seeded successfully.")

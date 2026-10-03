@@ -20,9 +20,9 @@ class CombatRepository:
         )).scalars().first()
         if uplink:
             char.node_id = uplink.id
-            # v1.8.0 HP Formula (Sum * 4 + 10)
+            # v1.8.0 HP Formula (Sum * 6 + 20)
             total_stats = char.cpu + char.ram + char.bnd + char.sec + char.alg
-            char.current_hp = (total_stats * 4) + 10
+            char.current_hp = (total_stats * 6) + 20
             return True
         return False
 
@@ -145,7 +145,7 @@ class CombatRepository:
                         char.level += 1
                         # HP Recalculation on level up (since stats might change or just for safety)
                         total_stats = char.cpu + char.ram + char.bnd + char.sec + char.alg
-                        char.current_hp = (total_stats * 4) + 10
+                        char.current_hp = (total_stats * 6) + 20
                         char.pending_stat_points += 1
                         result["leveled_up"] = True
                     else:
@@ -231,7 +231,7 @@ class CombatRepository:
                 
             await session.commit()
             total_stats = target.cpu + target.ram + target.bnd + target.sec + target.alg
-            max_hp = (total_stats * 4) + 10
+            max_hp = (total_stats * 6) + 20
             return True, f"{attacker.name} struck {target.name} for {final_dmg} DMG! ({target.current_hp}/{max_hp} HP)", None
 
     async def grid_hack(self, attacker_name, target_name, network):

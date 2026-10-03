@@ -14,12 +14,26 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_grid.grid_utils import format_text, tag_msg, format_item, C_RED, C_GREEN, C_YELLOW, C_CYAN
 
 # --- Config & Logging Setup ---
-try:
-    with open('config.json', 'r') as f:
-        CONFIG = json.load(f)
-except FileNotFoundError:
-    print("[!] config.json not found. Aborting.")
-    sys.exit(1)
+from pathlib import Path
+
+def _load_config():
+    base_dir = Path(__file__).resolve().parent
+    root_dir = base_dir.parent
+    for candidate in [
+        base_dir / 'config.json',
+        root_dir / 'config.json',
+        base_dir / 'config.json.example',
+        root_dir / 'config.json.example',
+    ]:
+        if candidate.is_file():
+            try:
+                with open(candidate, 'r') as f:
+                    return json.load(f)
+            except Exception:
+                continue
+    return {}
+
+CONFIG = _load_config()
 
 log_level_str = CONFIG.get('logging', {}).get('level', 'INFO').upper()
 log_level = getattr(logging, log_level_str, logging.INFO)
@@ -29,7 +43,8 @@ logger.setLevel(log_level)
 formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 # File Handler
-fh = logging.FileHandler('grid_combat.log')
+_log_path = Path(__file__).resolve().parent / 'grid_combat.log'
+fh = logging.FileHandler(_log_path)
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 

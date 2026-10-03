@@ -21,12 +21,26 @@ import ai_grid.core.security as security
 from ai_grid.core.security import request_nickserv_check
 
 # --- Config Load ---
-try:
-    with open('config.json', 'r') as f:
-        CONFIG = json.load(f)
-except FileNotFoundError:
-    print("[!] config.json not found. Aborting.")
-    sys.exit(1)
+from pathlib import Path
+
+def _load_config():
+    base_dir = Path(__file__).resolve().parent
+    root_dir = base_dir.parent
+    for candidate in [
+        base_dir / 'config.json',
+        root_dir / 'config.json',
+        base_dir / 'config.json.example',
+        root_dir / 'config.json.example',
+    ]:
+        if candidate.is_file():
+            try:
+                with open(candidate, 'r') as f:
+                    return json.load(f)
+            except Exception:
+                continue
+    return {}
+
+CONFIG = _load_config()
 
 # --- Logging Setup ---
 log_level_str = CONFIG.get('logging', {}).get('level', 'INFO').upper()

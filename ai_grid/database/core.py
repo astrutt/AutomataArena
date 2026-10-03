@@ -6,6 +6,10 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
+if not os.path.exists(CONFIG_FILE):
+    alt_file = os.path.join(BASE_DIR, 'config.json.example')
+    if os.path.exists(alt_file):
+        CONFIG_FILE = alt_file
 
 try:
     with open(CONFIG_FILE, 'r') as f:

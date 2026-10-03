@@ -1,7 +1,10 @@
 # ai_player/verify_save.py
 import json
 import os
-import bot
+try:
+    import bot
+except ModuleNotFoundError:
+    from ai_player import bot
 
 def test_save():
     print(f"[*] Testing save_character with CHARACTER_FILE='{bot.CHARACTER_FILE}'")

@@ -5,7 +5,7 @@ import sys
 sys.path.append(os.path.join(os.getcwd(), 'ai_grid'))
 
 from ai_grid.grid_db import ArenaDB
-import core.handlers as handlers
+import ai_grid.core.handlers as handlers
 from unittest.mock import MagicMock
 
 async def verify_refinements():

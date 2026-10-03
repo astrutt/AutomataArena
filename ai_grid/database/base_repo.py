@@ -77,9 +77,16 @@ class BaseRepository:
         Calculates a balanced reward package (XP, Credits, Data) for MCP actions.
         Scaling: 4 Big tasks to level at L1, 100 Big tasks to level at L50.
         """
-        rewards = CONFIG.get('mechanics', {}).get('mcp_rewards', {})
+        rewards = CONFIG.get('mechanics', {}).get('mcp_rewards')
         if not rewards:
-            return {"xp": 10, "credits": 50, "data": 5} # Fallback
+            rewards = {
+                'xp_divisor_low': 4.0,
+                'xp_divisor_high': 100.0,
+                'max_level_ref': 50,
+                'base_credits': {'small': 50.0, 'big': 200.0, 'biggest': 500.0},
+                'base_data': {'small': 10.0, 'big': 40.0, 'biggest': 100.0},
+                'multipliers': {'repair': 1.0, 'defend': 1.0}
+            }
             
         div_low = rewards.get('xp_divisor_low', 4.0)
         div_high = rewards.get('xp_divisor_high', 100.0)

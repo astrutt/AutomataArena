@@ -22,7 +22,7 @@ async def verify_combat():
             await session.commit()
 
     print("\n--- [1. HP FORMULA VERIFICATION] ---")
-    # stats: all 5. Sum=25. HP = 25*4 + 10 = 110.
+    # stats: all 5. Sum=25. HP = 25*6 + 20 = 170.
     stats = {'cpu': 5, 'ram': 5, 'bnd': 5, 'sec': 5, 'alg': 5}
     token = await db.register_player("CombatTest_Alice", net, "Human", "Hacker", "Ready.", stats)
     
@@ -34,13 +34,13 @@ async def verify_combat():
         await session.commit()
     
     char = await db.player.get_player("CombatTest_Alice", net)
-    print(f"Alice Initial HP: {char['current_hp']} (Expected: 110)")
+    print(f"Alice Initial HP: {char['current_hp']} (Expected: 170)")
     
     print("\nRanking up CPU...")
     await db.player.rank_up_stat("CombatTest_Alice", net, "cpu")
     char2 = await db.player.get_player("CombatTest_Alice", net)
-    # CPU=6. Sum=26. HP = 26*4 + 10 = 114.
-    print(f"Alice New HP: {char2['current_hp']} (Expected: 114)")
+    # CPU=6. Sum=26. HP = 26*6 + 20 = 176.
+    print(f"Alice New HP: {char2['current_hp']} (Expected: 176)")
 
     print("\n--- [2. LEVEL-UP CURVE VERIFICATION] ---")
     # Lvl 1 -> 2: 100 * 1.25^0 = 100 XP

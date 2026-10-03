@@ -29,8 +29,8 @@ def test_entity_initialization():
     }
     ent = Entity("TestUnit", db_record)
     
-    # Check HP: (5+5+5+5+5) * 4 + 10 = 110
-    expected_hp = 110
+    # Check HP: (5+5+5+5+5) * 6 + 20 = 170
+    expected_hp = 170
     if ent.max_hp == expected_hp:
         print(f"  ✅ HP Calculation Correct: {ent.max_hp}")
     else:
