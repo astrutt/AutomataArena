@@ -58,6 +58,8 @@ async def resolve_mob(node, nick: str, reply_target: str):
         msg = f"{enc['mob_name']} overwhelmed you! Lost {loss_credits:.2f}c. Ejected to UpLink."
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_RED, is_machine=machine_mode), action='COMBAT', result='LOSS', nick=nick, is_machine=machine_mode)}")
 
+from ai_grid.core.validation import validate_quantity
+
 async def handle_pvp_command(node, nickname: str, reply_target: str, action: str, target_name: str):
     if await node.db.combat.is_pvp_banned(nickname, node.net_name):
         msg = "PvP lockout active. Re-stabilizing systems after surrender... (10m Cooldown)"
@@ -67,10 +69,19 @@ async def handle_pvp_command(node, nickname: str, reply_target: str, action: str
     if not await check_rate_limit(node, nickname, reply_target, cooldown=10, consume=False): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
     
-    success, msg, reward = False, "", None
-    if action == "attack": success, msg, reward = await node.db.grid_attack(nickname, target_name, node.net_name)
-    elif action == "hack": success, msg, reward = await node.db.grid_hack(nickname, target_name, node.net_name)
-    elif action == "rob": success, msg, reward = await node.db.grid_rob(nickname, target_name, node.net_name)
+    res = None
+    if action == "attack": res = await node.db.grid_attack(nickname, target_name, node.net_name)
+    elif action == "hack": res = await node.db.grid_hack(nickname, target_name, node.net_name)
+    elif action == "rob": res = await node.db.grid_rob(nickname, target_name, node.net_name)
+    
+    if isinstance(res, (tuple, list)):
+        success = bool(res[0])
+        msg = str(res[1]) if len(res) > 1 else ""
+        reward = res[2] if len(res) > 2 else None
+    else:
+        success = False
+        msg = str(res or "Action failed.")
+        reward = None
     
     await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_GREEN if success else C_RED, is_machine=machine_mode), action='COMBAT', result='SUCCESS' if success else 'FAIL', nick=nickname, is_machine=machine_mode)}")
     
@@ -79,6 +90,12 @@ async def handle_pvp_command(node, nickname: str, reply_target: str, action: str
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(msg, C_YELLOW), action='SIGACT', nick=nickname)}")
         if reward:
             await node.send(f"{reply_method} {private_target} :{tag_msg(reward, action='SIGACT', result='LOOT', nick=nickname, is_machine=machine_mode)}")
+
+async def handle_grid_hack(node, nickname: str, reply_target: str, target_name: str):
+    await handle_pvp_command(node, nickname, reply_target, "hack", target_name)
+
+async def handle_grid_rob(node, nickname: str, reply_target: str, target_name: str):
+    await handle_pvp_command(node, nickname, reply_target, "rob", target_name)
 
 async def handle_ready(node, nick: str, token: str, reply_target: str):
     if await node.db.authenticate_player(nick, node.net_name, token):
@@ -97,9 +114,14 @@ async def handle_dice_roll(node, nick: str, args: list, reply_target: str):
         await node.send(f"{reply_method} {private_target} :{tag_msg('Usage: dice <bet> <high|low|seven>', action='INFO', result='ERR')}")
         return
     
-    try: bet = int(args[0])
-    except: bet = 0
+    bet = validate_quantity(args[0], min_val=10, max_val=1_000_000)
+    if bet is None:
+        await node.send(f"{reply_method} {private_target} :[ERR] Bet must be a positive integer >= 10c.")
+        return
     choice = args[1].lower()
+    if choice not in ["high", "low", "seven"]:
+        await node.send(f"{reply_method} {private_target} :[ERR] Choice must be 'high', 'low', or 'seven'.")
+        return
     
     result = await node.db.roll_dice(nick, node.net_name, bet, choice)
     if "error" in result:
@@ -141,3 +163,42 @@ async def handle_leaderboard(node, nick: str, args: list, reply_target: str):
         for i, r in enumerate(results):
             line = f"#{i+1} | {r['name']} | score: {r['score']:.1f}"
             await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='OSINT', is_machine=False)}")
+
+async def handle_bet(node, nick: str, args: list, reply_target: str):
+    from ai_grid.core.validation import validate_quantity
+    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
+    if len(args) < 2:
+        await node.send(f"{reply_method} {private_target} :{tag_msg(f'Usage: {node.prefix} bet <fighter> <amount>', action='INFO', result='ERR')}")
+        return
+
+    fighter_arg = args[0]
+    amount = validate_quantity(args[1], min_val=10, max_val=1_000_000)
+    if amount is None:
+        await node.send(f"{reply_method} {private_target} :[ERR] Bet amount must be an integer >= 10c.")
+        return
+
+    if not getattr(node, 'betting_open', False) or not getattr(node, 'current_match_id', None):
+        await node.send(f"{reply_method} {private_target} :[ERR] Betting window is currently closed. Bets can only be placed during the 60s countdown.")
+        return
+
+    match_id = node.current_match_id
+    valid_fighters = getattr(node, 'pending_fighters', [])
+
+    fighter_match = None
+    for f in valid_fighters:
+        if f.lower() == fighter_arg.lower():
+            fighter_match = f
+            break
+
+    if not fighter_match:
+        valid_str = ", ".join(valid_fighters) if valid_fighters else "None"
+        await node.send(f"{reply_method} {private_target} :[ERR] '{fighter_arg}' is not in this match. Active contenders: {valid_str}")
+        return
+
+    success, msg = await node.db.place_bet(nick, node.net_name, match_id, fighter_match, float(amount), valid_fighters)
+    if not success:
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='ARENA', result='FAIL', nick=nick, is_machine=machine_mode)}")
+    else:
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='ARENA', result='SUCCESS', nick=nick, is_machine=machine_mode)}")
+        await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} placed a {amount}c bet on {fighter_match}!', C_CYAN), action='ARENA', tags=['BETTING'])}")
+

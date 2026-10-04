@@ -367,3 +367,21 @@ class Memo(Base):
     recipient = relationship("Character", foreign_keys=[recipient_id])
     sender = relationship("Character", foreign_keys=[sender_id])
     source_node = relationship("GridNode")
+
+class ArenaBet(Base):
+    __tablename__ = 'arena_bets'
+
+    id = Column(Integer, primary_key=True)
+    match_id = Column(String, index=True, nullable=False)
+    player_id = Column(Integer, ForeignKey('players.id'), nullable=True)
+    nick = Column(String, index=True, nullable=False)
+    network = Column(String, nullable=False)
+    fighter = Column(String, nullable=False)
+    amount = Column(Float, default=0.0, nullable=False)
+    payout = Column(Float, default=0.0)
+    status = Column(String, default="PENDING", index=True) # PENDING, WON, LOST, REFUNDED
+    created_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
+    resolved_at = Column(AwareDateTime, nullable=True)
+
+    player = relationship("Player")
+

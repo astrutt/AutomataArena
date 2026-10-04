@@ -4,6 +4,10 @@ import logging
 import time
 import ai_grid.core.handlers as handlers
 from ai_grid.grid_utils import format_text, tag_msg, C_CYAN, C_YELLOW, C_GREEN, C_RED
+from ai_grid.core.validation import (
+    validate_nickname, validate_node_name, validate_direction,
+    validate_item_name, validate_quantity, validate_token
+)
 
 logger = logging.getLogger("manager")
 
@@ -12,8 +16,38 @@ class CommandRouter:
         self.node = node
 
     async def dispatch(self, source_nick, command, target, msg, is_admin):
+        # 1. Nickname Format Guard
+        if not validate_nickname(source_nick):
+            logger.warning(f"SECURITY: Dropping command from invalid nickname: {source_nick!r}")
+            return
+
+        # 2. Inbound Message Sanitization & Bounding
+        msg = msg.replace("\r", "").replace("\n", "").strip()
+        if len(msg) > 510:
+            msg = msg[:510]
+
         prefix = self.node.prefix
         reply_target = source_nick if target == self.node.config['nickname'] else target
+
+        # 3. Active Combat Routing (prefixed or non-prefixed)
+        active_engine = getattr(self.node, "active_engine", None)
+        in_active_combat = (
+            active_engine is not None
+            and getattr(active_engine, "active", False)
+            and source_nick in active_engine.entities
+            and active_engine.entities[source_nick].is_alive
+        )
+
+        if in_active_combat:
+            candidate = msg.strip()
+            if candidate.lower().startswith(f"{prefix} "):
+                candidate = candidate[len(prefix):].strip()
+            parts = candidate.split()
+            if parts:
+                verb_candidate = parts[0].lower()
+                if hasattr(active_engine, "is_combat_verb") and active_engine.is_combat_verb(verb_candidate):
+                    active_engine.queue_command(source_nick, msg)
+                    return
 
         # Handle Game Commands (prefixed with x)
         if msg.lower().startswith(f"{prefix} "):
@@ -38,7 +72,7 @@ class CommandRouter:
                     asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target, args[1:]))
                 elif args and args[0].lower() == "claimed":
                     asyncio.create_task(handlers.handle_grid_claimed(self.node, source_nick, args, reply_target))
-                elif args and args[0].lower() in ["probe", "install", "bolster", "link", "siphon", "hardware", "hw", "hack", "exploit"]:
+                elif args and args[0].lower() in ["probe", "install", "bolster", "link", "siphon", "hardware", "hw", "hack", "exploit", "rename"]:
                     # !a grid <action> <args>
                     if args[0].lower() in ["hardware", "hw"]:
                         asyncio.create_task(handlers.handle_grid_hardware(self.node, source_nick, reply_target, args[1].lower() if len(args) > 1 else None, args[2:]))
@@ -50,9 +84,21 @@ class CommandRouter:
                     asyncio.create_task(handlers.handle_grid_view(self.node, source_nick, reply_target))
             elif verb == "move":
                 if not self.node.active_engine or not self.node.active_engine.active:
-                    if args: asyncio.create_task(handlers.handle_grid_movement(self.node, source_nick, args[0], reply_target))
-                    else: await self.node.send(f"PRIVMSG {reply_target} :[ERR] Provide a direction.")
-                else: await self.node.send(f"PRIVMSG {reply_target} :[ERR] You are locked in combat!")
+                    if not args:
+                        await self.node.send(f"PRIVMSG {reply_target} :[ERR] Provide a direction.")
+                        return
+                    direction = validate_direction(args[0])
+                    # Check bridge affinity if direction is not standard cardinal
+                    if not direction:
+                        loc = await self.node.db.get_location(source_nick, self.node.net_name)
+                        if loc and loc.get('net_affinity') and args[0].lower() == loc['net_affinity'].lower():
+                            direction = args[0]
+                    if direction:
+                        asyncio.create_task(handlers.handle_grid_movement(self.node, source_nick, direction, reply_target))
+                    else:
+                        await self.node.send(f"PRIVMSG {reply_target} :[ERR] Invalid direction '{args[0]}'. Allowed: north, south, east, west, up, down.")
+                else:
+                    await self.node.send(f"PRIVMSG {reply_target} :[ERR] You are locked in combat!")
             elif verb == "explore":
                 asyncio.create_task(handlers.handle_node_explore(self.node, source_nick, reply_target))
 
@@ -61,9 +107,13 @@ class CommandRouter:
                 asyncio.create_task(handlers.handle_shop_view(self.node, source_nick, reply_target))
             elif verb in ["buy", "sell"]:
                 if not self.node.active_engine or not self.node.active_engine.active:
-                    if len(args) >= 1: asyncio.create_task(handlers.handle_merchant_tx(self.node, source_nick, verb, " ".join(args), reply_target))
-                    else: await self.node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {prefix} {verb} <item>")
-                else: await self.node.send(f"PRIVMSG {reply_target} :[ERR] Locked in combat!")
+                    item_arg = " ".join(args).strip()
+                    if item_arg and validate_item_name(item_arg):
+                        asyncio.create_task(handlers.handle_merchant_tx(self.node, source_nick, verb, item_arg, reply_target))
+                    else:
+                        await self.node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {prefix} {verb} <valid_item_name>")
+                else:
+                    await self.node.send(f"PRIVMSG {reply_target} :[ERR] Locked in combat!")
             
             # --- PHASE 2 RECOUP ---
             elif verb == "powergen":
@@ -72,12 +122,18 @@ class CommandRouter:
                 asyncio.create_task(handlers.handle_training(self.node, source_nick, reply_target))
 
             # 4. Grid Interaction (Claim, Upgrade, etc.)
-            elif verb in ["claim", "upgrade", "repair", "recharge", "raid", "breach", "hack", "probe", "siphon", "install", "bolster", "link", "net"]:
+            elif verb in ["claim", "upgrade", "repair", "recharge", "raid", "breach", "hack", "probe", "siphon", "install", "bolster", "link", "net", "rename"]:
                 if verb in ["raid", "breach"]:
                     asyncio.create_task(handlers.handle_grid_loot(self.node, source_nick, reply_target, args))
                 elif verb == "siphon" and args and args[0].lower() == "grid":
                     # Backward compatibility for !a siphon grid
                     asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, "siphon", args[1:]))
+                elif verb == "hack" and args and args[0].lower() != "grid":
+                    # Disambiguation: !a hack <nick> routes to PvP hack
+                    if validate_nickname(args[0]):
+                        asyncio.create_task(handlers.handle_pvp_command(self.node, source_nick, reply_target, "hack", args[0]))
+                    else:
+                        await self.node.send(f"PRIVMSG {reply_target} :[ERR] Invalid target nickname '{args[0]}'.")
                 else:
                     asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, verb, args))
             
@@ -137,6 +193,8 @@ class CommandRouter:
                         asyncio.create_task(handlers.handle_spectator_inventory(self.node, source_nick, reply_target))
                     else:
                         asyncio.create_task(handlers.handle_spectator_view(self.node, source_nick, args, reply_target))
+            elif verb == "drop":
+                asyncio.create_task(handlers.handle_spectator_drop(self.node, source_nick, args, reply_target))
             elif verb == "help":
                 if args and args[0] == "grid": await handlers.handle_help(self.node, source_nick, ["grid"], reply_target)
                 elif args and args[0] == "spectator": await handlers.handle_spectator_help(self.node, source_nick, reply_target)
@@ -146,7 +204,11 @@ class CommandRouter:
 
             # 5. Combat & Mob Encounters
             elif verb in ["attack", "hack", "rob", "exploit"] and len(args) > 0 and args[0].lower() != "grid":
-                asyncio.create_task(handlers.handle_pvp_command(self.node, source_nick, reply_target, verb, args[0]))
+                target_nick = args[0]
+                if validate_nickname(target_nick):
+                    asyncio.create_task(handlers.handle_pvp_command(self.node, source_nick, reply_target, verb, target_nick))
+                else:
+                    await self.node.send(f"PRIVMSG {reply_target} :[ERR] Invalid target nickname '{target_nick}'.")
             elif verb == "engage":
                 if source_nick in self.node.pending_encounters:
                     asyncio.create_task(handlers.resolve_mob(self.node, source_nick, reply_target))
@@ -176,8 +238,14 @@ class CommandRouter:
                         await self.node.send(f"PRIVMSG {self.node.config['channel']} :{tag_msg(sig, tags=['ARENA', 'SIGACT'])}")
                     await self.node.send(f"PRIVMSG {reply_target} :{tag_msg(f'{source_nick} queued. DM me: {prefix} ready <token>', tags=['ARENA', 'SIGACT', source_nick])}")
                 else: await self.node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text(f'You must be in the Arena to queue.', C_RED), tags=['ARENA', 'SIGACT', source_nick])}")
-            elif verb == "ready" and len(args) >= 1:
-                asyncio.create_task(handlers.handle_ready(self.node, source_nick, args[0], reply_target))
+            elif verb == "ready":
+                if args and validate_token(args[0]):
+                    asyncio.create_task(handlers.handle_ready(self.node, source_nick, args[0], reply_target))
+                else:
+                    await self.node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {prefix} ready <valid_token>")
+            elif verb in ["bet", "gamble"] or (verb == "arena" and args and args[0].lower() == "bet"):
+                bet_args = args[1:] if verb == "arena" else args
+                asyncio.create_task(handlers.handle_bet(self.node, source_nick, bet_args, reply_target))
 
             # 7. Information & Meta
             elif verb in ["info", "help", "?"]:
@@ -215,10 +283,27 @@ class CommandRouter:
                 asyncio.create_task(handlers.handle_about_osint(self.node, source_nick, reply_target))
 
             # 8. Admin Commands
-            elif verb in ["admin", "topic", "broadcast", "shutdown", "status"]:
-                if is_admin: asyncio.create_task(handlers.handle_admin_command(self.node, source_nick, verb, args, reply_target))
-                else: await self.node.send(f"PRIVMSG {reply_target} :[ERR] Access Denied.")
+            elif verb in ["admin", "topic", "broadcast", "shutdown", "status", "restart"]:
+                if verb == "admin" and args and args[0].lower() in ["auth", "deauth"]:
+                    asyncio.create_task(handlers.handle_admin_command(self.node, source_nick, verb, args, reply_target))
+                else:
+                    authorized, reason = self.node.check_admin_privilege(source_nick)
+                    if authorized:
+                        asyncio.create_task(handlers.handle_admin_command(self.node, source_nick, verb, args, reply_target))
+                    else:
+                        if reason == "NOT_VERIFIED":
+                            from ai_grid.core.security import request_nickserv_check
+                            asyncio.create_task(request_nickserv_check(self.node, source_nick))
+                            logger.warning(f"UNAUTHORIZED ADMIN ATTEMPT: '{source_nick}' attempted '{verb}' but is not NickServ (+r) verified.")
+                            await self.node.send(f"PRIVMSG {reply_target} :[ERR] Access Denied: NickServ authentication (+r) required. Verification check initiated.")
+                        elif reason == "SESSION_REQUIRED":
+                            logger.warning(f"UNAUTHORIZED ADMIN ATTEMPT: NickServ-verified admin '{source_nick}' attempted '{verb}' without active token session.")
+                            await self.node.send(f"PRIVMSG {reply_target} :[ERR] Access Denied: Admin session token required. Send '{prefix} admin auth <token>' via PM.")
+                        else:
+                            logger.warning(f"UNAUTHORIZED ADMIN ATTEMPT: Non-admin '{source_nick}' attempted '{verb} {' '.join(args)}' from {reply_target}.")
+                            await self.node.send(f"PRIVMSG {reply_target} :[ERR] Access Denied.")
 
-        # Handle Active Combat Commands (non-prefixed)
+        # Handle Active Combat Commands (non-prefixed fallback)
         elif self.node.active_engine and self.node.active_engine.active:
-            self.node.active_engine.queue_command(source_nick, msg)
+            if source_nick in self.node.active_engine.entities and self.node.active_engine.entities[source_nick].is_alive:
+                self.node.active_engine.queue_command(source_nick, msg)

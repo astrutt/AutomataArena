@@ -136,6 +136,7 @@ class SandboxHarness:
             "llm": {
                 "endpoint": self.llm_server.get_endpoint(),
                 "model": "mock-model",
+                "temperature": 0.7,
             },
             "admins": [self.admin_nick.lower(), "admin", "testadmin"],
             "flood_messages": {
@@ -156,7 +157,7 @@ class SandboxHarness:
         mock_hub = type("MockHub", (), {
             "start_time": time.time(),
             "nodes": {},
-            "llm": ArenaLLM({"llm": {"endpoint": self.llm_server.get_endpoint(), "model": "mock"}}),
+            "llm": ArenaLLM(sandbox_config),
             "db": self.db,
             "relay_message": lambda *args, **kwargs: asyncio.sleep(0),
             "send_memo": lambda *args, **kwargs: asyncio.sleep(0),
@@ -352,6 +353,7 @@ class SandboxHarness:
             line = raw_line.rstrip("\r\n") + "\r\n"
             self._client_writer.write(line.encode())
             await self._client_writer.drain()
+            await asyncio.sleep(0.05)
         else:
             await self.irc_server.broadcast(raw_line)
 

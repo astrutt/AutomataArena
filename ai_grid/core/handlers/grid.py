@@ -149,12 +149,29 @@ async def handle_grid_map(node, nick: str, reply_target: str, args: list = None)
         for line in map_text.split("\n"):
             await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='GEOINT', is_machine=machine_mode)}")
 
-async def handle_node_probe(node, nick: str, reply_target: str):
+async def handle_node_probe(node, nick: str, reply_target: str, args: list = None):
     """SigInt report on current nodal architecture."""
     if not await check_rate_limit(node, nick, reply_target, cooldown=15, consume=False, verb="probe"): return
-    
+
+    args = args or []
+    direction = None
+    target_name = None
+    if args:
+        from ai_grid.core.validation import validate_direction
+        d = validate_direction(args[0])
+        if d:
+            direction = d
+            if len(args) > 1:
+                target_name = args[1]
+        else:
+            target_name = args[0]
+            if len(args) > 1:
+                d = validate_direction(args[1])
+                if d:
+                    direction = d
+
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
-    res = await node.db.probe_node(nick, node.net_name)
+    res = await node.db.probe_node(nick, node.net_name, direction=direction, target_name=target_name)
     
     if not res.get("success"):
         err_msg = res.get('error') or res.get('msg') or 'PROBE_FAILED'
@@ -195,7 +212,7 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
         node_name = args[0] if args else None
         success, msg = await node.db.grid_recharge(nickname, node.net_name, node_name=node_name)
     elif action == "probe": 
-        await handle_node_probe(node, nickname, reply_target)
+        await handle_node_probe(node, nickname, reply_target, args)
         return
     elif action == "siphon":
         perc = 100.0
@@ -241,6 +258,19 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
     elif action == "hack":
         res = await node.db.hack_node(nickname, node.net_name)
         success, msg, alert_data = res[0], res[1], res[2] if len(res) > 2 else None
+    elif action == "rename":
+        if not args:
+            await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: rename <new_name> (Cost: 5000c)', action='INFO', result='ERR')}")
+            return
+        if len(args) == 1:
+            target_node = None
+            new_name = args[0]
+        else:
+            target_node = args[0]
+            new_name = args[1]
+        success, msg = await node.db.community_rename_node(
+            nickname, node.net_name, new_name, target_node=target_node
+        )
     else: return
 
     if success:

@@ -53,7 +53,13 @@ class SpectatorRepository:
             await session.commit()
             return True, f"Daily Dividend processed: +{bonus_creds}c, +{bonus_xp} XP."
 
-    async def spectator_drop(self, nick: str, network: str, target: str = None) -> tuple:
+    DEFAULT_DROP_ITEMS = {
+        "nano_patch": {"name": "Nano_Patch", "cost": 2500.0, "type": "consumable", "aliases": {"nano_patch", "nanopatch", "patch", "heal", "hp", "nano"}, "effect": "heal", "val": 50},
+        "battery": {"name": "Battery", "cost": 2500.0, "type": "consumable", "aliases": {"battery", "batt", "power", "cell", "up", "energy"}, "effect": "power", "val": 50},
+        "zeroday_chain": {"name": "ZeroDay_Chain", "cost": 7500.0, "type": "hack", "aliases": {"zeroday_chain", "zeroday", "0day", "chain", "exploit", "zerodaychain"}, "effect": "exploit", "val": 15},
+    }
+
+    async def spectator_drop(self, nick: str, network: str, target: str = None, item_name: str = None) -> tuple:
         """High-cost interaction to drop items in the Arena."""
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
@@ -63,20 +69,40 @@ class SpectatorRepository:
             char = (await session.execute(stmt)).scalars().first()
             if not char: return False, "Orbital link failed."
 
-            cost = 2500.0
+            matched_info = None
+            if item_name:
+                norm = item_name.lower().replace("-", "_").replace(" ", "_")
+                for k, info in self.DEFAULT_DROP_ITEMS.items():
+                    if norm == k or norm == info["name"].lower() or norm in info["aliases"]:
+                        matched_info = info
+                        break
+
+            if matched_info:
+                cost = matched_info["cost"]
+                chosen_name = matched_info["name"]
+                item_type = matched_info["type"]
+            elif item_name:
+                cost = 2500.0
+                chosen_name = item_name
+                item_type = "consumable"
+            else:
+                cost = 2500.0
+                candidates = ["Data_Shard", "Memory_Fragment", "Corrupted_Bit"]
+                chosen_name = random.choice(candidates)
+                item_type = "junk"
+
             if char.credits < cost:
                 return False, f"Insufficient budget. Support drops cost {cost}c."
-            
-            # Find a random useful item (matches LOOT_TEMPLATES in core.py)
-            candidates = ["Data_Shard", "Memory_Fragment", "Corrupted_Bit"]
-            item_name = random.choice(candidates)
-            
-            stmt_item = select(ItemTemplate).where(ItemTemplate.name == item_name)
+
+            stmt_item = select(ItemTemplate).where(func.lower(ItemTemplate.name) == chosen_name.lower())
             tpl = (await session.execute(stmt_item)).scalars().first()
-            if not tpl: return False, "Loot generation failure."
+            if not tpl:
+                tpl = ItemTemplate(name=chosen_name, item_type=item_type, base_value=int(cost))
+                session.add(tpl)
+                await session.flush()
 
             char.credits -= cost
-            
+
             if target:
                 # Targeted Drop (Direct to inventory if nearby/online?)
                 # Simplified: Targeted drop always succeeds if player exists
@@ -85,29 +111,27 @@ class SpectatorRepository:
                     NetworkAlias.network_name == network
                 ).options(selectinload(Character.inventory))
                 target_char = (await session.execute(stmt_target)).scalars().first()
-                
+
                 if not target_char:
                     return False, f"Target '{target}' not found in local sector."
-                
+
                 existing = next((i for i in target_char.inventory if i.template_id == tpl.id), None)
                 if existing: existing.quantity += 1
                 else:
                     new_item = InventoryItem(character_id=target_char.id, template_id=tpl.id, quantity=1)
                     session.add(new_item)
-                
+
                 await session.commit()
                 return True, f"Orbital Drop successful! {tpl.name} delivered to {target_char.name}."
             else:
                 # Public Drop (Spawns in Arena)
                 arena = (await session.execute(select(GridNode).where(GridNode.node_type == 'arena'))).scalars().first()
                 if not arena: return False, "Arena node logic failure."
-                
-                char.credits -= cost
-                
+
                 # Manifest a high-value Pulse Event in the Arena
                 duration_mins = 10
                 expiry = datetime.datetime.now(datetime.timezone.utc) + timedelta(minutes=duration_mins)
-                
+
                 pulse = PulseEvent(
                     node_id=arena.id,
                     network_name=network,

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 import shlex
+import hmac
 from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from .base import get_action_routing
 
@@ -14,7 +15,68 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
             return [a[0], "********"] + a[2:]
         if v == "nickconfirm" and len(a) >= 2:
             return [a[0], "****"] + a[2:]
+        if v == "admin" and len(a) >= 2 and a[0].lower() == "auth":
+            return [a[0], "********"] + a[2:]
         return a
+
+    # Special Handling for auth and deauth subcommands:
+    if verb == "admin" and args and args[0].lower() in ["auth", "deauth"]:
+        sub = args[0].lower()
+        # SECURITY GATE: Disallow auth commands in public channel
+        if reply_target.lower() == node.config['channel'].lower():
+            logger.warning(f"SECURITY ALERT: Admin auth command attempted in public channel by {admin_nick}!")
+            await node.send(f"PRIVMSG {admin_nick} :{tag_msg(format_text('[ALARM] CRITICAL: Admin authentication commands must be executed via Private Message only.', C_RED, True), tags=['ALARM'])}")
+            return
+
+        # Check admin list membership
+        if admin_nick.lower() not in node.admins:
+            logger.warning(f"UNAUTHORIZED AUTH ATTEMPT: Non-admin {admin_nick} attempted admin {sub}.")
+            await node.send(f"PRIVMSG {admin_nick} :[ERR] Access Denied.")
+            return
+
+        # Check NickServ verification
+        if admin_nick.lower() not in node.nickserv_verified:
+            from ai_grid.core.security import request_nickserv_check
+            asyncio.create_task(request_nickserv_check(node, admin_nick))
+            logger.warning(f"UNAUTHORIZED AUTH ATTEMPT: {admin_nick} is not NickServ verified.")
+            await node.send(f"PRIVMSG {admin_nick} :[ERR] Access Denied: NickServ authentication (+r) required before session auth.")
+            return
+
+        if sub == "deauth":
+            node.admin_sessions.pop(admin_nick.lower(), None)
+            logger.info(f"SYSADMIN DEAUTH: {admin_nick} terminated admin session.")
+            await node.send(f"PRIVMSG {admin_nick} :{tag_msg(format_text('[SYSADMIN] Admin session terminated.', C_YELLOW), tags=['SIGACT'], nick=admin_nick)}")
+            return
+
+        if sub == "auth":
+            if len(args) < 2:
+                await node.send(f"PRIVMSG {admin_nick} :[ERR] Syntax: {node.prefix} admin auth <token>")
+                return
+
+            provided_token = args[1]
+            from ai_grid.manager import CONFIG
+            configured_token = CONFIG.get('admin_token') or getattr(node, 'config', {}).get('admin_token')
+            if not configured_token and hasattr(node, 'hub') and node.hub.nodes:
+                configured_token = node.hub.nodes.get(node.net_name, node).config.get('admin_token')
+
+            if not configured_token:
+                await node.send(f"PRIVMSG {admin_nick} :[INFO] Admin token auth is not configured on this server (NickServ +r is sufficient).")
+                return
+
+            if hmac.compare_digest(str(provided_token), str(configured_token)):
+                node.admin_sessions[admin_nick.lower()] = time.time() + 3600  # 60 minute TTL
+                logger.info(f"SYSADMIN AUTH: Admin {admin_nick} successfully established 60m admin session.")
+                await node.send(f"PRIVMSG {admin_nick} :{tag_msg(format_text('[SYSADMIN] Authentication successful. Admin session active for 60 minutes.', C_GREEN, True), tags=['SIGACT'], nick=admin_nick)}")
+            else:
+                logger.warning(f"SYSADMIN AUTH FAILURE: Admin {admin_nick} provided invalid token.")
+                await node.send(f"PRIVMSG {admin_nick} :[ERR] Authentication failed: Invalid token.")
+            return
+
+    # Check admin privileges for all other administrative operations
+    if not node.is_admin(admin_nick):
+        logger.warning(f"SYSADMIN REJECT: {admin_nick} attempted '{verb}' without active authorization.")
+        await node.send(f"PRIVMSG {reply_target} :[ERR] Access Denied.")
+        return
 
     # Redacted log for INFO, full for DEBUG
     logger.info(f"SYSADMIN OVERRIDE: {admin_nick} -> {verb} {mask_args(verb, args)}")

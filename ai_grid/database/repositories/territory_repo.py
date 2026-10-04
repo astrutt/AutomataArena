@@ -6,6 +6,7 @@ from sqlalchemy import func
 from ai_grid.models import Character, Player, NetworkAlias, GridNode, InventoryItem
 from ai_grid.database.core import logger, CONFIG, increment_daily_task
 from ai_grid.database.base_repo import BaseRepository
+from ai_grid.core.validation import validate_node_name
 
 class TerritoryRepository(BaseRepository):
     async def claim_node(self, name: str, network: str, node_name: str = None) -> tuple[bool, str]:
@@ -382,7 +383,8 @@ class TerritoryRepository(BaseRepository):
             return {"success": True, "msg": f"Linkage established to '{subnet_name}'."}
 
     async def rename_node(self, old_name: str, new_name: str) -> tuple[bool, str]:
-        if len(new_name) > 11: return False, "Name too long (11 chars max)."
+        if not validate_node_name(new_name):
+            return False, "Invalid node name: alphanumeric + _ only, max 11 chars."
         async with self.async_session() as session:
             node = (await session.execute(select(GridNode).where(func.lower(GridNode.name) == old_name.lower()))).scalars().first()
             if not node: return False, "Target not found."
@@ -393,6 +395,57 @@ class TerritoryRepository(BaseRepository):
             await session.commit()
             logger.info(f"GRID_RENAME: {old_display} -> {new_name}")
             return True, f"Operation successful: {old_display} rebranded to {new_name}."
+
+    async def community_rename_node(self, nick: str, network: str, new_name: str, target_node: str = None) -> tuple[bool, str]:
+        if not validate_node_name(new_name):
+            return False, "Invalid node name: alphanumeric + _ only, max 11 chars."
+
+        cost = 5000.0
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                func.lower(Character.name) == nick.lower(),
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.current_node))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char:
+                return False, "System offline."
+
+            if char.credits < cost:
+                return False, f"Insufficient credits. Renaming sector costs {cost:.0f}c."
+
+            if target_node:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == target_node.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+            else:
+                node = char.current_node
+
+            if not node:
+                return False, "Target node unavailable."
+
+            # Critical node protection
+            if (
+                getattr(node, 'is_spawn_node', False)
+                or node.name.lower() == "uplink"
+                or (node.node_type and node.node_type.lower() == "safezone")
+            ):
+                return False, "Permission Denied: Critical infrastructure (Uplink/Safezones) cannot be renamed."
+
+            if new_name.lower() == "uplink":
+                return False, "Permission Denied: Reserved system identifier 'UpLink' cannot be used."
+
+            # Collision check
+            existing = (await session.execute(
+                select(GridNode).where(func.lower(GridNode.name) == new_name.lower())
+            )).scalars().first()
+            if existing and existing.id != node.id:
+                return False, f"Naming collision: Sector '{new_name}' already exists."
+
+            old_name = node.name
+            char.credits -= cost
+            node.name = new_name
+            await session.commit()
+            logger.info(f"COMMUNITY_RENAME: {char.name} rebranded {old_name} -> {new_name} for {cost:.0f}c")
+            return True, f"Sector {old_name} rebranded to {new_name} for {cost:.0f}c."
 
     async def update_node_description(self, node_name: str, new_desc: str) -> tuple[bool, str]:
         async with self.async_session() as session:

@@ -112,6 +112,14 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
     if not grid: return "MAP ERROR: Coordinate void detected."
     
     # 5. Build Map Output
+    now = datetime.datetime.now(datetime.timezone.utc)
+    def get_effective_intel(node_id):
+        level = disc_recs.get(node_id, "NONE")
+        exp = disc_expires.get(node_id)
+        if level == "PROBE" and exp and now > exp:
+            return "NONE"
+        return level
+
     output = []
     for gy in range(min_y, max_y + 1):
         row = ""
@@ -122,7 +130,7 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
             curr = grid.get((gx, gy))
             if curr:
                 # Add node with intel context
-                intel = disc_recs.get(curr.id, "NONE")
+                intel = get_effective_intel(curr.id)
                 node_sym = get_node_symbol(curr, char, machine_mode, intel)
                 row += node_sym
                 
@@ -130,7 +138,7 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
                 east = grid.get((gx+1, gy))
                 if east:
                     # Gated by discovery of BOTH Source and Target
-                    east_intel = disc_recs.get(east.id, "NONE")
+                    east_intel = get_effective_intel(east.id)
                     if intel != "NONE" and east_intel != "NONE":
                         conn_sym = get_connector_symbol(curr, east, vertical=False)
                         row += format_text(conn_sym, C_GREY)
@@ -143,7 +151,7 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
                 south = grid.get((gx, gy+1))
                 if south:
                     # Gated by discovery of BOTH Source and Target
-                    south_intel = disc_recs.get(south.id, "NONE")
+                    south_intel = get_effective_intel(south.id)
                     if intel != "NONE" and south_intel != "NONE":
                         conn_sym = get_connector_symbol(curr, south, vertical=True)
                         connector_row += f"  {format_text(conn_sym, C_GREY)}   "

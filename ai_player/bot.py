@@ -9,9 +9,32 @@ import urllib.request
 import os
 import sys
 import logging
+import functools
+
+# Polyfill asyncio.to_thread for Python 3.8
+if not hasattr(asyncio, "to_thread"):
+    async def _to_thread(func, *args, **kwargs):
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
+    asyncio.to_thread = _to_thread
+
+def sanitize_irc_outbound(text, max_bytes=510):
+    """Sanitize outbound IRC line: strip CRLF and truncate to 510 bytes UTF-8."""
+    if not isinstance(text, str):
+        text = str(text) if text is not None else ""
+    cleaned = text.replace("\r", "").replace("\n", "")
+    encoded = cleaned.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return cleaned
+    return encoded[:max_bytes].decode("utf-8", errors="ignore")
 
 config = configparser.ConfigParser()
-config.read('config.ini')
+if os.path.exists('config.ini'):
+    config.read('config.ini')
+elif os.path.exists(os.path.join(os.path.dirname(__file__), 'config.ini')):
+    config.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
+else:
+    config.read('config.ini')
 
 IRC_SERVER = config['IRC']['Server']
 IRC_PORT = int(config['IRC']['Port'])
@@ -20,12 +43,8 @@ NICK = config['IRC']['Nickname']
 CHANNEL = config['IRC']['Channel']
 MANAGER = config['IRC']['ManagerNick'].strip().lower()
 PREFIX = config['IRC'].get('Prefix', 'x').strip().lower()
-USE_SSL = config['IRC'].getboolean('UseSSL')
-NICK = config['IRC']['Nickname']
-CHANNEL = config['IRC']['Channel']
-MANAGER = config['IRC']['ManagerNick'].strip().lower()
-PREFIX = config['IRC'].get('Prefix', 'x').strip().lower()
 OWNER = config['IRC'].get('Owner', '').strip().lower()
+NICKSERV_PASS = config['IRC'].get('NickServPass', config['IRC'].get('NickServPassword', os.environ.get('NICKSERV_PASS', ''))).strip()
 
 LLM_ENDPOINT = config['LLM']['Endpoint']
 LLM_MODEL = config['LLM']['Model']
@@ -248,9 +267,13 @@ class AutomataBot:
         except Exception as e:
             logger.error(f"Autonomic Recovery: Failed to emit registration sequence: {e}")
 
+    def sanitize(self, message: str) -> str:
+        return sanitize_irc_outbound(message)
+
     async def send(self, message):
-        logger.info(f"IRC_OUT: {message}")
-        self.writer.write(f"{message}\r\n".encode('utf-8'))
+        sanitized = sanitize_irc_outbound(message)
+        logger.info(f"IRC_OUT: {sanitized}")
+        self.writer.write(f"{sanitized}\r\n".encode('utf-8'))
         await self.writer.drain()
         await asyncio.sleep(0.5)
 
@@ -297,9 +320,12 @@ class AutomataBot:
         current_memory = list(self.memory_buffer)
         
         action = await asyncio.to_thread(call_llm, arena_state, self.char_data, current_memory)
+        # Ensure LLM action is on a single line
+        if action:
+            action = action.split("\n")[0].strip()
         logger.info(f"LLM decision: {action}")
         self.record_memory(f"You decided to: {action}")
-        if not action.lower().startswith(PREFIX):
+        if not action or not action.lower().startswith(PREFIX):
             logger.warning(f"LLM response did not start with '{PREFIX}', defaulting to '{PREFIX} grid map'.")
             action = f"{PREFIX} grid map"
         await self.send(f"PRIVMSG {CHANNEL} :{action}")
@@ -341,6 +367,9 @@ class AutomataBot:
                 old_nick = self.current_nick
                 self.current_nick = target
                 logger.info(f"Identity confirmed by server: {old_nick} -> {self.current_nick}")
+                if NICKSERV_PASS:
+                    logger.info(f"Identifying with NickServ for {self.current_nick}...")
+                    await self.send(f"PRIVMSG NickServ :IDENTIFY {NICKSERV_PASS}")
                 continue
 
             if command == "NICK":
@@ -397,7 +426,14 @@ class AutomataBot:
 
             if command == "NOTICE" and (target.lower() == self.current_nick.lower() or target.lower() == NICK.lower()):
                 logger.info(f"NOTICE_RECV: {source_nick} -> {target}: {msg}")
-                if source_nick == MANAGER:
+                if source_nick == "nickserv":
+                    msg_lower = msg.lower()
+                    if NICKSERV_PASS and any(k in msg_lower for k in ["identify", "password", "registered and protected"]):
+                        logger.info("Responding to NickServ identification challenge...")
+                        await self.send(f"PRIVMSG NickServ :IDENTIFY {NICKSERV_PASS}")
+                    elif any(k in msg_lower for k in ["password accepted", "now recognized"]):
+                        logger.info("NickServ identification successfully confirmed.")
+                elif source_nick == MANAGER:
                     if "[SYS_PAYLOAD]" in msg:
                         logger.debug(f"Intercepted [SYS_PAYLOAD] from {source_nick}")
                         # Robust extraction: find content after tag

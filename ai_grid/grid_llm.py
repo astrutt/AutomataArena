@@ -7,7 +7,7 @@ import urllib.request
 import urllib.error
 import logging
 import sys
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 # --- Config & Logging Setup ---
 from pathlib import Path
@@ -57,7 +57,8 @@ class ArenaLLM:
         self.timeout = config['llm'].get('timeout', 60)
         logger.info(f"ArenaLLM initialized. Model: {self.model}, Timeout: {self.timeout}s")
 
-    def _make_request(self, system_prompt: str, user_prompt: str) -> str:
+    def _make_request(self, system_prompt: str, user_prompt: str, timeout: Optional[float] = None) -> str:
+        req_timeout = timeout if timeout is not None else self.timeout
         payload = {
             "model": self.model,
             "messages": [
@@ -76,7 +77,7 @@ class ArenaLLM:
         logger.debug(f"Dispatching LLM payload to {self.endpoint}")
         
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+            with urllib.request.urlopen(req, timeout=req_timeout) as response:
                 result = json.loads(response.read().decode('utf-8'))
                 content = result['choices'][0]['message']['content'].strip()
                 logger.debug("LLM response received successfully.")
@@ -87,6 +88,95 @@ class ArenaLLM:
         except Exception as e:
             logger.exception(f"Unexpected error during LLM request: {e}")
             return "ERROR: Neural connection severed."
+
+    async def generate_turn_battle_report(
+        self,
+        turn: int,
+        events: list,
+        combatants: list,
+        fallback_lines: Optional[list] = None
+    ) -> list:
+        """
+        Generates a 1-3 sentence visceral combat report for a completed arena turn.
+        Enforces 3.0s timeout with fallback to procedural lines.
+        """
+        def build_procedural_fallback():
+            if fallback_lines:
+                return fallback_lines
+            lines = []
+            for ev in events:
+                t = ev.get("type")
+                if t == "attack":
+                    crit = " [CRITICAL]" if ev.get("critical") else ""
+                    fatal = " (DISCONNECTED)" if ev.get("fatal") else ""
+                    lines.append(f"{ev.get('actor')} struck {ev.get('target')} for {ev.get('damage')} {ev.get('mode')} damage{crit}{fatal}.")
+                elif t == "exploit":
+                    lines.append(f"{ev.get('actor')} executed a ZERO-DAY on {ev.get('target')} for {ev.get('damage')} damage!")
+                elif t == "evade":
+                    lines.append(f"{ev.get('target')} evaded an attack from {ev.get('actor')}.")
+                elif t == "defend":
+                    lines.append(f"{ev.get('actor')} buffered incoming damage.")
+                elif t == "support":
+                    lines.append(f"{ev.get('actor')} utilized {ev.get('item')} restoring {ev.get('heal')} HP.")
+                elif t == "flee":
+                    status = "escaped" if ev.get("success") else "failed to escape"
+                    lines.append(f"{ev.get('actor')} attempted to flee and {status}.")
+                elif t == "surrender":
+                    lines.append(f"{ev.get('actor')} yielded and exited combat.")
+                elif t == "timeout":
+                    lines.append(f"{ev.get('actor')} timed out.")
+                elif t == "spectator_drop":
+                    lines.append(f"Orbital drop from {ev.get('donor')}: {ev.get('item')} delivered to {ev.get('target')}.")
+            return lines or ["Combatants trade tactical blows in the arena."]
+
+        if not events:
+            return build_procedural_fallback()
+
+        # Serialize events
+        serialized = []
+        for ev in events:
+            ev_type = ev.get("type", "action")
+            actor = ev.get("actor", "Unknown")
+            target = ev.get("target", "")
+            dmg = ev.get("damage", "")
+            mode = ev.get("mode", "")
+            crit = " (CRIT)" if ev.get("critical") else ""
+            fatal = " (FATAL/DISCONNECTED)" if ev.get("fatal") else ""
+            if ev_type in ["attack", "exploit"]:
+                serialized.append(f"- {actor} used {mode} against {target} for {dmg} damage{crit}{fatal}")
+            elif ev_type == "evade":
+                serialized.append(f"- {target} evaded attack from {actor}")
+            elif ev_type == "defend":
+                serialized.append(f"- {actor} took defensive stance")
+            elif ev_type == "support":
+                serialized.append(f"- {actor} used {ev.get('item')} restoring {ev.get('heal')} HP")
+            elif ev_type == "flee":
+                serialized.append(f"- {actor} flee attempt (success={ev.get('success')})")
+            elif ev_type == "surrender":
+                serialized.append(f"- {actor} surrendered")
+            elif ev_type == "spectator_drop":
+                serialized.append(f"- Spectator {ev.get('donor')} dropped {ev.get('item')} for {target}")
+            else:
+                serialized.append(f"- {actor} action: {ev_type}")
+
+        event_text = "\n".join(serialized)
+        combatants_str = ", ".join(combatants)
+        system = "You are the tactical combat announcer for The Grid arena. Summarize the turn's combat exchanges in 1 to 3 gritty, visceral, cyberpunk sentences. Do not hallucinate actions that did not occur."
+        user = f"Turn {turn} Combatants: {combatants_str}\nEvents:\n{event_text}\nSummarize:"
+
+        try:
+            raw = await asyncio.wait_for(
+                asyncio.to_thread(self._make_request, system, user, 3.0),
+                timeout=3.5
+            )
+            if not raw or raw.startswith("ERROR"):
+                return build_procedural_fallback()
+            cleaned = raw.strip(' "\'\n')
+            report_lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+            return report_lines if report_lines else build_procedural_fallback()
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning(f"Battle report LLM call timed out or failed: {e}. Using fallback.")
+            return build_procedural_fallback()
 
     async def generate_bio(self, name: str, race: str, bot_class: str, traits: str) -> str:
         logger.info(f"Requesting bio generation for {name} ({race}/{bot_class})")

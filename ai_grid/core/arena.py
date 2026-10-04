@@ -1,14 +1,14 @@
-# arena.py - v1.5.0
+# arena.py - v2.0.0
 import asyncio
 import logging
-from ai_grid.grid_combat import CombatEngine, Entity
+import time
+import uuid
 from ai_grid.grid_combat import CombatEngine, Entity
 from ai_grid.grid_utils import (
     format_text, tag_msg, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_BLUE, C_PURPLE,
     C_ORANGE, C_L_GREEN, C_L_BLUE, C_PINK, generate_gradient, generate_meter,
     TOPIC_START, TOPIC_END, TOPIC_SEP
 )
-from ai_grid.grid_combat import CombatEngine, Entity
 
 logger = logging.getLogger("manager")
 
@@ -70,26 +70,49 @@ async def trigger_arena_call(node):
 
 async def check_match_start(node):
     if len(node.ready_players) > 0 and not node.active_engine and not node.pve_task:
+        match_id = f"ARENA_{int(time.time())}_{uuid.uuid4().hex[:4]}"
+        node.current_match_id = match_id
+        node.betting_open = True
+        if len(node.ready_players) >= 2:
+            node.pending_fighters = [node.ready_players[0], node.ready_players[1]]
+        else:
+            node.pending_fighters = [node.ready_players[0], "Trojan.Exe"]
+
+        contenders = " vs ".join(node.pending_fighters)
         # A 1-minute grace period begins as soon as the first player readies
-        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('Match initialization sequence started. 60 seconds until combat drop...', tags=['ARENA', 'SIGACT'])}")
+        await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(f'Match initialization sequence started! 60 seconds until combat drop: [{contenders}]. Betting is OPEN: {node.prefix} bet <fighter> <amount>', tags=['ARENA', 'SIGACT'])}")
         node.pve_task = asyncio.create_task(pve_countdown(node))
 
 async def pve_countdown(node):
     try:
         await asyncio.sleep(60) # Standard 1-minute grace period
+        node.betting_open = False
+        match_id = getattr(node, 'current_match_id', None) or f"ARENA_{int(time.time())}_{uuid.uuid4().hex[:4]}"
         if len(node.ready_players) >= 2:
             participants = node.ready_players[:2]
             node.ready_players = node.ready_players[2:]
             logger.info(f"Starting PVP Match after 1m wait: {participants}")
-            asyncio.create_task(start_match(node, "PVP_MATCH", participants, pve=False))
+            asyncio.create_task(start_match(node, match_id, participants, pve=False))
         elif len(node.ready_players) == 1:
             player = node.ready_players.pop(0)
             await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('No human challengers manifested. Dropping PvE obstacle.', tags=['ARENA', 'SIGACT'])}")
             logger.info(f"Starting PVE Match for: {player}")
-            asyncio.create_task(start_match(node, "PVE_MATCH", [player], pve=True))
+            asyncio.create_task(start_match(node, match_id, [player], pve=True))
+        else:
+            # Aborted with 0 fighters
+            if getattr(node, 'current_match_id', None):
+                await node.db.refund_bets(node.current_match_id)
+            node.current_match_id = None
+            node.pending_fighters = []
+            node.betting_open = False
         
         node.pve_task = None
     except asyncio.CancelledError:
+        node.betting_open = False
+        if getattr(node, 'current_match_id', None):
+            await node.db.refund_bets(node.current_match_id)
+        node.current_match_id = None
+        node.pending_fighters = []
         node.pve_task = None
 
 async def generate_and_queue_npc(node, npc: Entity, state_msg: str):
@@ -98,6 +121,7 @@ async def generate_and_queue_npc(node, npc: Entity, state_msg: str):
         node.active_engine.queue_command(npc.name, action)
 
 async def start_match(node, match_id: str, participants: list, pve=False):
+    node.betting_open = False
     # Detect participant preferences for mirroring
     machine_participants = []
     for p in participants:
@@ -122,7 +146,7 @@ async def start_match(node, match_id: str, participants: list, pve=False):
         if p in node.match_queue:
             node.match_queue.remove(p)
 
-    node.active_engine = CombatEngine(match_id, node.prefix, combat_broadcast)
+    node.active_engine = CombatEngine(match_id, node.prefix, combat_broadcast, llm=getattr(node, 'llm', None))
     for name in participants:
         db_stats = await node.db.get_player(name, node.net_name)
         node.active_engine.add_entity(Entity(name, db_stats))
@@ -162,6 +186,7 @@ async def start_match(node, match_id: str, participants: list, pve=False):
     if node.active_engine: 
         winners = [e.name for e in node.active_engine.entities.values() if e.is_alive and not e.is_npc]
         losers = [e.name for e in node.active_engine.entities.values() if not e.is_alive and not e.is_npc]
+        npc_winners = [e.name for e in node.active_engine.entities.values() if e.is_alive and e.is_npc]
         
         if winners and losers:
             # v1.8.0: Pass surrender flag and final uP to repo
@@ -180,7 +205,31 @@ async def start_match(node, match_id: str, participants: list, pve=False):
                 winner_up=winner_up,
                 loser_up=loser_up
             )
-            
+
+        # Betting Resolution
+        match_id_res = getattr(node.active_engine, 'match_id', match_id)
+        if winners:
+            winner_name = winners[0]
+            payouts = await node.db.resolve_bets(match_id_res, winner_name)
+            if payouts:
+                won_count = sum(1 for p in payouts if p['status'] == 'WON')
+                total_paid = sum(p['payout'] for p in payouts if p['status'] == 'WON')
+                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(f'BETTING RESOLUTION: {winner_name} wins! {won_count} bets paid out ({total_paid:.0f}c total).', tags=['ARENA', 'SIGACT'])}")
+        elif npc_winners:
+            winner_name = npc_winners[0]
+            payouts = await node.db.resolve_bets(match_id_res, winner_name)
+            if payouts:
+                won_count = sum(1 for p in payouts if p['status'] == 'WON')
+                total_paid = sum(p['payout'] for p in payouts if p['status'] == 'WON')
+                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(f'BETTING RESOLUTION: {winner_name} wins! {won_count} bets paid out ({total_paid:.0f}c total).', tags=['ARENA', 'SIGACT'])}")
+        else:
+            refunds = await node.db.refund_bets(match_id_res)
+            if refunds:
+                await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(f'BETTING REFUND: Match concluded without a victor. {len(refunds)} bets refunded.', tags=['ARENA', 'SIGACT'])}")
+
+        node.current_match_id = None
+        node.pending_fighters = []
+        node.betting_open = False
         await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg('MATCH CONCLUDED.', tags=['ARENA'])}")
         node.active_engine = None
     

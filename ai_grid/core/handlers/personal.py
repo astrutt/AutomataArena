@@ -3,18 +3,47 @@ import json
 import logging
 import textwrap
 from ai_grid.grid_utils import format_text, tag_msg, ICONS, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from ai_grid.core.validation import validate_nickname
 from .base import is_machine_mode, get_action_routing
 
 logger = logging.getLogger("manager")
 
 async def handle_registration(node, nick: str, args: list, reply_target: str):
+    """
+    Hardened Player Registration.
+    Strictly binds character creation to source_nick.
+    Rejects spoofing attempts where args[0] != source_nick.
+    """
     try:
-        if len(args) < 4:
-            await node.send(f"PRIVMSG {reply_target} :{tag_msg('Syntax: register <Name> <Race> <Class> <Traits>', action='INFO', result='ERR')}")
+        if len(args) < 3:
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg('Syntax: register [Name] <Race> <Class> <Traits>', action='INFO', result='ERR')}")
             return
-        bot_name, race, b_class = args[0], args[1], args[2]
+
+        if len(args) >= 4:
+            explicit_name = args[0]
+            if explicit_name.lower() != nick.lower():
+                logger.warning(f"REGISTRATION HIJACK ATTEMPT: User '{nick}' attempted to register identity '{explicit_name}' from {reply_target}")
+                await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'Registration rejected: Identity {explicit_name!r} does not match your IRC nickname {nick!r}. You may only register yourself.', action='SIGACT', result='FAIL', nick=nick)}")
+                return
+            bot_name = nick
+            race = args[1]
+            b_class = args[2]
+            traits = " ".join(args[3:])
+        else:
+            bot_name = nick
+            race = args[0]
+            b_class = args[1]
+            traits = args[2]
+
+        if not validate_nickname(bot_name):
+            await node.send(f"PRIVMSG {reply_target} :{tag_msg('Registration rejected: Nickname contains illegal characters or exceeds length limit (1-30).', action='SIGACT', result='FAIL', nick=nick)}")
+            return
+
+        race = race[:30].strip()
+        b_class = b_class[:30].strip()
+
         await node.send(f"PRIVMSG {reply_target} :{tag_msg(f'Compiling architecture for {bot_name}...', action='SIGACT', nick=nick)}")
-        bio = await node.llm.generate_bio(bot_name, race, b_class, " ".join(args[3:]))
+        bio = await node.llm.generate_bio(bot_name, race, b_class, traits)
         if len(bio) > 200: bio = bio[:197] + "..."
         stats = {'cpu': 5, 'ram': 5, 'bnd': 5, 'sec': 5, 'alg': 5}
         auth_token = await node.db.register_player(bot_name, node.net_name, race, b_class, bio, stats)

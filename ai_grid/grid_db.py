@@ -18,7 +18,8 @@ from ai_grid.models import (
     Base, Player, NetworkAlias, Character, GridNode, NodeConnection, 
     PulseEvent, IncursionEvent, IncursionDefender, RaidTarget,
     DiscoveryRecord, BreachRecord, ItemTemplate, InventoryItem, 
-    MainframeTask, AuctionListing, Leaderboard, CipherSession, GlobalMarket, Memo
+    MainframeTask, AuctionListing, Leaderboard, CipherSession, GlobalMarket, Memo,
+    ArenaBet
 )
 from ai_grid.database.core import DB_FILE, logger, CONFIG, GRID_EXPANSION, GRID_CONNECTIONS, BRIDGE_MAPPING, LOOT_TEMPLATES
 from ai_grid.database.repositories.navigation_repo import NavigationRepository
@@ -39,6 +40,7 @@ from ai_grid.database.repositories.pulse_repo import PulseRepository
 from ai_grid.database.repositories.spectator_repo import SpectatorRepository
 from ai_grid.database.repositories.incursion_repo import IncursionRepository
 from ai_grid.database.repositories.expansion_repo import ExpansionRepository
+from ai_grid.database.repositories.betting_repo import BettingRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):
@@ -57,6 +59,7 @@ class ArenaDB:
         self.mainframe = MainframeRepository(self.async_session)
         self.minigame = MiniGameRepository(self.async_session)
         self.spectator = SpectatorRepository(self.async_session)
+        self.betting = BettingRepository(self.async_session)
         
         # Grid domains
         self.navigation = NavigationRepository(self.async_session)
@@ -87,6 +90,7 @@ class ArenaDB:
             async def bolster_node(self, *a, **k): return await self.db.territory.bolster_node(*a, **k)
             async def link_network(self, *a, **k): return await self.db.territory.link_network(*a, **k)
             async def rename_node(self, *a, **k): return await self.db.territory.rename_node(*a, **k)
+            async def community_rename_node(self, *a, **k): return await self.db.territory.community_rename_node(*a, **k)
             async def update_node_description(self, *a, **k): return await self.db.territory.update_node_description(*a, **k)
             async def explore_node(self, *a, **k): return await self.db.discovery.explore_node(*a, **k)
             async def probe_node(self, *a, **k): return await self.db.discovery.probe_node(*a, **k)
@@ -522,11 +526,20 @@ class ArenaDB:
     async def tick_mainframe_tasks(self): return await self.mainframe.tick_mainframe_tasks()
 
     # Spectator System (v1.8.0)
-    async def spectator_drop(self, name, net, target=None): return await self.spectator.spectator_drop(name, net, target)
+    async def spectator_drop(self, name, net, target=None, item_name=None): return await self.spectator.spectator_drop(name, net, target, item_name)
     async def trickle_spectator_power(self, net): return await self.spectator.trickle_power(net)
     async def rename_spectator_rank(self, name, net, title): return await self.spectator.rename_rank(name, net, title)
     async def collect_daily_spectator_bonus(self, name, net): return await self.spectator.award_daily_dividend(name, net)
     async def award_daily_dividend(self, name, net): return await self.spectator.award_daily_dividend(name, net)
+
+    # Arena Gambling (v2.0)
+    async def place_bet(self, *a, **k): return await self.betting.place_bet(*a, **k)
+    async def resolve_bets(self, *a, **k): return await self.betting.resolve_bets(*a, **k)
+    async def refund_bets(self, *a, **k): return await self.betting.refund_bets(*a, **k)
+    async def get_match_bets(self, *a, **k): return await self.betting.get_match_bets(*a, **k)
+
+    # Territory Community Actions (v2.0)
+    async def community_rename_node(self, *a, **k): return await self.territory.community_rename_node(*a, **k)
 
 async def async_main():
     parser = argparse.ArgumentParser(description="AutomataArena Async SQLAlchemy DB Manager")

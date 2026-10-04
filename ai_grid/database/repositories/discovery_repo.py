@@ -29,17 +29,25 @@ class DiscoveryRepository(BaseRepository):
             
             char.power -= cost
             node = char.current_node
-            
-            # --- PERSISTENT DISCOVERY ---
-            disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
-            if not (await session.execute(disc_stmt)).scalars().first():
-                session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level='EXPLORE'))
 
             noise_malus = node.noise * 0.05
             success_threshold = (0.4 + (char.alg * 0.02)) - noise_malus
             
             roll = random.random()
             if roll < success_threshold:
+                # --- PERSISTENT DISCOVERY ON SUCCESSFUL ROLL ---
+                disc_stmt = select(DiscoveryRecord).where(
+                    DiscoveryRecord.character_id == char.id,
+                    DiscoveryRecord.node_id == node.id,
+                    DiscoveryRecord.raid_target_id == None
+                )
+                existing_disc = (await session.execute(disc_stmt)).scalars().first()
+                if not existing_disc:
+                    session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level='EXPLORE', intel_expires_at=None))
+                else:
+                    existing_disc.intel_level = 'EXPLORE'
+                    existing_disc.intel_expires_at = None
+
                 occupants = [c.name for c in node.characters_present if c.name != name]
 
                 
@@ -115,13 +123,6 @@ class DiscoveryRepository(BaseRepository):
                 else:
                     return {"success": False, "error": f"Target '{target_name}' not detected in local sector."}
             
-            # --- SEQUENCE CHECK: Require EXPLORE before PROBE ---
-            # If probing a target, check if node is explored first
-            disc_check_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id)
-            existing_disc = (await session.execute(disc_check_stmt)).scalars().first()
-            if not existing_disc:
-                return {"success": False, "error": "Discovery Conflict: Node topology must be EXPLORED before deep probing."}
-            
             # --- SECURITY PRE-CHECK (IDS) ---
             addons = json.loads(node.addons_json or "{}")
             is_owner = node.owner_character_id == char.id
@@ -177,8 +178,9 @@ class DiscoveryRepository(BaseRepository):
                 disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id, DiscoveryRecord.raid_target_id == None)
                 existing_disc = (await session.execute(disc_stmt)).scalars().first()
                 if existing_disc:
-                    existing_disc.intel_level = 'PROBE'
-                    existing_disc.intel_expires_at = expires_at
+                    if existing_disc.intel_level != 'EXPLORE':
+                        existing_disc.intel_level = 'PROBE'
+                        existing_disc.intel_expires_at = expires_at
                     existing_disc.discovered_at = datetime.now(timezone.utc)
                 else:
                     session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level='PROBE', intel_expires_at=expires_at))

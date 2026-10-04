@@ -95,6 +95,8 @@ LOOT_TEMPLATES = [
     {"name": "NET",             "item_type": "node_addon", "base_value": 1000, "effects_json": "{\"type\": \"NET\"}"},
     {"name": "Vulnerability",    "item_type": "hack", "base_value": 500, "is_darknet": False, "effects_json": "{\"alg_boost\": 5}"},
     {"name": "ZeroDay_Chain",    "item_type": "hack", "base_value": 2500, "is_darknet": True, "effects_json": "{\"alg_boost\": 15}"},
+    {"name": "Nano_Patch",       "item_type": "consumable", "base_value": 2500, "effects_json": "{\"heal\": 50}"},
+    {"name": "Battery",          "item_type": "consumable", "base_value": 2500, "effects_json": "{\"power\": 50}"},
 ]
 
 DEFAULT_PREFS = {

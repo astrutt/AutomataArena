@@ -210,6 +210,7 @@ class CombatRepository:
             
             evade_roll = random.randint(1, 100)
             if evade_roll <= (target.bnd * 2):
+                await session.commit()
                 return True, f"{attacker.name} swung wildly at {target.name}, but they evaded!", None
                 
             raw_dmg = (attacker.cpu * 5) + attacker.ram
@@ -247,31 +248,36 @@ class CombatRepository:
                 if c.name.lower() == attacker_name.lower(): attacker = c
                 if c.name.lower() == target_name.lower(): target = c
                 
-            if not attacker or not target: return False, "Target not found."
-            if attacker.node_id != target.node_id: return False, "Target is not in your current sector."
-            if target.current_node and target.current_node.node_type == "safezone": return False, "MCP prevents hacking in safezones."
-            if attacker.id == target.id: return "..."
+            if not attacker or not target: return False, "Target not found on this network.", None
+            if attacker.node_id != target.node_id: return False, "Target is not in your current sector.", None
+            if target.current_node and target.current_node.node_type == "safezone": return False, "MCP prevents hacking in safezones.", None
+            if attacker.id == target.id: return False, "Self-termination is illogical.", None
             
             # Phase 2: Power Consumption
             cost = CONFIG.get('mechanics', {}).get('action_costs', {}).get('hack', 3.0)
             if attacker.power < cost:
-                return False, f"MCP trace active. You need {cost:.1f} power to safely breach."
+                return False, f"MCP trace active. You need {cost:.1f} power to safely breach.", None
             attacker.power -= cost
             
-            roll = random.randint(1, 20) + attacker.alg
-            dc = 10 + target.sec
-            if roll >= dc:
-                looted = target.credits * 0.05
-                target.credits -= looted
-                attacker.credits += looted
-                reward_msg = await increment_daily_task(session, attacker, "Hack a Player")
-                await session.commit()
-                msg = f"Hack Successful! {attacker.name} breached {target.name}'s firewall and siphoned {looted:.2f}c."
-                return True, msg, reward_msg
-            else:
-                attacker.credits = max(0.0, attacker.credits - 50.0)
-                await session.commit()
-                return False, f"Hack Failed. {target.name}'s MCP traced the intrusion. {attacker.name} is fined 50c!", None
+            try:
+                roll = random.randint(1, 20) + attacker.alg
+                dc = 10 + target.sec
+                if roll >= dc:
+                    looted = target.credits * 0.05
+                    target.credits -= looted
+                    attacker.credits += looted
+                    reward_msg = await increment_daily_task(session, attacker, "Hack a Player")
+                    await session.commit()
+                    msg = f"Hack Successful! {attacker.name} breached {target.name}'s firewall and siphoned {looted:.2f}c."
+                    return True, msg, reward_msg
+                else:
+                    attacker.credits = max(0.0, attacker.credits - 50.0)
+                    await session.commit()
+                    return False, f"Hack Failed. {target.name}'s MCP traced the intrusion. {attacker.name} is fined 50c!", None
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error executing grid_hack: {e}")
+                return False, "Hack failed due to a system malfunction.", None
 
     async def grid_rob(self, attacker_name, target_name, network):
         async with self.async_session() as session:
@@ -289,19 +295,25 @@ class CombatRepository:
                 if c.name.lower() == attacker_name.lower(): attacker = c
                 if c.name.lower() == target_name.lower(): target = c
                 
-            if not attacker or not target: return False, "Target not found."
-            if attacker.node_id != target.node_id: return False, "Target is not in your locale."
-            if target.current_node and target.current_node.node_type == "safezone": return False, "No physical theft allowed here."
-            if attacker.id == target.id: return False, "..."
-            if not target.inventory: return False, f"{target.name}'s pockets are empty."
+            if not attacker or not target: return False, "Target not found on this network.", None
+            if attacker.node_id != target.node_id: return False, "Target is not in your locale.", None
+            if target.current_node and target.current_node.node_type == "safezone": return False, "No physical theft allowed here.", None
+            if attacker.id == target.id: return False, "Cannot rob yourself.", None
+            if not target.inventory: return False, f"{target.name}'s pockets are empty.", None
             
-            roll = random.randint(1, 20) + attacker.bnd
-            dc = 10 + target.bnd
-            if roll >= dc:
-                item_to_steal = random.choice(target.inventory)
-                item_to_steal.character_id = attacker.id
-                await session.commit()
-                return True, f"Sleight of hand successful! {attacker.name} lifted an item.", None
-            else:
-                return False, f"{attacker.name} clumsily attempted to rob {target.name} and was caught!", None
+            try:
+                roll = random.randint(1, 20) + attacker.bnd
+                dc = 10 + target.bnd
+                if roll >= dc:
+                    item_to_steal = random.choice(target.inventory)
+                    item_name = item_to_steal.template.name if getattr(item_to_steal, 'template', None) else "item"
+                    item_to_steal.character_id = attacker.id
+                    await session.commit()
+                    return True, f"Sleight of hand successful! {attacker.name} lifted an item from {target.name}.", f"Looted: {item_name}"
+                else:
+                    return False, f"{attacker.name} clumsily attempted to rob {target.name} and was caught!", None
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error executing grid_rob: {e}")
+                return False, "Theft attempt failed due to an unexpected disturbance.", None
 

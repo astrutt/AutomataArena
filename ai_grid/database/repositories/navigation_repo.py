@@ -68,12 +68,16 @@ class NavigationRepository(BaseRepository):
             # Check expiration
             from datetime import datetime, timezone
             if intel == "PROBE" and disc.intel_expires_at and datetime.now(timezone.utc) > disc.intel_expires_at:
-                intel = "EXPLORE"
-            
+                intel = "NONE"
+
             # Auto-discover current node
             if intel == "NONE":
                 intel = "EXPLORE" 
-                session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level="EXPLORE"))
+                if not disc:
+                    session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, intel_level="EXPLORE"))
+                else:
+                    disc.intel_level = "EXPLORE"
+                    disc.intel_expires_at = None
                 await session.commit()
 
             # v2.0 Cardinal Exit Mapping

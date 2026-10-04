@@ -45,8 +45,9 @@ class TestSandboxHarness(unittest.IsolatedAsyncioTestCase):
         async with SandboxHarness() as harness:
             await harness.send_raw_irc("PRIVMSG #automatagrid :Hello world")
             found = False
-            for line in harness.irc_server.raw_lines:
-                if "Hello world" in line:
+            for _ in range(50):
+                if any("Hello world" in line for line in harness.irc_server.raw_lines):
                     found = True
                     break
+                await asyncio.sleep(0.02)
             self.assertTrue(found, "Expected raw line to be received by MockIRCServer")

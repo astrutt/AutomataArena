@@ -2,17 +2,32 @@
 import asyncio
 import ssl
 import logging
+from ai_grid.core.validation import sanitize_irc_outbound
 
 logger = logging.getLogger("manager")
 
 class IRCClient:
-    def __init__(self, net_name, config):
+    def __init__(self, net_name, config=None):
         self.net_name = net_name
-        self.config = config
+        if isinstance(config, dict):
+            self.config = config
+            self.nickname = config.get('nickname', 'ArenaMaster')
+            self.channel = config.get('channel', '#automatagrid')
+        else:
+            self.config = {
+                'server': str(net_name),
+                'port': config if isinstance(config, int) else 6667,
+                'nickname': 'ArenaMaster',
+                'channel': '#automatagrid',
+                'ssl': False,
+            }
+            self.nickname = self.config['nickname']
+            self.channel = self.config['channel']
         self.reader = None
         self.writer = None
-        self.nickname = config['nickname']
-        self.channel = config['channel']
+
+    def sanitize_line(self, line: str) -> str:
+        return sanitize_irc_outbound(line)
 
     async def connect(self):
         logger.info(f"Connecting to {self.net_name} ({self.config['server']}:{self.config['port']})...")
@@ -28,8 +43,9 @@ class IRCClient:
 
     async def send(self, message: str):
         if self.writer:
-            logger.debug(f"[{self.net_name}] > {message}")
-            self.writer.write(f"{message}\r\n".encode('utf-8'))
+            sanitized = sanitize_irc_outbound(message)
+            logger.debug(f"[{self.net_name}] > {sanitized}")
+            self.writer.write(f"{sanitized}\r\n".encode('utf-8'))
             await self.writer.drain()
             await asyncio.sleep(0.3)
 

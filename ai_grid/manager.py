@@ -101,7 +101,34 @@ class GridNode:
         if isinstance(raw_admins, str):
             raw_admins = [x.strip() for x in raw_admins.split(',')]
         self.admins = [a.lower() for a in raw_admins]
-        self.pending_encounters = {} 
+        self.pending_encounters = {}
+        self.admin_sessions = {}  # nick_lower -> expires_at_timestamp (float)
+
+    def check_admin_privilege(self, nick: str) -> tuple[bool, str]:
+        """
+        Evaluates admin privileges under hardened RBAC.
+        Returns (is_authorized: bool, rejection_reason: str).
+        rejection_reason is one of: 'AUTHORIZED', 'NOT_ADMIN', 'NOT_VERIFIED', 'SESSION_REQUIRED'
+        """
+        nick_lower = nick.lower()
+        if nick_lower not in self.admins:
+            return False, "NOT_ADMIN"
+        if nick_lower not in self.nickserv_verified:
+            return False, "NOT_VERIFIED"
+
+        admin_token = CONFIG.get('admin_token')
+        if admin_token:
+            session_expiry = self.admin_sessions.get(nick_lower, 0)
+            import time
+            if time.time() > session_expiry:
+                return False, "SESSION_REQUIRED"
+
+        return True, "AUTHORIZED"
+
+    def is_admin(self, nick: str) -> bool:
+        """Convenience boolean check for administrative authorization."""
+        authorized, _ = self.check_admin_privilege(nick)
+        return authorized
 
     async def send(self, message: str, immediate: bool = False):
         """Dispatches a message either immediately or via the paced queue, applying msgtype prefs."""
@@ -192,15 +219,19 @@ class GridNode:
         await self.listen_loop()
 
     async def auto_identify_routine(self):
-        """Wait 30s after connect, then attempt to identify and verify status."""
+        """Wait nickserv_delay (default 30s) after connect, then attempt to identify and verify status."""
         try:
-            await asyncio.sleep(30)
+            delay = self.config.get('nickserv_delay', 30)
+            if delay > 0:
+                await asyncio.sleep(delay)
             password = self.config.get('password')
             if password:
                 logger.info(f"[{self.net_name}] Emitting scheduled IDENTIFY sequence to NickServ.")
                 await self.send(f"PRIVMSG NickServ :IDENTIFY {password}", immediate=True)
                 # Give it a moment to process before checking
-                await asyncio.sleep(5)
+                check_delay = min(5, delay) if delay > 0 else 0
+                if check_delay > 0:
+                    await asyncio.sleep(check_delay)
                 await request_nickserv_check(self, self.config['nickname'])
             else:
                 logger.debug(f"[{self.net_name}] Auto-identify skipped: No password in config.")
@@ -271,10 +302,16 @@ class GridNode:
                             if who_nick in self.nickserv_verified:
                                 logger.info(f"[{self.net_name}] HUB IDENTITY VERIFIED: {who_nick} is +r (Registered).")
                             else:
-                                logger.warning(f"[{self.net_name}] HUB IDENTITY FAILURE: {who_nick} is NOT +r. Manual identification required.")
-                                # Alert admins via PM
-                                for admin in self.admins:
-                                    asyncio.create_task(self.send(f"NOTICE {admin} :[GRID][ALARM] HUB IDENTITY FAILURE: I am not identified as +r on {self.net_name}. Use '!a admin nickidentify' or NickServ directly."))
+                                auto_reg_pass = self.config.get('nickserv_auto_register_password') or self.config.get('auto_register_password')
+                                auto_reg_email = self.config.get('nickserv_auto_register_email', f"{who_nick}@automata.grid")
+                                if auto_reg_pass:
+                                    logger.info(f"[{self.net_name}] HUB IDENTITY: Emitting auto-registration fallback to NickServ...")
+                                    await self.send(f"PRIVMSG NickServ :REGISTER {auto_reg_pass} {auto_reg_email}", immediate=True)
+                                else:
+                                    logger.warning(f"[{self.net_name}] HUB IDENTITY FAILURE: {who_nick} is NOT +r. Manual identification required.")
+                                    # Alert admins via PM
+                                    for admin in self.admins:
+                                        asyncio.create_task(self.send(f"NOTICE {admin} :[GRID][ALARM] HUB IDENTITY FAILURE: I am not identified as +r on {self.net_name}. Use '!a admin nickidentify' or NickServ directly."))
                 elif command == "353":
                     nicks = msg.replace('@', '').replace('+', '').split()
                     import time
@@ -303,10 +340,34 @@ class GridNode:
                         welcome = format_text(f"Welcome to the Grid, {source_nick}.", C_CYAN)
                         await self.send(f"PRIVMSG {self.config['channel']} :{tag_msg(welcome, tags=['SIGACT', source_nick])}")
                 elif command in ["PART", "QUIT"]:
-                    self.channel_users.pop(source_nick.lower(), None)
+                    nick_lower = source_nick.lower()
+                    self.channel_users.pop(nick_lower, None)
+                    self.nickserv_verified.discard(nick_lower)
+                    self.admin_sessions.pop(nick_lower, None)
+                elif command == "KICK":
+                    parts_kick = line.split()
+                    kicked_nick = (parts_kick[3] if len(parts_kick) > 3 else "").lower()
+                    if kicked_nick:
+                        self.channel_users.pop(kicked_nick, None)
+                        self.nickserv_verified.discard(kicked_nick)
+                        self.admin_sessions.pop(kicked_nick, None)
+                elif command == "NICK":
+                    old_nick = source_nick.lower()
+                    new_nick = (msg.strip() if msg else target.strip()).lower()
+                    self.channel_users.pop(old_nick, None)
+                    self.nickserv_verified.discard(old_nick)
+                    self.admin_sessions.pop(old_nick, None)
+                    if new_nick in self.admins:
+                        from ai_grid.core.security import request_nickserv_check
+                        asyncio.create_task(request_nickserv_check(self, new_nick))
                 elif command == "NOTICE":
                     if target.lower() == self.config['nickname'].lower():
                         logger.info(f"NOTICE_RECV [{self.net_name}]: {source_nick} -> {target}: {msg}")
+                        if source_nick.lower() == "nickserv":
+                            msg_lower = msg.lower()
+                            if any(k in msg_lower for k in ["password accepted", "now recognized", "registered", "confirmed"]):
+                                self.nickserv_verified.add(self.config['nickname'].lower())
+                                logger.info(f"[{self.net_name}] HUB IDENTITY VERIFIED via NickServ NOTICE.")
                 elif command == "PRIVMSG":
                     if target.lower() == self.config['nickname'].lower():
                         logger.info(f"PRIVMSG_RECV [{self.net_name}]: {source_nick} -> {target}: {msg}")
@@ -317,8 +378,14 @@ class GridNode:
                             self.channel_users[nick_lower]['chat_lines'] += 1
                             asyncio.create_task(self.db.update_last_seen(source_nick, self.net_name))
                     
-                    if msg.startswith(self.prefix):
-                        is_admin = source_nick.lower() in self.admins
+                    in_active_combat = (
+                        self.active_engine is not None
+                        and getattr(self.active_engine, "active", False)
+                        and source_nick in self.active_engine.entities
+                        and self.active_engine.entities[source_nick].is_alive
+                    )
+                    if msg.startswith(self.prefix) or in_active_combat:
+                        is_admin = self.is_admin(source_nick)
                         asyncio.create_task(self.db.update_last_seen(source_nick, self.net_name))
                         asyncio.create_task(self.router.dispatch(source_nick, command, target, msg, is_admin))
 

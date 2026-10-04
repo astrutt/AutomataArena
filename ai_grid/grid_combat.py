@@ -93,10 +93,12 @@ class Entity:
         return self.hp > 0
 
 class CombatEngine:
-    def __init__(self, match_id, network_prefix, send_callback):
+    def __init__(self, match_id, network_prefix, send_callback, llm=None):
         self.match_id = match_id
         self.prefix = network_prefix 
         self.send_callback = send_callback 
+        self.llm = llm
+        self.turn_events = []
         self.entities = {}
         self.turn = 1
         self.active = False
@@ -104,7 +106,7 @@ class CombatEngine:
         # v1.8.0: Expanded verb map
         self.verb_map = {
             "kinetic": ["attack", "strike", "hit", "punch", "smash", "bash"],
-            "cyber": ["hack", "corrupt", "inject", "scramble"],
+            "cyber": ["hack", "corrupt", "inject", "scramble", "scan"],
             "exploit": ["exploit", "zeroday", "0day"],
             "flee": ["flee", "retreat", "escape", "run"],
             "surrender": ["surrender", "yield", "quit"],
@@ -114,6 +116,10 @@ class CombatEngine:
             "social": ["speak", "yell", "taunt", "broadcast"]
         }
         logger.info(f"CombatEngine initialized for match: {self.match_id}")
+
+    def is_combat_verb(self, verb: str) -> bool:
+        v = verb.lower()
+        return any(v in aliases for aliases in self.verb_map.values())
 
     def add_entity(self, entity: Entity):
         self.entities[entity.name] = entity
@@ -134,13 +140,20 @@ class CombatEngine:
             logger.debug(f"Command ignored: {entity_name} is dead or not in match.")
             return
         
-        parts = raw_command.strip().split(maxsplit=2)
-        
-        if len(parts) < 2 or parts[0] != self.prefix: 
-            return 
-        
-        verb = parts[1].lower()
-        args = parts[2] if len(parts) > 2 else ""
+        cmd = raw_command.strip()
+        if not cmd:
+            return
+
+        # Strip prefix if present (e.g., "!a strike Enemy" -> "strike Enemy")
+        if self.prefix and cmd.lower().startswith(self.prefix.lower()):
+            cmd = cmd[len(self.prefix):].strip()
+
+        parts = cmd.split(maxsplit=1)
+        if not parts:
+            return
+
+        verb = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ""
         
         action_intent = "invalid"
         for intent, aliases in self.verb_map.items():
@@ -172,6 +185,7 @@ class CombatEngine:
             if not cmd:
                 logger.warning(f"Timeout: {actor.name} submitted no command.")
                 narrative_log.append(f"{actor.name}'s AI core timed out. (Skipped turn)")
+                self.turn_events.append({"type": "timeout", "actor": actor.name})
                 continue
 
             if actor.status == "Evading": actor.status = "Normal"
@@ -185,6 +199,7 @@ class CombatEngine:
             
             if actor.up < cost:
                 narrative_log.append(f"{actor.name} has insufficient power for {cmd['raw_verb']}! (Action Failed)")
+                self.turn_events.append({"type": "insufficient_power", "actor": actor.name, "verb": cmd['raw_verb']})
                 actor.command_queued = None
                 continue
                 
@@ -207,20 +222,25 @@ class CombatEngine:
             elif intent == "evade":
                 actor.status = "Evading"
                 narrative_log.append(f"{format_text(actor.name, C_CYAN)} enters evasion mode. (uP耗: 5)")
+                self.turn_events.append({"type": "defend_stance", "actor": actor.name, "mode": "evade"})
             elif intent == "defend":
                 actor.status = "Defending"
                 narrative_log.append(f"{format_text(actor.name, C_CYAN)} buffers incoming damage. (uP耗: 5)")
+                self.turn_events.append({"type": "defend", "actor": actor.name})
             elif intent == "flee":
                 # v1.8.0: Flee attempt
                 if random.random() > 0.4: # 60% success
                     actor.hp = 0 # Mark as out of match
                     narrative_log.append(f"{format_text(actor.name, C_YELLOW)} successfully extracted from the combat zone!")
+                    self.turn_events.append({"type": "flee", "actor": actor.name, "success": True})
                 else:
                     narrative_log.append(f"{actor.name} tried to flee but the escape route is locked!")
+                    self.turn_events.append({"type": "flee", "actor": actor.name, "success": False})
             elif intent == "surrender":
                 actor.hp = 0
                 actor.status = "Surrendered"
                 narrative_log.append(f"{format_text(actor.name, C_RED)} has YIELDED. Combat terminated for unit.")
+                self.turn_events.append({"type": "surrender", "actor": actor.name})
                 
             elif intent == "support":
                 if not target_name:
@@ -234,22 +254,38 @@ class CombatEngine:
                         heal = (actor.ram + actor.alg) * 5
                         actor.hp = min(actor.max_hp, actor.hp + heal)
                         narrative_log.append(f"{format_text(actor.name, C_CYAN)} used {format_item(exact_item)}, restoring {format_text(str(heal), C_GREEN)} HP!")
+                        self.turn_events.append({"type": "support", "actor": actor.name, "item": exact_item, "heal": heal, "hp": actor.hp})
                     else:
                         narrative_log.append(f"{actor.name} searches for '{target_name}' but fails to locate it!")
                         
             elif intent == "social":
                 speech = cmd["args"][:150]
                 narrative_log.append(f"{format_text(actor.name, C_CYAN)} broadcasts: \"{format_text(speech, C_YELLOW)}\"")
+                self.turn_events.append({"type": "social", "actor": actor.name, "text": speech})
             else:
                 narrative_log.append(f"{actor.name} attempted invalid opcode '{cmd['raw_verb']}'.")
 
             actor.command_queued = None
 
+        report_lines = []
+        if self.llm and hasattr(self.llm, 'generate_turn_battle_report'):
+            try:
+                combatants = list(self.entities.keys())
+                report_lines = await self.llm.generate_turn_battle_report(
+                    self.turn, self.turn_events, combatants, fallback_lines=narrative_log
+                )
+            except Exception as e:
+                logger.warning(f"Error calling LLM battle report: {e}")
+                report_lines = narrative_log
+
+        lines_to_send = report_lines if report_lines else narrative_log
+
         await self.send_callback(tag_msg(f"TURN {self.turn} RESULTS:", tags=['ARENA', 'COMBAT']))
-        for line in narrative_log:
+        for line in lines_to_send:
             await self.send_callback(f"⚔️ {line}")
             await asyncio.sleep(0.5) 
 
+        self.turn_events = []
         self.turn += 1
         is_active = self._check_match_status()
         if not is_active:
@@ -282,6 +318,7 @@ class CombatEngine:
         evade_chance = min(60.0, evade_chance) # Cap at 60%
         
         if random.randint(1, 100) <= evade_chance: 
+            self.turn_events.append({"type": "evade", "actor": attacker.name, "target": target.name, "mode": mode})
             return f"{attacker.name}'s {mode} maneuver was {format_text('EVADED', C_YELLOW)} by {target.name}!"
 
         # --- v1.8.0 DAMAGE FORMULAS ---
@@ -304,14 +341,25 @@ class CombatEngine:
         if target.status == "Defending": final_dmg = int(final_dmg * 0.5)
 
         # Crit check via ALG
-        if random.randint(1, 100) <= attacker.alg:
+        is_crit = random.randint(1, 100) <= attacker.alg
+        if is_crit:
             final_dmg *= 2
             dmg_str = format_text(f"{final_dmg} CRITICAL DMG", C_RED, bold=True)
         else:
             dmg_str = format_text(f"{final_dmg} DMG", C_RED)
 
         target.hp -= final_dmg
-        fatal_str = f" {format_text(target.name + ' HAS BEEN DISCONNECTED!', C_RED, bold=True)}" if target.hp <= 0 else ""
+        is_fatal = target.hp <= 0
+        self.turn_events.append({
+            "type": "attack" if mode != "exploit" else "exploit",
+            "actor": attacker.name,
+            "target": target.name,
+            "mode": mode,
+            "damage": final_dmg,
+            "critical": is_crit,
+            "fatal": is_fatal
+        })
+        fatal_str = f" {format_text(target.name + ' HAS BEEN DISCONNECTED!', C_RED, bold=True)}" if is_fatal else ""
         
         return f"{format_text(attacker.name, C_CYAN)} {verb} {target.name} for {dmg_str}!{fatal_str}"
 

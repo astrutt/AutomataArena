@@ -56,12 +56,90 @@ async def handle_spectator_help(node, nickname: str, reply_target: str):
         for line in ["spectator view", "spectator stats", "spectator drop <nick>", "spectator inventory"]:
             await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='OSINT', is_machine=False)}")
 
+DROP_ITEM_ALIASES = {
+    "nano_patch": "Nano_Patch",
+    "nanopatch": "Nano_Patch",
+    "patch": "Nano_Patch",
+    "heal": "Nano_Patch",
+    "hp": "Nano_Patch",
+    "nano": "Nano_Patch",
+    "battery": "Battery",
+    "batt": "Battery",
+    "power": "Battery",
+    "cell": "Battery",
+    "up": "Battery",
+    "energy": "Battery",
+    "zeroday_chain": "ZeroDay_Chain",
+    "zeroday": "ZeroDay_Chain",
+    "0day": "ZeroDay_Chain",
+    "chain": "ZeroDay_Chain",
+    "exploit": "ZeroDay_Chain",
+    "zerodaychain": "ZeroDay_Chain",
+}
+
+def resolve_item_alias(token: str):
+    if not token:
+        return None
+    norm = token.lower().replace("-", "_").replace(" ", "_")
+    return DROP_ITEM_ALIASES.get(norm)
+
+def parse_drop_args(args: list):
+    """Disambiguates <target> <item> and <item> <target> syntax."""
+    if not args:
+        return None, "Nano_Patch"
+    if len(args) == 1:
+        item = resolve_item_alias(args[0])
+        if item:
+            return None, item
+        else:
+            return args[0], "Nano_Patch"
+    
+    item0 = resolve_item_alias(args[0])
+    item1 = resolve_item_alias(args[1])
+    if item0 and not item1:
+        return args[1], item0
+    elif item1 and not item0:
+        return args[0], item1
+    elif item0 and item1:
+        return args[1], item0
+    else:
+        return args[0], "Nano_Patch"
+
 async def handle_spectator_drop(node, nickname: str, args: list, reply_target: str):
-    target = args[0] if args else None
-    success, msg = await node.db.spectator_drop(nickname, node.net_name, target)
+    target, item_name = parse_drop_args(args)
+    success, msg = await node.db.spectator_drop(nickname, node.net_name, target=target, item_name=item_name)
     color = C_GREEN if success else C_RED
+    chan = node.config.get('channel', reply_target) if hasattr(node, 'config') and isinstance(node.config, dict) else reply_target
+
+    if success and target and getattr(node, 'active_engine', None) and getattr(node.active_engine, 'active', False):
+        engine = node.active_engine
+        if target in engine.entities:
+            ent = engine.entities[target]
+            if ent.alive:
+                effect_desc = ""
+                if item_name == "Nano_Patch":
+                    ent.hp = min(ent.max_hp, ent.hp + 50)
+                    effect_desc = f"+50 HP ({ent.hp}/{ent.max_hp})"
+                elif item_name == "Battery":
+                    ent.up = min(ent.max_up, ent.up + 50)
+                    effect_desc = f"+50 uP ({ent.up}/{ent.max_up})"
+                elif item_name == "ZeroDay_Chain":
+                    ent.inventory.append("Zero-Day")
+                    effect_desc = "Zero-Day Exploit loaded"
+
+                if hasattr(engine, 'turn_events') and isinstance(engine.turn_events, list):
+                    engine.turn_events.append({
+                        "type": "spectator_drop",
+                        "donor": nickname,
+                        "target": target,
+                        "item": item_name,
+                        "effect": effect_desc
+                    })
+                alert = format_text(f"⚡ [ORBITAL INJECTION] {nickname} dropped {item_name} to {target}! {effect_desc}", C_YELLOW, True)
+                await node.send(f"PRIVMSG {chan} :{tag_msg(alert, action='SIGACT', result='INJECT', nick=nickname)}")
+
     # Orbital drops are always broadcast with SIGACT
-    await node.send(f"PRIVMSG {node.config['channel']} :{tag_msg(format_text(msg, color, success), action='SIGACT', result='ORBITAL', nick=nickname)}")
+    await node.send(f"PRIVMSG {chan} :{tag_msg(format_text(msg, color, success), action='SIGACT', result='ORBITAL', nick=nickname)}")
 
 async def handle_spectator_inventory(node, nickname: str, reply_target: str):
     char = await node.db.get_player(nickname, node.net_name)
