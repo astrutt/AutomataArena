@@ -3,11 +3,19 @@
 
 import asyncio
 import json
+import logging
 import urllib.request
 import urllib.error
-import logging
 import sys
+import functools
 from typing import List, Dict, Optional
+
+# Polyfill asyncio.to_thread for Python 3.8
+if not hasattr(asyncio, "to_thread"):
+    async def _to_thread(func, *args, **kwargs):
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
+    asyncio.to_thread = _to_thread
 
 # --- Config & Logging Setup ---
 from pathlib import Path
@@ -51,10 +59,11 @@ logger.addHandler(ch)
 
 class ArenaLLM:
     def __init__(self, config: dict):
-        self.endpoint = config['llm']['endpoint']
-        self.model = config['llm']['model']
-        self.temp = config['llm']['temperature']
-        self.timeout = config['llm'].get('timeout', 60)
+        llm_cfg = config.get('llm', config) if isinstance(config, dict) else {}
+        self.endpoint = llm_cfg.get('endpoint', 'http://127.0.0.1:11434/v1/chat/completions')
+        self.model = llm_cfg.get('model', 'mock-model')
+        self.temp = llm_cfg.get('temperature', 0.7)
+        self.timeout = llm_cfg.get('timeout', 60)
         logger.info(f"ArenaLLM initialized. Model: {self.model}, Timeout: {self.timeout}s")
 
     def _make_request(self, system_prompt: str, user_prompt: str, timeout: Optional[float] = None) -> str:

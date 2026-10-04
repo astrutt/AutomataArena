@@ -86,7 +86,7 @@ class InfiltrationRepository(BaseRepository):
         
         alert_data = None
         if not is_owner:
-            from core.security_utils import is_action_hostile
+            from ai_grid.core.security_utils import is_action_hostile
             is_hostile = is_action_hostile('siphon', node.availability_mode)
             if is_hostile and not is_silent:
                 addons = json.loads(node.addons_json or "{}")
@@ -178,7 +178,7 @@ class InfiltrationRepository(BaseRepository):
         alert_data = None
         
         if not is_owner:
-            from core.security_utils import is_action_hostile
+            from ai_grid.core.security_utils import is_action_hostile
             if is_action_hostile('hack', node.availability_mode):
                 if addons.get("IDS") or node.upgrade_level > 2:
                     node.ids_alerts += 1
@@ -187,7 +187,7 @@ class InfiltrationRepository(BaseRepository):
                     alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
 
         if node.availability_mode == 'CLOSED':
-            from core.security_utils import get_security_dc_multiplier
+            from ai_grid.core.security_utils import get_security_dc_multiplier
             base_dc = 10 + (node.upgrade_level * 5) + int(node.power_stored / 1000) + int(10 - node.durability / 10)
             difficulty = int(base_dc * get_security_dc_multiplier(addons)) if not is_owner else base_dc
             
@@ -390,7 +390,7 @@ class InfiltrationRepository(BaseRepository):
             is_silent = existing_breach.is_silent if existing_breach else False
 
             if not is_owner and not is_silent:
-                from core.security_utils import is_action_hostile
+                from ai_grid.core.security_utils import is_action_hostile
                 if is_action_hostile('raid', node.availability_mode):
                     if addons.get("IDS") or node.upgrade_level > 2:
                         node.ids_alerts += 1

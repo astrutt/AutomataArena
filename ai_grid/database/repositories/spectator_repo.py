@@ -13,6 +13,25 @@ class SpectatorRepository:
     def __init__(self, async_session):
         self.async_session = async_session
 
+    async def get_spectator(self, nick: str, network: str) -> dict:
+        """Fetch spectator details including credits and rank."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                func.lower(Character.name) == nick.lower(),
+                NetworkAlias.network_name == network
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char:
+                return None
+            return {
+                "name": char.name,
+                "race": char.race,
+                "credits": char.credits,
+                "level": char.level,
+                "rank_title": char.rank_title,
+                "xp": char.xp,
+            }
+
     async def rename_rank(self, nick: str, network: str, new_title: str) -> tuple:
         """Allows a spectator to customize their Rank Title for a fee."""
         async with self.async_session() as session:

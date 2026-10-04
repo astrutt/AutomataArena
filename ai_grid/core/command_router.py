@@ -27,7 +27,8 @@ class CommandRouter:
             msg = msg[:510]
 
         prefix = self.node.prefix
-        reply_target = source_nick if target == self.node.config['nickname'] else target
+        bot_nick = (self.node.config.get('nickname') or '').lower()
+        reply_target = source_nick if target.lower() == bot_nick else target
 
         # 3. Active Combat Routing (prefixed or non-prefixed)
         active_engine = getattr(self.node, "active_engine", None)
@@ -58,7 +59,8 @@ class CommandRouter:
 
             # --- CENTRAL ANTI-FLOOD ENFORCEMENT ---
             # All game commands consume tokens immediately. Admin commands are exempt.
-            if not is_admin:
+            admin_verbs = ["admin", "topic", "broadcast", "shutdown", "status", "restart"]
+            if not is_admin and verb not in admin_verbs:
                 if not await handlers.base.check_rate_limit(self.node, source_nick, reply_target, consume=True):
                     return
 

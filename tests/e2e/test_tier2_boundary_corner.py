@@ -131,8 +131,10 @@ class TestTier2BoundaryCorner(unittest.IsolatedAsyncioTestCase):
 
         async def increment_credits(amount: float):
             async with self.env.db.async_session() as session:
-                c = await session.get(Character, char.id)
-                c.credits += amount
+                from sqlalchemy import update
+                await session.execute(
+                    update(Character).where(Character.id == char.id).values(credits=Character.credits + amount)
+                )
                 await session.commit()
 
         # Run 10 concurrent increments of 10.0

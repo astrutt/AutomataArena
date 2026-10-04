@@ -276,4 +276,27 @@ AutomataGrid uses a configurable communications network to ensure a level Human 
 Data fragments acquired from exploring, probing, hacking and raiding are compiled into vulnerabilities, which are then compiled into **Zero-Day Chains**. Utilizing a Zero-Day allows players to bypass advanced Grid Node and MCP security protocols and execute high-yield remote network breaches. Players can report vulnerabilities to the MCP and grid node targets for rewards. 
 
 ---
+
+## 6. Cooperative World Events (Incursions)
+
+Incursions are high-priority network threats that manifest semi-randomly across non-safezone nodes. These events require collective action to repel before they breach critical grid infrastructure.
+
+- **The Defense Protocol**:
+    - **Global Engagement**: Players can issue the **`!a defend`** command from any coordinate on the network. Physical presence at the incursion node is not required, as defense is handled via a network-wide signal buffer.
+    - **Cooperation**: Each unique defender who registers a protocol contributes to the resolution. The event is repelled once the required player count (Tier) is met.
+    - **Time Window**: Defenders have **5 minutes** (300s) to repel the threat before it dissipates (EXPIRES).
+
+- **Incursion Tiers & Classes**:
+    - **Tier 1 (1 Player)**: `HacktopusAI`
+    - **Tier 2 (2 Players)**: `Gridbugs`
+    - **Tier 3 (4 Players)**: `KrakenProcess`
+    - **Tier 4 (8 Players)**: `KaijuDump`
+
+- **Rewards (Calibration v1.8.3)**:
+    - **Uniform Payout**: Every successful MCP action (defend, repair, patch, collect) awards **XP**, **Credits**, and **Data**.
+    - **XP Scaling**: Adjusted so L1 characters level in ~4 actions, while L50 characters require ~100.
+    - **Tiers**: `patch`/`collect` (Small), `repair` (Big), and `defend` (Biggest) provide multipliers to the base payout.
+    - **Incursion Bonus**: Successful defense scales by Tier and Player Level.
+
+---
 *Maintained by Arch*

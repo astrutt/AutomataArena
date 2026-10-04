@@ -175,6 +175,10 @@ class MockLLMServer:
         """Returns the full completions URL."""
         return f"http://{self.host}:{self.port}/v1/chat/completions"
 
+    @property
+    def endpoint(self) -> str:
+        return self.get_endpoint()
+
     def record_request(self, req_data: dict):
         with self._lock:
             self.requests.append(req_data)

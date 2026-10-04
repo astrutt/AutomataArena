@@ -148,7 +148,8 @@ class TestIRCClientAndBotOutboundFraming(unittest.IsolatedAsyncioTestCase):
 
     async def test_automata_bot_process_turn_multiline_llm_splitting(self):
         """AutomataBot.process_turn must only take first non-empty line of LLM output."""
-        bot = AutomataBot()
+        import ai_player.bot as bot_mod
+        bot = bot_mod.AutomataBot()
         writer = MockSocketWriter()
         bot.writer = writer
         bot.char_data = {"name": "AI_Bot", "race": "Synth", "class": "Warrior"}
@@ -158,7 +159,7 @@ class TestIRCClientAndBotOutboundFraming(unittest.IsolatedAsyncioTestCase):
 
         # Mock LLM returning multiline command injection
         multiline_llm = "!a strike Enemy\n!a admin shutdown\n!a quit"
-        with unittest.mock.patch("ai_player.bot.call_llm", return_value=multiline_llm):
+        with unittest.mock.patch.object(bot_mod, "call_llm", return_value=multiline_llm):
             await bot.process_turn("TURN 1: RESULTS")
 
         raw = bytes(writer.buffer)

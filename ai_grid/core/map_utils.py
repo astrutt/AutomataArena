@@ -80,7 +80,19 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
     if center_override and len(center_override) == 2:
         center_x, center_y = center_override
     else:
-        center_x, center_y = char.current_node.x, char.current_node.y
+        curr = char.__dict__.get('current_node')
+        if curr is not None and hasattr(curr, 'x') and hasattr(curr, 'y'):
+            center_x, center_y = curr.x, curr.y
+        elif getattr(char, 'node_id', None):
+            node_stmt = select(GridNode).where(GridNode.id == char.node_id)
+            node_res = await session.execute(node_stmt)
+            curr = node_res.scalars().first()
+            if curr:
+                center_x, center_y = curr.x, curr.y
+            else:
+                center_x, center_y = 0, 0
+        else:
+            center_x, center_y = 0, 0
         
     min_x, max_x = center_x - radius, center_x + radius
     min_y, max_y = center_y - radius, center_y + radius

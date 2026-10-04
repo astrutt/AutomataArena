@@ -43,6 +43,7 @@ class TestEnvironment:
         # Instantiate ArenaDB on temp path and init schema
         self.db = ArenaDB(self.db_path)
         await self.db.init_schema()
+        await self.db.seed_grid_expansion()
         return self
 
     async def teardown(self):
@@ -163,41 +164,65 @@ Traits = dangerous
         """Helper to register and persist a character in the test DB."""
         auth_token = f"auth_tok_{nickname.lower()}"
         async with self.db.async_session() as session:
-            # Create player
-            player = Player(global_name=nickname)
-            session.add(player)
-            await session.flush()
+            from sqlalchemy import select
+            # Create or reuse player
+            player = (await session.execute(
+                select(Player).where(Player.global_name == nickname)
+            )).scalars().first()
+            if not player:
+                player = Player(global_name=nickname)
+                session.add(player)
+                await session.flush()
 
-            # Create alias
-            alias = NetworkAlias(player_id=player.id, network_name=network, nickname=nickname)
-            session.add(alias)
+            # Create or reuse alias
+            alias = (await session.execute(
+                select(NetworkAlias).where(
+                    NetworkAlias.player_id == player.id,
+                    NetworkAlias.network_name == network,
+                    NetworkAlias.nickname == nickname
+                )
+            )).scalars().first()
+            if not alias:
+                alias = NetworkAlias(player_id=player.id, network_name=network, nickname=nickname)
+                session.add(alias)
 
             # Spawn node lookup
             spawn_node = await self.db.get_spawn_node_name()
-            from sqlalchemy import select
             loc_node = await session.execute(
                 select(GridNode).filter_by(name=spawn_node)
             )
             node_obj = loc_node.scalars().first()
             node_id = node_obj.id if node_obj else None
 
-            # Create character
-            char = Character(
-                player_id=player.id,
-                node_id=node_id,
-                name=nickname,
-                race=race,
-                char_class=char_class,
-                bio=bio,
-                level=level,
-                credits=credits,
-                power=power,
-                stability=stability,
-                auth_token=auth_token,
-                status="Active",
-                current_hp=(5 + 5 + 5 + 5 + 5) * 6 + 20,
-            )
-            session.add(char)
+            # Create or update character
+            char = (await session.execute(
+                select(Character).where(
+                    Character.player_id == player.id,
+                    Character.name == nickname
+                )
+            )).scalars().first()
+            if char:
+                char.credits = credits
+                char.power = power
+                char.stability = stability
+                char.node_id = node_id
+            else:
+                char = Character(
+                    player_id=player.id,
+                    node_id=node_id,
+                    name=nickname,
+                    race=race,
+                    char_class=char_class,
+                    bio=bio,
+                    level=level,
+                    credits=credits,
+                    power=power,
+                    stability=stability,
+                    auth_token=auth_token,
+                    status="Active",
+                    current_hp=(5 + 5 + 5 + 5 + 5) * 6 + 20,
+                )
+                session.add(char)
             await session.commit()
             await session.refresh(char)
             return char

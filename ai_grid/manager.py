@@ -57,7 +57,7 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 class GridNode:
-    def __init__(self, net_name, net_config, llm, db, hub):
+    def __init__(self, net_name, net_config, llm=None, db=None, hub=None):
         self.net_name = net_name
         self.network_name = None # Task 061: Dynamic Network Naming
         self.config = net_config
@@ -85,6 +85,7 @@ class GridNode:
         }
         self.pending_registrations = {} 
         self.nickserv_verified = set()  
+        self._nickserv_identified = False
         self.hype_counter = 0
         self.router = CommandRouter(self)
         
@@ -97,12 +98,47 @@ class GridNode:
         self.last_send_ts = 0
         self.user_msgtype_cache = {} # nick.lower() -> "NOTICE" or "PRIVMSG"
         
-        raw_admins = CONFIG.get('admins', [])
+        raw_admins = self.config.get('admins', CONFIG.get('admins', []))
         if isinstance(raw_admins, str):
             raw_admins = [x.strip() for x in raw_admins.split(',')]
         self.admins = [a.lower() for a in raw_admins]
         self.pending_encounters = {}
         self.admin_sessions = {}  # nick_lower -> expires_at_timestamp (float)
+
+    @property
+    def nickserv_identified(self) -> bool:
+        return getattr(self, '_nickserv_identified', False)
+
+    @nickserv_identified.setter
+    def nickserv_identified(self, val: bool):
+        self._nickserv_identified = val
+
+    def is_user_verified(self, nick: str) -> bool:
+        return nick.lower() in self.nickserv_verified
+
+    def _handle_numeric(self, numeric: str, args: list):
+        if numeric in ["307", "330"]:
+            if len(args) >= 2:
+                self.nickserv_verified.add(args[1].lower())
+        elif numeric == "379":
+            if len(args) == 2:
+                self.nickserv_verified.add(args[1].lower())
+            elif len(args) > 2:
+                trailing = args[-1]
+                if "r" in trailing.lower():
+                    self.nickserv_verified.add(args[1].lower())
+
+    def _handle_notice(self, source: str, text: str):
+        if source.lower() == "nickserv":
+            if "accepted" in text.lower() or "recognized" in text.lower():
+                self.nickserv_identified = True
+                my_nick = (
+                    self.config.get('nickname')
+                    or (self.config.get('networks', {}).get(self.net_name, {}).get('nickname') if isinstance(self.config.get('networks'), dict) else None)
+                    or ''
+                ).lower()
+                if my_nick:
+                    self.nickserv_verified.add(my_nick)
 
     def check_admin_privilege(self, nick: str) -> tuple[bool, str]:
         """

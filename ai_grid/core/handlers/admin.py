@@ -8,7 +8,24 @@ from .base import get_action_routing
 
 logger = logging.getLogger("manager")
 
-async def handle_admin_command(node, admin_nick: str, verb: str, args: list, reply_target: str):
+async def handle_admin_command(node, admin_nick: str, verb, args=None, reply_target: str = None):
+    if isinstance(verb, (list, tuple)):
+        cmd_args = list(verb)
+        verb = cmd_args[0] if cmd_args else ""
+        if isinstance(args, str) and reply_target is None:
+            reply_target = args
+            args = cmd_args[1:]
+        else:
+            args = cmd_args[1:] + (list(args) if isinstance(args, (list, tuple)) else [])
+    elif isinstance(args, str) and reply_target is None:
+        reply_target = args
+        args = []
+
+    if args is None:
+        args = []
+    if reply_target is None:
+        reply_target = getattr(node, 'config', {}).get('channel', '#arena') if isinstance(getattr(node, 'config', None), dict) else "#arena"
+
     # Logging Redaction Utility
     def mask_args(v, a):
         if v in ["nickregister", "nickidentify"] and len(a) >= 2:
@@ -72,10 +89,28 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                 await node.send(f"PRIVMSG {admin_nick} :[ERR] Authentication failed: Invalid token.")
             return
 
+    # Check NickServ verification first
+    if hasattr(node, "is_user_verified") and callable(node.is_user_verified):
+        if not node.is_user_verified(admin_nick):
+            logger.warning(f"UNAUTHORIZED ADMIN ATTEMPT: {admin_nick} lacks NickServ verification.")
+            await node.send(f"PRIVMSG {reply_target} :[ERR] Access Denied: NickServ authentication (+r) required. [AUTH_DENIED]")
+            return
+
     # Check admin privileges for all other administrative operations
-    if not node.is_admin(admin_nick):
-        logger.warning(f"SYSADMIN REJECT: {admin_nick} attempted '{verb}' without active authorization.")
-        await node.send(f"PRIVMSG {reply_target} :[ERR] Access Denied.")
+    if hasattr(node, "is_admin") and callable(node.is_admin):
+        if not node.is_admin(admin_nick):
+            logger.warning(f"SYSADMIN REJECT: {admin_nick} attempted '{verb}' without active authorization.")
+            await node.send(f"PRIVMSG {reply_target} :[ERR] Access Denied.")
+            return
+    elif hasattr(node, "admins"):
+        admin_list = [a.lower() for a in node.admins] if isinstance(node.admins, (list, set, tuple)) else []
+        if admin_nick.lower() not in admin_list:
+            logger.warning(f"SYSADMIN REJECT: {admin_nick} attempted '{verb}' without active authorization.")
+            await node.send(f"PRIVMSG {reply_target} :[ERR] Access Denied.")
+            return
+
+    if verb == "help":
+        await node.send(f"PRIVMSG {reply_target} :[ADMIN] Available commands: status, version, topic, broadcast, grid, battlestart, battlestop, restart, shutdown")
         return
 
     # Redacted log for INFO, full for DEBUG
@@ -314,7 +349,7 @@ async def handle_admin_command(node, admin_nick: str, verb: str, args: list, rep
                         
                     # Manual increment mode and trigger
                     node.topic_mode = (node.topic_mode + 1) % 4
-                    from core.arena import set_dynamic_topic
+                    from ai_grid.core.arena import set_dynamic_topic
                     await set_dynamic_topic(node)
                     
                     status = f"Mode: {node.topic_mode} | Interval: {node.topic_interval}m"

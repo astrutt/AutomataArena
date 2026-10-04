@@ -99,6 +99,10 @@ class DiscoveryRepository(BaseRepository):
                 await session.commit()
                 return {"status": "failure", "msg": "The exploration sequence yielded no actionable data."}
 
+    async def probe_direction(self, name: str, network: str, direction: str) -> dict:
+        """Alias for probe_node with a specified direction."""
+        return await self.probe_node(name, network, direction=direction)
+
     async def probe_node(self, name: str, network: str, direction: str = None, target_name: str = None) -> dict:
         """Deep scan for hardware, occupants, or specific raid targets."""
         async with self.async_session() as session:
@@ -129,7 +133,7 @@ class DiscoveryRepository(BaseRepository):
             alert_data = None
             
             if not is_owner:
-                from core.security_utils import is_action_hostile
+                from ai_grid.core.security_utils import is_action_hostile
                 if is_action_hostile('probe', node.availability_mode):
                     if addons.get("IDS") or node.upgrade_level > 2:
                         from ai_grid.models import Memo
@@ -140,9 +144,35 @@ class DiscoveryRepository(BaseRepository):
             # Change target node if direction specified
             if direction and not raid_target:
                 conn = next((c for c in node.exits if c.direction.lower() == direction.lower()), None)
-                if not conn: return {"success": False, "error": f"Invalid direction: '{direction}'."}
-                if conn.is_hidden: return {"success": False, "error": f"Direction '{direction}' is not yet mapped."}
-                node = conn.target_node
+                if conn:
+                    if conn.is_hidden: return {"success": False, "error": f"Direction '{direction}' is not yet mapped."}
+                    node = conn.target_node
+                else:
+                    dir_offsets = {
+                        'north': (0, -1), 'n': (0, -1),
+                        'south': (0, 1), 's': (0, 1),
+                        'east': (1, 0), 'e': (1, 0),
+                        'west': (-1, 0), 'w': (-1, 0),
+                        'northeast': (1, -1), 'ne': (1, -1),
+                        'northwest': (-1, -1), 'nw': (-1, -1),
+                        'southeast': (1, 1), 'se': (1, 1),
+                        'southwest': (-1, 1), 'sw': (-1, 1),
+                    }
+                    offset = dir_offsets.get(direction.lower())
+                    if not offset:
+                        return {"success": False, "error": f"Invalid direction: '{direction}'."}
+                    tx, ty = node.x + offset[0], node.y + offset[1]
+                    if tx < 0 or tx > 49 or ty < 0 or ty > 49:
+                        return {"success": False, "error": f"Direction '{direction}' exceeds grid boundaries."}
+                    target_stmt = select(GridNode).options(
+                        selectinload(GridNode.characters_present),
+                        selectinload(GridNode.exits).selectinload(NodeConnection.target_node),
+                        selectinload(GridNode.active_target)
+                    ).where(GridNode.x == tx, GridNode.y == ty)
+                    target_node = (await session.execute(target_stmt)).scalars().first()
+                    if not target_node:
+                        return {"success": False, "error": f"No node detected {direction}."}
+                    node = target_node
             
             cost = CONFIG.get('mechanics', {}).get('action_costs', {}).get('probe', 10.0)
             if char.power < cost: return {"success": False, "error": "Insufficient POWER."}
@@ -173,8 +203,8 @@ class DiscoveryRepository(BaseRepository):
                     existing_target_disc.intel_expires_at = expires_at
                 else:
                     session.add(DiscoveryRecord(character_id=char.id, node_id=node.id, raid_target_id=raid_target.id, intel_level='PROBE', intel_expires_at=expires_at))
-            else:
-                # Node-specific DiscoveryRecord
+            elif not direction:
+                # Node-specific DiscoveryRecord (topological direction scans do not create DiscoveryRecord)
                 disc_stmt = select(DiscoveryRecord).where(DiscoveryRecord.character_id == char.id, DiscoveryRecord.node_id == node.id, DiscoveryRecord.raid_target_id == None)
                 existing_disc = (await session.execute(disc_stmt)).scalars().first()
                 if existing_disc:

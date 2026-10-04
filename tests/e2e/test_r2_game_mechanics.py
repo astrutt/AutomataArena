@@ -302,17 +302,8 @@ class TestSpectatorItemDrops(unittest.IsolatedAsyncioTestCase):
 
     async def test_13_spectator_drop_live_arena_entity_injection(self):
         """Verifies dropping Nano_Patch, Battery, ZeroDay_Chain restores live HP/power and exploit."""
-        class MockEntity:
-            def __init__(self, name):
-                self.name = name
-                self.hp = 20
-                self.max_hp = 100
-                self.up = 10
-                self.max_up = 100
-                self.inventory = []
-                self.alive = True
-
-        fighter_ent = MockEntity("FighterOne")
+        from ai_grid.grid_combat import Entity
+        fighter_ent = Entity("FighterOne", hp=20, max_hp=100, up=10, max_up=100)
         mock_engine = MagicMock()
         mock_engine.active = True
         mock_engine.entities = {"FighterOne": fighter_ent}
@@ -406,6 +397,12 @@ class TestCommunityNodeRenaming(unittest.IsolatedAsyncioTestCase):
         self.env = TestEnvironment(prefix="m3_rename_")
         await self.env.setup()
         await self.env.create_test_player("CitizenAlice", "mocknet", credits=10000.0)
+        async with self.env.db.async_session() as session:
+            node = (await session.execute(select(GridNode).where(GridNode.name == "Memory_Heap"))).scalars().first()
+            char = (await session.execute(select(Character).where(Character.name == "CitizenAlice"))).scalars().first()
+            if node and char:
+                char.node_id = node.id
+                await session.commit()
 
     async def asyncTearDown(self):
         await self.env.teardown()
@@ -468,7 +465,7 @@ class TestCommunityNodeRenaming(unittest.IsolatedAsyncioTestCase):
     async def test_22_community_rename_collision_check(self):
         """Verifies renaming to an existing node name fails."""
         success, msg = await self.env.db.territory.community_rename_node(
-            "CitizenAlice", "mocknet", "Neural_Nexus", target_node="Memory_Heap"
+            "CitizenAlice", "mocknet", "Null_Space", target_node="Memory_Heap"
         )
         self.assertFalse(success)
         self.assertIn("collision", msg.lower())

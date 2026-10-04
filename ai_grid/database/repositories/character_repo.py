@@ -124,18 +124,24 @@ class CharacterRepository(BaseRepository):
 
     async def update_last_seen(self, nick: str, network: str):
         """Updates the activity timestamp for a character."""
-        async with self.async_session() as session:
-            char = await self.get_character_by_nick(nick, network, session)
-            if char:
-                char.last_seen_at = datetime.datetime.now(datetime.timezone.utc)
-                await session.commit()
+        try:
+            async with self.async_session() as session:
+                char = await self.get_character_by_nick(nick, network, session)
+                if char:
+                    char.last_seen_at = datetime.datetime.now(datetime.timezone.utc)
+                    await session.commit()
+        except Exception:
+            pass
 
     async def update_activity_stats(self, nick: str, network: str, chat_inc: int, idle_sec: float):
         """Updates persistent activity stats (idle time and chat count)."""
-        async with self.async_session() as session:
-            char = await self.get_character_by_nick(nick, network, session)
-            if char:
-                char.total_chat_messages += chat_inc
-                char.total_idle_seconds += idle_sec
-                char.last_seen_at = datetime.datetime.now(datetime.timezone.utc)
-                await session.commit()
+        try:
+            async with self.async_session() as session:
+                char = await self.get_character_by_nick(nick, network, session)
+                if char:
+                    char.total_chat_messages += chat_inc
+                    char.total_idle_seconds += idle_sec
+                    char.last_seen_at = datetime.datetime.now(datetime.timezone.utc)
+                    await session.commit()
+        except Exception:
+            pass

@@ -186,7 +186,7 @@ Your next command:"""
         return f"{PREFIX} defend"
 
 class AutomataBot:
-    def __init__(self):
+    def __init__(self, config=None):
         self.writer = None
         self.reader = None
         self.char_data = load_character()
@@ -199,10 +199,33 @@ class AutomataBot:
         self.recovery_attempts = 0
         self.last_recovery_time = 0
         self.puppet_mode = False
-        self.current_nick = NICK # Initialize with config value
-        self.manager_nick = MANAGER # Primary manager identity
-        self.manager_online = False # Presence bit (WHOIS validated)
+
+        if config and isinstance(config, dict):
+            irc_cfg = config.get("irc", config.get("IRC", {}))
+            self.current_nick = irc_cfg.get("nickname", irc_cfg.get("Nickname", NICK))
+            self.manager_nick = irc_cfg.get("manager_nick", irc_cfg.get("ManagerNick", MANAGER)).lower()
+            self.channel = irc_cfg.get("channel", irc_cfg.get("Channel", CHANNEL))
+            self.nickserv_pass = irc_cfg.get("nickserv_pass", irc_cfg.get("NickServPass", None))
+        else:
+            self.current_nick = NICK
+            self.manager_nick = MANAGER
+            self.channel = CHANNEL
+            self.nickserv_pass = NICKSERV_PASS or None
+
+        self.manager_online = False
         self.presence_task = None
+
+    def send_raw(self, line: str):
+        if self.writer:
+            asyncio.create_task(self.send(line))
+
+    def _on_registered(self, numeric: str, msg: str):
+        if self.nickserv_pass:
+            self.send_raw(f"PRIVMSG NickServ :IDENTIFY {self.nickserv_pass}")
+
+    def _on_notice(self, source: str, hostmask: str, msg: str):
+        if source.lower() == "nickserv" and "identify" in msg.lower() and self.nickserv_pass:
+            self.send_raw(f"PRIVMSG NickServ :IDENTIFY {self.nickserv_pass}")
 
     def record_memory(self, msg):
         if "Awaiting public commands" in msg:

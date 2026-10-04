@@ -55,35 +55,37 @@ logger.addHandler(ch)
 
 
 class Entity:
-    def __init__(self, name, db_record, is_npc=False):
+    def __init__(self, name, db_record=None, is_npc=False, **kwargs):
         self.name = name
         self.is_npc = is_npc
+        if db_record is None:
+            db_record = {}
         # v1.8.0: Starting stats are 1
-        self.cpu = db_record.get('cpu', 1)
-        self.ram = db_record.get('ram', 1)
-        self.bnd = db_record.get('bnd', 1)
-        self.sec = db_record.get('sec', 1)
-        self.alg = db_record.get('alg', 1)
-        self.bio = db_record.get('bio', 'A rogue process.' if is_npc else 'A mindless drone.')
+        self.cpu = kwargs.get('cpu', db_record.get('cpu', 1))
+        self.ram = kwargs.get('ram', db_record.get('ram', 1))
+        self.bnd = kwargs.get('bnd', db_record.get('bnd', 1))
+        self.sec = kwargs.get('sec', db_record.get('sec', 1))
+        self.alg = kwargs.get('alg', db_record.get('alg', 1))
+        self.bio = kwargs.get('bio', db_record.get('bio', 'A rogue process.' if is_npc else 'A mindless drone.'))
         
         try:
-            self.inventory = json.loads(db_record.get('inventory', '[]'))
+            self.inventory = json.loads(db_record.get('inventory', '[]')) if isinstance(db_record.get('inventory'), str) else (kwargs.get('inventory') or [])
         except:
             self.inventory = []
             
         # v1.8.1: HP = (SumStats * 6) + 20 (Calibrated for 6-10 STK)
         total_stats = self.cpu + self.ram + self.bnd + self.sec + self.alg
-        self.max_hp = (total_stats * 6) + 20
-        self.hp = self.max_hp
+        self.max_hp = kwargs.get('max_hp', db_record.get('max_hp', (total_stats * 6) + 20))
+        self.hp = kwargs.get('hp', db_record.get('hp', self.max_hp))
         
         # v1.8.0: Unit Power (uP) and Stability
-        self.up = db_record.get('power', 100) # Current Unit Power
-        self.max_up = 1000 # Default cap for Arena encounters, though uncapped in persistence
-        self.stability = 100.0 # Percentage
+        self.up = kwargs.get('up', db_record.get('power', 100)) # Current Unit Power
+        self.max_up = kwargs.get('max_up', 1000) # Default cap for Arena encounters, though uncapped in persistence
+        self.stability = kwargs.get('stability', 100.0) # Percentage
         
-        self.alignment = db_record.get('alignment', 0)
-        self.zone = "The_Arena" 
-        self.status = "Normal" 
+        self.alignment = kwargs.get('alignment', db_record.get('alignment', 0))
+        self.zone = kwargs.get('zone', "The_Arena")
+        self.status = kwargs.get('status', "Normal")
         self.command_queued = None
         self.last_attacker_name = None
         logger.debug(f"Entity '{self.name}' initialized. HP: {self.hp}/{self.max_hp}, UP: {self.up}, NPC: {self.is_npc}")
@@ -91,6 +93,10 @@ class Entity:
     @property
     def is_alive(self):
         return self.hp > 0
+
+    @property
+    def alive(self):
+        return self.is_alive
 
 class CombatEngine:
     def __init__(self, match_id, network_prefix, send_callback, llm=None):
@@ -292,7 +298,20 @@ class CombatEngine:
             logger.info(f"Match {self.match_id} triggered completion condition.")
         return is_active
 
-    def _execute_attack(self, attacker: Entity, target_name: str, mode: str = "kinetic"):
+    def _execute_attack(self, attacker, target_name: str, mode: str = "kinetic"):
+        if isinstance(attacker, str):
+            attacker = self.entities.get(attacker)
+        if not attacker:
+            return ""
+
+        mode_clean = mode.lower() if isinstance(mode, str) else "kinetic"
+        if mode_clean in ["strike", "kinetic"]:
+            mode = "kinetic"
+        elif mode_clean in ["scan", "cyber"]:
+            mode = "cyber"
+        elif mode_clean in ["exploit"]:
+            mode = "exploit"
+
         # --- SMART TARGETING LOGIC ---
         if not target_name:
             if attacker.last_attacker_name and attacker.last_attacker_name in self.entities:

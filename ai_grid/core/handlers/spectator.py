@@ -115,7 +115,7 @@ async def handle_spectator_drop(node, nickname: str, args: list, reply_target: s
         engine = node.active_engine
         if target in engine.entities:
             ent = engine.entities[target]
-            if ent.alive:
+            if getattr(ent, 'is_alive', getattr(ent, 'alive', False)):
                 effect_desc = ""
                 if item_name == "Nano_Patch":
                     ent.hp = min(ent.max_hp, ent.hp + 50)

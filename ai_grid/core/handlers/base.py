@@ -229,10 +229,21 @@ async def get_action_routing(node, nickname: str, current_target: str):
     Diverts private_target to the player's nickname if they are in machine mode.
     reply_method is determined by character preference (PRIVMSG or NOTICE).
     """
-    prefs = await node.db.get_prefs(nickname, node.net_name)
-    machine_mode = prefs.get('output_mode', 'human') == 'machine'
-    reply_method = prefs.get('msg_type', 'privmsg').upper() # PRIVMSG or NOTICE
-    channel = node.config['channel']
+    prefs = {}
+    if hasattr(node, 'db') and hasattr(node.db, 'get_prefs'):
+        try:
+            res = node.db.get_prefs(nickname, getattr(node, 'net_name', 'default'))
+            if asyncio.iscoroutine(res) or hasattr(res, '__await__'):
+                prefs = await res
+            elif isinstance(res, dict):
+                prefs = res
+        except Exception:
+            prefs = {}
+
+    machine_mode = isinstance(prefs, dict) and prefs.get('output_mode', 'human') == 'machine'
+    reply_method = prefs.get('msg_type', 'privmsg').upper() if isinstance(prefs, dict) else 'PRIVMSG'
+    cfg = getattr(node, 'config', {})
+    channel = cfg.get('channel', '#arena') if isinstance(cfg, dict) else '#arena'
     
     if machine_mode:
         return nickname, channel, True, reply_method

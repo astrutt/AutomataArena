@@ -112,11 +112,12 @@ class SandboxHarness:
             network=self.network_name,
             credits=2000.0,
         )
-        await self.env.create_test_player(
-            nickname=self.admin_nick,
-            network=self.network_name,
-            credits=50000.0,
-        )
+        if self.admin_nick.lower() != self.player_nick.lower():
+            await self.env.create_test_player(
+                nickname=self.admin_nick,
+                network=self.network_name,
+                credits=50000.0,
+            )
 
         # 4. Patch manager and database configs
         sandbox_config = {
@@ -177,6 +178,8 @@ class SandboxHarness:
 
         # Configure outbound pacing (accelerated for test harness)
         if not self.enable_pacing:
+            self.engine_node.flood_config['max_tokens'] = 50.0
+            self.engine_node.flood_config['refill_rate'] = 50.0
             async def _fast_outbound_worker():
                 while True:
                     try:
@@ -233,7 +236,11 @@ class SandboxHarness:
         self._client_drain_task = asyncio.create_task(_drain_client())
         self._background_tasks.append(self._client_drain_task)
 
-        # Brief yield to ensure channel synchronization
+        # Flush initial greetings and channel join announcements
+        for _ in range(20):
+            if self.engine_node.out_queue.empty():
+                break
+            await asyncio.sleep(0.05)
         await asyncio.sleep(0.1)
         self._is_started = True
 
@@ -333,7 +340,9 @@ class SandboxHarness:
 
         while asyncio.get_event_loop().time() - start < timeout:
             for msg in self.irc_server.received_messages[min_index:]:
-                if msg["from"].lower() == expected_nick:
+                if msg["from"].lower() == expected_nick and msg.get("command", "").upper() in ["PRIVMSG", "NOTICE"]:
+                    if "Grid systems nominal" in msg["text"] or "Welcome to the Grid" in msg["text"]:
+                        continue
                     if contains is None or contains in msg["text"]:
                         return msg
 

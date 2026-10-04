@@ -385,3 +385,11 @@ class ArenaBet(Base):
 
     player = relationship("Player")
 
+    @property
+    def bettor_nick(self) -> str:
+        return self.nick
+
+    @property
+    def chosen_fighter(self) -> str:
+        return self.fighter
+
