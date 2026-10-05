@@ -139,7 +139,7 @@ async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1
             'last_refill': now,
             'violations': 0,
             'lockout_until': 0,
-            'last_action': now,
+            'last_action': now if (cooldown > 1 or not consume) else 0.0,
             'warned': False
         }
         return True
@@ -167,15 +167,44 @@ async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1
         record['violations'] = 0
 
     # 4. Check Intervals & Capacity
-    passed_interval = (now - record['last_action']) >= (cooldown - 0.1) # 100ms grace for race conditions
+    passed_interval = (now - record['last_action']) >= (cooldown - 0.1) if cooldown > 1 else True
+
+    # Mode A: consume=False (Check cooldown against last_action, do NOT deduct tokens)
+    if not consume:
+        if not passed_interval and cooldown > 1:
+            if not record['warned']:
+                record['warned'] = True
+                rem = int(cooldown - (now - record['last_action']))
+                
+                # Use verb-specific message if available
+                msg_template = None
+                default_msg = "COOLDOWN: Protocol initialization in progress. Please wait {rem}s."
+                if verb:
+                    msg_template = node.flood_config.get('messages', {}).get(f'cooldown_{verb}')
+                
+                if not msg_template:
+                    msg_template = node.flood_config.get('messages', {}).get('cooldown', default_msg)
+                
+                msg = msg_template.format(rem=rem)
+                private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
+                asyncio.create_task(node.send(f"{reply_method} {private_target} :{tag_msg(format_text(msg, C_YELLOW, is_machine=machine_mode), action='SIGACT', result='FAIL', nick=nick)}"))
+            return False
+        
+        # Cooldown passed
+        if cooldown > 1:
+            record['last_action'] = now
+            record['warned'] = False
+        return True
+
+    # Mode B: consume=True (default - token bucket deduction & steady-state pacing)
     has_token = record['tokens'] >= 1.0
 
     if has_token and passed_interval:
-        if consume:
-            # Success: Consume Token
-            record['tokens'] -= 1.0
+        # Success: Consume Token
+        record['tokens'] -= 1.0
+        if cooldown > 1:
             record['last_action'] = now
-            record['warned'] = False
+        record['warned'] = False
         return True
     
     # 5. Failure: Flood Detected

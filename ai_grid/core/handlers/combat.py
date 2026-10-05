@@ -66,7 +66,7 @@ async def handle_pvp_command(node, nickname: str, reply_target: str, action: str
         await node.send(f"PRIVMSG {reply_target} :{tag_msg(msg, action='COMBAT', result='FAIL', nick=nickname)}")
         return
 
-    if not await check_rate_limit(node, nickname, reply_target, cooldown=10, consume=False): return
+    if not await check_rate_limit(node, nickname, reply_target, cooldown=30, consume=False, verb="pvp"): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
     
     res = None
