@@ -1,8 +1,11 @@
-# core.py
 import os
 import json
 import logging
+import datetime
+from datetime import timezone
+from sqlalchemy import Column, Integer, String, Float, DateTime, UniqueConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from ai_grid.models import Base, AwareDateTime
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
@@ -144,3 +147,50 @@ async def increment_daily_task(session, char, task_key):
         
     char.daily_tasks = json.dumps(tasks)
     return reward_msg
+
+
+# ==========================================
+# SPECTATOR SYSTEM MODEL (v1.5.0)
+# ==========================================
+class Spectator(Base):
+    __tablename__ = 'spectators'
+    __table_args__ = (
+        UniqueConstraint('nick', 'network', name='uq_spectators_nick_network'),
+    )
+
+    id = Column(Integer, primary_key=True)
+    nick = Column(String, nullable=False)
+    network = Column(String, nullable=False)
+    xp = Column(Integer, default=0, nullable=False)
+    credits = Column(Float, default=0.0, nullable=False)
+    idle_hours = Column(Float, default=0.0, nullable=False)
+    message_count = Column(Integer, default=0, nullable=False)
+    lifetime_messages = Column(Integer, default=0, nullable=False)
+    last_seen = Column(AwareDateTime, default=lambda: datetime.datetime.now(timezone.utc), nullable=False)
+    joined_at = Column(AwareDateTime, default=lambda: datetime.datetime.now(timezone.utc), nullable=False)
+    created_at = Column(AwareDateTime, default=lambda: datetime.datetime.now(timezone.utc), nullable=False)
+
+    def __getitem__(self, item):
+        return getattr(self, item)
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def get(self, key, default=None):
+        return getattr(self, key, default)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nick': self.nick,
+            'network': self.network,
+            'xp': self.xp,
+            'credits': self.credits,
+            'idle_hours': self.idle_hours,
+            'message_count': self.message_count,
+            'lifetime_messages': self.lifetime_messages,
+            'last_seen': self.last_seen,
+            'joined_at': self.joined_at,
+            'created_at': self.created_at,
+        }
+

@@ -163,7 +163,7 @@ async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1
     record['last_refill'] = now
 
     # 3. Violation Decay (Good Behavior)
-    if now - record['last_action'] > 60:
+    if record['last_action'] > 0 and now - record['last_action'] > 60:
         record['violations'] = 0
 
     # 4. Check Intervals & Capacity

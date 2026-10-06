@@ -2,6 +2,8 @@
 import asyncio
 import logging
 import time
+import datetime
+from datetime import timezone
 import random
 from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW
 
@@ -345,3 +347,137 @@ async def incursion_event_loop(node):
             break
         except Exception as e:
             logger.error(f"Incursion loop error on {node.net_name}: {e}")
+
+async def distribute_spectator_payout(node):
+    """
+    Executes passive accrual payout to active spectators (seen within past 90 minutes).
+    Base XP (10), Base Credits (5),
+    Chat bonus (+2 credits per 10 messages since last payout, capped at +20),
+    Idle bonus (+1 XP per hour of session time).
+    Atomically commits rewards, increments idle hours by 1.0, resets message count,
+    and broadcasts summary notice to the channel:
+    '[GRID DIVIDEND] Hourly accrual distributed to N spectators.'
+    """
+    try:
+        repo = getattr(node.db, 'spectator_repo', None)
+        if repo is None:
+            from ai_grid.database.spectator_repo import SpectatorRepository
+            repo = SpectatorRepository(node.db.async_session)
+
+        net_name = getattr(node, 'net_name', None)
+        if net_name:
+            active_res = repo.get_all_active(network=net_name, since_minutes=90)
+        else:
+            active_res = repo.get_all_active(since_minutes=90)
+
+        if asyncio.iscoroutine(active_res) or hasattr(active_res, '__await__'):
+            active_spectators = await active_res
+        else:
+            active_spectators = active_res
+
+        if not active_spectators:
+            return 0
+
+        now_utc = datetime.datetime.now(timezone.utc)
+        paid_count = 0
+        for spec in active_spectators:
+            try:
+                # Base XP (10), Base Credits (5)
+                base_xp = 10
+                base_credits = 5.0
+
+                # Chat bonus (+2 credits per full 10 messages, capped at +20)
+                raw_msgs = spec.get('message_count', 0) if isinstance(spec, dict) else getattr(spec, 'message_count', 0)
+                try:
+                    msg_count = int(raw_msgs)
+                except (TypeError, ValueError):
+                    msg_count = 0
+                chat_bonus = min(20.0, (msg_count // 10) * 2.0)
+
+                # Idle bonus (+1 XP per hour of session time)
+                session_hours = 0.0
+                raw_joined = spec.get('joined_at') if isinstance(spec, dict) else getattr(spec, 'joined_at', None)
+                if isinstance(raw_joined, datetime.datetime):
+                    if raw_joined.tzinfo is None:
+                        raw_joined = raw_joined.replace(tzinfo=timezone.utc)
+                    session_hours = max(0.0, (now_utc - raw_joined).total_seconds() / 3600.0)
+
+                raw_idle = spec.get('idle_hours', 0.0) if isinstance(spec, dict) else getattr(spec, 'idle_hours', 0.0)
+                try:
+                    idle_hrs = float(raw_idle)
+                except (TypeError, ValueError):
+                    idle_hrs = 0.0
+                effective_hours = max(session_hours, idle_hrs)
+                idle_bonus = int(effective_hours)
+
+                total_xp = base_xp + idle_bonus
+                total_credits = base_credits + chat_bonus
+
+                nick = spec.get('nick') if isinstance(spec, dict) else getattr(spec, 'nick', '')
+                net = spec.get('network') if isinstance(spec, dict) else getattr(spec, 'network', '')
+                if not nick or not net:
+                    continue
+
+                # Commit payout
+                apply_res = repo.apply_payout(nick, net, total_xp, total_credits)
+                if asyncio.iscoroutine(apply_res) or hasattr(apply_res, '__await__'):
+                    await apply_res
+
+                # Increment idle hours
+                idle_res = repo.record_idle_hours(nick, net, 1.0)
+                if asyncio.iscoroutine(idle_res) or hasattr(idle_res, '__await__'):
+                    await idle_res
+
+                # Reset message count
+                reset_res = repo.reset_message_count(nick, net)
+                if asyncio.iscoroutine(reset_res) or hasattr(reset_res, '__await__'):
+                    await reset_res
+
+                paid_count += 1
+            except Exception as spec_err:
+                logger.error(f"Error processing individual spectator payout: {spec_err}")
+
+        if paid_count == 0:
+            return 0
+
+        summary = f"[GRID DIVIDEND] Hourly accrual distributed to {paid_count} spectators."
+        channel = "#automatagrid"
+        if isinstance(getattr(node, 'config', None), dict) and 'channel' in node.config:
+            channel = node.config['channel']
+        elif hasattr(node, 'channel'):
+            channel = node.channel
+        send_res = node.send(f"PRIVMSG {channel} :{summary}")
+        if asyncio.iscoroutine(send_res) or hasattr(send_res, '__await__'):
+            await send_res
+        return paid_count
+    except Exception as e:
+        logger.error(f"Spectator payout error on {getattr(node, 'net_name', 'node')}: {e}")
+        return 0
+
+async def spectator_payout_loop(node):
+    while True:
+        try:
+            await asyncio.sleep(3600)
+            await distribute_spectator_payout(node)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Spectator payout loop error on {getattr(node, 'net_name', 'node')}: {e}")
+
+def start_loops(node):
+    """Starts all background operational and maintenance loops for the node."""
+    return [
+        asyncio.create_task(hype_loop(node)),
+        asyncio.create_task(ambient_event_loop(node)),
+        asyncio.create_task(arena_call_loop(node)),
+        asyncio.create_task(idle_payout_loop(node)),
+        asyncio.create_task(power_tick_loop(node)),
+        asyncio.create_task(mainframe_loop(node)),
+        asyncio.create_task(auction_loop(node)),
+        asyncio.create_task(economic_ticker_loop(node)),
+        asyncio.create_task(hype_drop_loop(node)),
+        asyncio.create_task(topic_engine_loop(node)),
+        asyncio.create_task(incursion_event_loop(node)),
+        asyncio.create_task(spectator_payout_loop(node)),
+    ]
+

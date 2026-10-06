@@ -23,6 +23,8 @@ class IRCClient:
             }
             self.nickname = self.config['nickname']
             self.channel = self.config['channel']
+        self.spectator_repo = self.config.get('spectator_repo') if isinstance(self.config, dict) else None
+        self.db = self.config.get('db') if isinstance(self.config, dict) else None
         self.reader = None
         self.writer = None
 
@@ -61,6 +63,102 @@ class IRCClient:
     async def part(self, channel: str):
         await self.send(f"PART {channel}")
 
+    def get_spectator_repo(self):
+        if getattr(self, 'spectator_repo', None) is not None:
+            return self.spectator_repo
+        if getattr(self, 'db', None) is not None:
+            if hasattr(self.db, 'spectator_repo'):
+                self.spectator_repo = self.db.spectator_repo
+                return self.spectator_repo
+            from ai_grid.database.spectator_repo import SpectatorRepository
+            self.spectator_repo = SpectatorRepository(self.db.async_session)
+            return self.spectator_repo
+        try:
+            from ai_grid.grid_db import ArenaDB
+            from ai_grid.database.spectator_repo import SpectatorRepository
+            db = ArenaDB()
+            self.spectator_repo = SpectatorRepository(db.async_session)
+            return self.spectator_repo
+        except Exception:
+            return None
+
+    def track_spectator_activity(self, line: str):
+        if not line:
+            return
+        try:
+            prefix = ""
+            rest = line
+            if rest.startswith(":"):
+                prefix, _, rest = rest[1:].partition(" ")
+            trailing = ""
+            if " :" in rest:
+                rest, _, trailing = rest.partition(" :")
+            tokens = rest.split()
+            if not tokens:
+                return
+            command = tokens[0].upper()
+            params = tokens[1:]
+            if trailing:
+                params.append(trailing)
+
+            source_nick = prefix.split("!")[0] if prefix else ""
+            if not source_nick:
+                return
+
+            # Ignore bot nick
+            if source_nick.lower() == (self.nickname or "").lower():
+                return
+
+            # Ignore administrator nicks (config['admins'])
+            raw_admins = []
+            if isinstance(self.config, dict):
+                raw_admins = self.config.get('admins', [])
+            if isinstance(raw_admins, str):
+                admin_nicks = [a.strip().lower() for a in raw_admins.split(',') if a.strip()]
+            elif isinstance(raw_admins, (list, set, tuple)):
+                admin_nicks = [str(a).strip().lower() for a in raw_admins if str(a).strip()]
+            else:
+                admin_nicks = []
+
+            if source_nick.lower() in admin_nicks:
+                return
+
+            game_channel = (self.channel or "").lower()
+
+            if command == "PRIVMSG" and params:
+                target = params[0].lstrip(":").lower()
+                if target == game_channel:
+                    asyncio.create_task(self._track_privmsg_spectator(source_nick))
+            elif command == "JOIN" and params:
+                target = params[0].lstrip(":").lower()
+                if target == game_channel:
+                    asyncio.create_task(self._track_join_spectator(source_nick))
+        except Exception as e:
+            logger.error(f"Error tracking spectator in IRCClient: {e}")
+
+    async def _track_privmsg_spectator(self, nick: str):
+        try:
+            repo = self.get_spectator_repo()
+            if repo:
+                res1 = repo.upsert_spectator(nick, self.net_name)
+                if asyncio.iscoroutine(res1) or hasattr(res1, '__await__'):
+                    await res1
+                res2 = repo.record_message(nick, self.net_name)
+                if asyncio.iscoroutine(res2) or hasattr(res2, '__await__'):
+                    await res2
+        except Exception as e:
+            logger.error(f"Spectator PRIVMSG tracking error for {nick}: {e}")
+
+    async def _track_join_spectator(self, nick: str):
+        try:
+            repo = self.get_spectator_repo()
+            if repo:
+                res = repo.upsert_spectator(nick, self.net_name)
+                if asyncio.iscoroutine(res) or hasattr(res, '__await__'):
+                    await res
+        except Exception as e:
+            logger.error(f"Spectator JOIN tracking error for {nick}: {e}")
+
     def is_connected(self):
         return self.reader is not None and self.writer is not None
 
@@ -71,7 +169,10 @@ class IRCClient:
             line = await self.reader.readline()
             if not line:
                 return None
-            return line.decode('utf-8', errors='ignore').strip()
+            decoded = line.decode('utf-8', errors='ignore').strip()
+            if decoded:
+                self.track_spectator_activity(decoded)
+            return decoded
         except Exception as e:
             logger.error(f"Error reading from {self.net_name}: {e}")
             return None

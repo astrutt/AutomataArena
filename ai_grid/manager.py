@@ -66,6 +66,10 @@ class GridNode:
         self.hub = hub
         self.prefix = self.config.get('cmd_prefix', 'x').strip().lower() 
         self.irc = IRCClient(net_name, self.config)
+        if self.db:
+            self.irc.db = self.db
+            if hasattr(self.db, 'spectator_repo'):
+                self.irc.spectator_repo = self.db.spectator_repo
         
         self.active_engine = None
         self.match_queue = [] 
@@ -251,6 +255,7 @@ class GridNode:
         asyncio.create_task(loops.hype_drop_loop(self))
         asyncio.create_task(loops.topic_engine_loop(self))
         asyncio.create_task(loops.incursion_event_loop(self))
+        asyncio.create_task(loops.spectator_payout_loop(self))
         await self.db.seed_grid_expansion()
         await self.listen_loop()
 

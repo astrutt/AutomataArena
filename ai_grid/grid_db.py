@@ -38,6 +38,8 @@ from ai_grid.database.repositories.minigame_repo import MiniGameRepository
 from ai_grid.database.repositories.combat_repo import CombatRepository
 from ai_grid.database.repositories.pulse_repo import PulseRepository
 from ai_grid.database.repositories.spectator_repo import SpectatorRepository
+from ai_grid.database.spectator_repo import SpectatorRepository as SpectatorCoreRepository
+from ai_grid.database.core import Spectator
 from ai_grid.database.repositories.incursion_repo import IncursionRepository
 from ai_grid.database.repositories.expansion_repo import ExpansionRepository
 from ai_grid.database.repositories.betting_repo import BettingRepository
@@ -59,6 +61,7 @@ class ArenaDB:
         self.mainframe = MainframeRepository(self.async_session)
         self.minigame = MiniGameRepository(self.async_session)
         self.spectator = SpectatorRepository(self.async_session)
+        self.spectator_repo = SpectatorCoreRepository(self.async_session)
         self.betting = BettingRepository(self.async_session)
         
         # Grid domains
@@ -531,6 +534,15 @@ class ArenaDB:
     async def rename_spectator_rank(self, name, net, title): return await self.spectator.rename_rank(name, net, title)
     async def collect_daily_spectator_bonus(self, name, net): return await self.spectator.award_daily_dividend(name, net)
     async def award_daily_dividend(self, name, net): return await self.spectator.award_daily_dividend(name, net)
+
+    # Spectator System (v1.5.0 core passive accrual)
+    async def upsert_spectator(self, nick, net): return await self.spectator_repo.upsert_spectator(nick, net)
+    async def record_spectator_message(self, nick, net): return await self.spectator_repo.record_message(nick, net)
+    async def get_spectator(self, nick, net): return await self.spectator_repo.get_spectator(nick, net)
+    async def get_all_active_spectators(self, *a, **k): return await self.spectator_repo.get_all_active(*a, **k)
+    async def apply_spectator_payout(self, nick, net, xp, credits): return await self.spectator_repo.apply_payout(nick, net, xp, credits)
+    async def record_spectator_idle_hours(self, nick, net, hours=1.0): return await self.spectator_repo.record_idle_hours(nick, net, hours)
+    async def reset_spectator_message_count(self, nick, net): return await self.spectator_repo.reset_message_count(nick, net)
 
     # Arena Gambling (v2.0)
     async def place_bet(self, *a, **k): return await self.betting.place_bet(*a, **k)

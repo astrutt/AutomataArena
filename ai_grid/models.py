@@ -393,3 +393,9 @@ class ArenaBet(Base):
     def chosen_fighter(self) -> str:
         return self.fighter
 
+# Register Spectator with Base.metadata
+try:
+    from ai_grid.database.core import Spectator
+except ImportError:
+    pass
+

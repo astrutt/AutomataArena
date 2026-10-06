@@ -2,6 +2,8 @@
 import asyncio
 import logging
 import time
+import datetime
+from datetime import timezone
 import ai_grid.core.handlers as handlers
 from ai_grid.grid_utils import format_text, tag_msg, C_CYAN, C_YELLOW, C_GREEN, C_RED
 from ai_grid.core.validation import (
@@ -50,8 +52,14 @@ class CommandRouter:
                     active_engine.queue_command(source_nick, msg)
                     return
 
-        # Handle Game Commands (prefixed with x)
-        if msg.lower().startswith(f"{prefix} "):
+        # Handle Game Commands (prefixed with configured prefix or !a)
+        matched_prefix = None
+        for p in [prefix, "!a"]:
+            if msg.lower().startswith(f"{p} "):
+                matched_prefix = p
+                break
+
+        if matched_prefix:
             parts = msg.split()
             if len(parts) < 2: return
             verb = parts[1].lower()
@@ -181,20 +189,21 @@ class CommandRouter:
             elif verb in ["leaderboard", "highrollers", "top"]:
                 asyncio.create_task(handlers.handle_leaderboard(self.node, source_nick, args, reply_target))
 
-            # --- PHASE 6: MAP ---
-            elif verb == "spectator":
-                if not args:
-                    asyncio.create_task(handlers.handle_spectator_view(self.node, source_nick, args, reply_target))
+            # --- PHASE 6: MAP & SPECTATOR ---
+            elif verb == "spectator" or (verb == "a" and len(args) > 0 and args[0].lower() == "spectator"):
+                spec_args = args[1:] if verb == "a" else args
+                if not spec_args:
+                    asyncio.create_task(self.handle_spectator_session_command(source_nick))
                 else:
-                    sub = args[0].lower()
+                    sub = spec_args[0].lower()
                     if sub == "stats":
-                        asyncio.create_task(handlers.handle_spectator_stats(self.node, source_nick, args[1:], reply_target))
+                        asyncio.create_task(self.handle_spectator_stats_command(source_nick))
                     elif sub == "drop":
-                        asyncio.create_task(handlers.handle_spectator_drop(self.node, source_nick, args[1:], reply_target))
+                        asyncio.create_task(handlers.handle_spectator_drop(self.node, source_nick, spec_args[1:], reply_target))
                     elif sub == "inventory":
                         asyncio.create_task(handlers.handle_spectator_inventory(self.node, source_nick, reply_target))
                     else:
-                        asyncio.create_task(handlers.handle_spectator_view(self.node, source_nick, args, reply_target))
+                        asyncio.create_task(self.handle_spectator_session_command(source_nick))
             elif verb == "drop":
                 asyncio.create_task(handlers.handle_spectator_drop(self.node, source_nick, args, reply_target))
             elif verb == "help":
@@ -309,3 +318,100 @@ class CommandRouter:
         elif self.node.active_engine and self.node.active_engine.active:
             if source_nick in self.node.active_engine.entities and self.node.active_engine.entities[source_nick].is_alive:
                 self.node.active_engine.queue_command(source_nick, msg)
+
+    async def handle_spectator_session_command(self, source_nick: str):
+        try:
+            repo = getattr(self.node.db, 'spectator_repo', None)
+            if repo is None:
+                from ai_grid.database.spectator_repo import SpectatorRepository
+                repo = SpectatorRepository(self.node.db.async_session)
+
+            spec_res = repo.upsert_spectator(source_nick, self.node.net_name)
+            if asyncio.iscoroutine(spec_res) or hasattr(spec_res, '__await__'):
+                spec = await spec_res
+            else:
+                spec = spec_res
+
+            now_utc = datetime.datetime.now(timezone.utc)
+            elapsed_seconds = 0.0
+            raw_joined = spec.get('joined_at') if isinstance(spec, dict) else getattr(spec, 'joined_at', None)
+            if isinstance(raw_joined, datetime.datetime):
+                if raw_joined.tzinfo is None:
+                    raw_joined = raw_joined.replace(tzinfo=datetime.timezone.utc)
+                elapsed_seconds = max(0.0, (now_utc - raw_joined).total_seconds())
+
+            nick_lower = source_nick.lower()
+            if hasattr(self.node, 'channel_users') and isinstance(self.node.channel_users, dict) and nick_lower in self.node.channel_users:
+                c_data = self.node.channel_users[nick_lower]
+                if isinstance(c_data, dict) and 'join_time' in c_data:
+                    try:
+                        c_elapsed = max(0.0, time.time() - float(c_data['join_time']))
+                        elapsed_seconds = max(elapsed_seconds, c_elapsed)
+                    except (TypeError, ValueError):
+                        pass
+
+            elapsed_time = str(datetime.timedelta(seconds=int(elapsed_seconds)))
+            raw_count = spec.get('message_count', 0) if isinstance(spec, dict) else getattr(spec, 'message_count', 0)
+            try:
+                count = int(raw_count)
+            except (TypeError, ValueError):
+                count = 0
+
+            hours = elapsed_seconds / 3600.0
+            rate = (count / hours) if hours > 0 else 0.0
+            msg = f"[SPECTATOR] {source_nick} | Session: {elapsed_time} | Messages: {count} | Rate: {rate:.1f}"
+            send_res = self.node.send(f"PRIVMSG {source_nick} :{msg}")
+            if asyncio.iscoroutine(send_res) or hasattr(send_res, '__await__'):
+                await send_res
+        except Exception as e:
+            logger.error(f"Error handling spectator command for {source_nick}: {e}")
+
+    async def handle_spectator_stats_command(self, source_nick: str):
+        try:
+            repo = getattr(self.node.db, 'spectator_repo', None)
+            if repo is None:
+                from ai_grid.database.spectator_repo import SpectatorRepository
+                repo = SpectatorRepository(self.node.db.async_session)
+
+            spec_res = repo.upsert_spectator(source_nick, self.node.net_name)
+            if asyncio.iscoroutine(spec_res) or hasattr(spec_res, '__await__'):
+                spec = await spec_res
+            else:
+                spec = spec_res
+
+            raw_xp = spec.get('xp', 0) if isinstance(spec, dict) else getattr(spec, 'xp', 0)
+            try:
+                xp = int(raw_xp)
+            except (TypeError, ValueError):
+                xp = 0
+
+            raw_creds = spec.get('credits', 0.0) if isinstance(spec, dict) else getattr(spec, 'credits', 0.0)
+            try:
+                creds_f = float(raw_creds)
+                creds = int(creds_f) if creds_f.is_integer() else creds_f
+            except (TypeError, ValueError):
+                creds = 0
+
+            raw_idle = spec.get('idle_hours', 0.0) if isinstance(spec, dict) else getattr(spec, 'idle_hours', 0.0)
+            try:
+                idle_hours = float(raw_idle)
+            except (TypeError, ValueError):
+                idle_hours = 0.0
+
+            raw_lifetime = None
+            if isinstance(spec, dict):
+                raw_lifetime = spec.get('lifetime_messages', spec.get('message_count', 0))
+            else:
+                raw_lifetime = getattr(spec, 'lifetime_messages', getattr(spec, 'message_count', 0))
+            try:
+                lifetime_msgs = int(raw_lifetime)
+            except (TypeError, ValueError):
+                lifetime_msgs = 0
+
+            msg = f"[SPECTATOR STATS] {source_nick} | XP: {xp} | Credits: {creds}c | Idle Hours: {idle_hours:.1f}h | Messages (lifetime): {lifetime_msgs}"
+            send_res = self.node.send(f"PRIVMSG {source_nick} :{msg}")
+            if asyncio.iscoroutine(send_res) or hasattr(send_res, '__await__'):
+                await send_res
+        except Exception as e:
+            logger.error(f"Error handling spectator stats command for {source_nick}: {e}")
+

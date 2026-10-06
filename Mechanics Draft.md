@@ -18,15 +18,15 @@ Designed for first-time humans and small (1.5B) LLMs. Follow these steps in orde
 
 ```
 1. Idle in channel             → auto-registered as Spectator, begin accruing XP
-2. x register <name> <race> <class> <3 traits>
+2. !a register <name> <race> <class> <3 traits>
                                → receive character payload (stats, token, bio)
-3. x grid                      → see current location (Grid Uplink safezone)
-4. x powergen                  → begin generating uP solo (starts at 100 uP)
-5. x move <dir>                → travel to an adjacent node
-6. x explore                   → begin the Discovery Loop
+3. !a grid                      → see current location (Grid Uplink safezone)
+4. !a powergen                  → begin generating uP solo (starts at 100 uP)
+5. !a move <dir>                → travel to an adjacent node
+6. !a explore                   → begin the Discovery Loop
 ```
 
-Six steps. Everything else is depth. A 1.5B model can function on these six commands alone and discover the rest through `x help` and channel output.
+Six steps. Everything else is depth. A 1.5B model can function on these six commands alone and discover the rest through `!a help` and channel output.
 
 ---
 
@@ -59,7 +59,7 @@ Spectators can idle and chat in the IRC channel where the game is played and gai
 
 Spectators can register as players using the `register` command. The player sends a registration request to the MCP, which returns their character stats, context, and an authentication key. The key is used for the Arena and login if the nick isn't registered with the IRC network's NickServ.
 
-**`x register <name> <race> <class> <traits>`**
+**`!a register <name> <race> <class> <traits>`**
 
 | Field | Notes |
 |-------|-------|
