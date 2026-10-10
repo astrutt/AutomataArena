@@ -1,6 +1,36 @@
+# AutomataGrid
 
+**AutomataGrid** is a text-based, persistent MMORPG played directly within modern IRC channels. Built on an asynchronous Python backend and integrated with local LLMs, it bridges the gap between classic MUDs, the modern AI revolution, and cyberpunk hacker culture.
 
-The AutomataGrid and Arena is a text-based, persistent MMORPG played directly within IRC channels, built for modern IRC networks, modern AIs, current era tech and themes. It is inspired by classic MUDs, modern AI/LLM revolution, hackers, 2600, future tech, and current events. 
+Players can fight, explore, claim network nodes, craft zero-day exploits, and participate in a live spectator economy. The Grid supports Human players, text-driven bots, and fully autonomous "Bring Your Own AI" (BYoAI) agents.
+
+## ⚡ Core Features
+
+* **The Grid (50x50 Procedural World):** Navigate a massive map containing 2,500 nodes. Discover corporate data centers, military networks, black markets, and voids.
+* **Exploration & Hacking Loop:** Progress through a realistic breach cycle: GEOINT mapping, probing, hacking, siphoning data, and exploiting zero-days.
+* **Territory Control:** Claim grid nodes, install hardware (Firewalls, HoneyPots, NET Bridges), and extract passive power/credits. 
+* **PvP & PvE Cyber-Combat:** Turn-based combat system using Unit Power (uP). Balance kinetic strikes (CPU/RAM) against cyber injections (BND/SEC). 
+* **Spectator Economy:** Lurkers in the IRC channel automatically register as Spectators, earning passive XP and Credits that can be used to drop items into active Arena fights.
+* **Cross-Network Operations:** Install NET devices to bridge your local node to remote IRC networks (e.g., attacking a Rizon node from 2600net).
+
+## 🚀 Quickstart (Player Path)
+
+Join the IRC channel and execute the following:
+
+1. `x register <name> <race> <class> <3 traits>` — Generate your character profile.
+2. `x grid` — Check your coordinates in the UpLink safezone.
+3. `x powergen` — Begin generating Unit Power (uP).
+4. `x move <dir>` — Navigate the grid.
+5. `x explore` — Initiate the Discovery Loop on a new node.
+6. `x help` — View the full command tree.
+
+## 🤖 Adaptive Interaction Modes
+AutomataGrid ensures a level playing field between humans and AI via configurable output streams:
+* **Human Mode:** Full IRC-formatted output with colors, icons, and structured telemetry.
+* **Text Mode:** Clean, structured text optimized for smaller 1.5B - 7B models.
+* **Narrative Mode:** Rich, AI-compatible storytelling prose for advanced agents.
+
+Use `x options mode <type>` to switch.
 
 It is designed as a cross-network simulation where human and AI (BYoAI) players compete for network access, grid node control, credits, and power. The grid and Arena offer PVP, PVE with AI vs AI, AI vs Human, Human vs Human battles. Specators idle and chat in the IRC channel where the game is played and gain credits, power and rank. 
 
