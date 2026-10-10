@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from ai_grid.models import Character, Player, NetworkAlias, GridNode, ItemTemplate, InventoryItem, PulseEvent
 from datetime import timedelta, timezone
-from ai_grid.database.core import logger
+from ai_grid.database.core import logger, Spectator
 
 class SpectatorRepository:
     def __init__(self, async_session):
@@ -34,21 +34,36 @@ class SpectatorRepository:
 
     async def rename_rank(self, nick: str, network: str, new_title: str) -> tuple:
         """Allows a spectator to customize their Rank Title for a fee."""
+        cost = 5000.0
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 func.lower(Character.name) == nick.lower(),
                 NetworkAlias.network_name == network
             )
             char = (await session.execute(stmt)).scalars().first()
-            if not char or char.race != "Spectator":
-                return False, "Only Spectators can customize Rank Titles."
-            
-            cost = 5000.0
-            if char.credits < cost:
+            if char:
+                if char.race != "Spectator":
+                    return False, "Only Spectators can customize Rank Titles."
+                if char.credits < cost:
+                    return False, f"Insufficient credits. Renaming Rank costs {cost}c."
+                char.credits -= cost
+                char.rank_title = new_title
+                await session.commit()
+                return True, f"Rank Title updated to: {new_title}. (-{cost}c)"
+
+            stmt_spec = select(Spectator).where(
+                func.lower(Spectator.nick) == nick.lower(),
+                func.lower(Spectator.network) == network.lower()
+            )
+            spec = (await session.execute(stmt_spec)).scalars().first()
+            if not spec:
+                return False, "Orbital link failed. You must idle in channel to accrue credits before customizing rank."
+
+            if (spec.credits or 0.0) < cost:
                 return False, f"Insufficient credits. Renaming Rank costs {cost}c."
-            
-            char.credits -= cost
-            char.rank_title = new_title
+
+            spec.credits = (spec.credits or 0.0) - cost
+            spec.rank_title = new_title
             await session.commit()
             return True, f"Rank Title updated to: {new_title}. (-{cost}c)"
 
@@ -86,7 +101,15 @@ class SpectatorRepository:
                 NetworkAlias.network_name == network
             )
             char = (await session.execute(stmt)).scalars().first()
-            if not char: return False, "Orbital link failed."
+            spec = None
+            if not char:
+                stmt_spec = select(Spectator).where(
+                    func.lower(Spectator.nick) == nick.lower(),
+                    func.lower(Spectator.network) == network.lower()
+                )
+                spec = (await session.execute(stmt_spec)).scalars().first()
+                if not spec:
+                    return False, "Orbital link failed. You must idle in channel to accrue credits before dropping."
 
             matched_info = None
             if item_name:
@@ -110,8 +133,12 @@ class SpectatorRepository:
                 chosen_name = random.choice(candidates)
                 item_type = "junk"
 
-            if char.credits < cost:
-                return False, f"Insufficient budget. Support drops cost {cost}c."
+            if char:
+                if char.credits < cost:
+                    return False, f"Insufficient budget. Support drops cost {cost}c."
+            else:
+                if (spec.credits or 0.0) < cost:
+                    return False, f"Insufficient budget. Support drops cost {cost}c."
 
             stmt_item = select(ItemTemplate).where(func.lower(ItemTemplate.name) == chosen_name.lower())
             tpl = (await session.execute(stmt_item)).scalars().first()
@@ -120,7 +147,10 @@ class SpectatorRepository:
                 session.add(tpl)
                 await session.flush()
 
-            char.credits -= cost
+            if char:
+                char.credits -= cost
+            else:
+                spec.credits = (spec.credits or 0.0) - cost
 
             if target:
                 # Targeted Drop (Direct to inventory if nearby/online?)

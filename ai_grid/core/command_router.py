@@ -5,6 +5,8 @@ import time
 import datetime
 from datetime import timezone
 import ai_grid.core.handlers as handlers
+import ai_grid.core.handlers.spectator as _spectator_handler
+handlers.handle_spectator_rename = _spectator_handler.handle_spectator_rename
 from ai_grid.grid_utils import format_text, tag_msg, C_CYAN, C_YELLOW, C_GREEN, C_RED
 from ai_grid.core.validation import (
     validate_nickname, validate_node_name, validate_direction,
@@ -202,6 +204,8 @@ class CommandRouter:
                         asyncio.create_task(handlers.handle_spectator_drop(self.node, source_nick, spec_args[1:], reply_target))
                     elif sub == "inventory":
                         asyncio.create_task(handlers.handle_spectator_inventory(self.node, source_nick, reply_target))
+                    elif sub == "rename":
+                        asyncio.create_task(handlers.handle_spectator_rename(self.node, source_nick, spec_args[1:], reply_target))
                     else:
                         asyncio.create_task(self.handle_spectator_session_command(source_nick))
             elif verb == "drop":

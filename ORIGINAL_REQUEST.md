@@ -21,7 +21,7 @@ Integrity mode: benchmark
 Refactor and harden the existing codebase (`ai_grid`, `ai_player`) to production quality. Apply rigorous cybersecurity practices, including input validation, bot command security, RBAC refinements, and error handling. Ensure the architecture can safely support untrusted input from human and AI IRC clients.
 
 ### R2. Complete Pending Game Mechanics
-Implement the essential uncompleted features required for a polished V1 experience (drawing from `TODO.md`): NickServ support, dynamic LLM-driven procedural battle reporting, spectator item drops, in-IRC arena gambling, community node renaming, and the probe vs. explore mechanics.
+Implement the essential uncompleted features required for a polished V1 experience (drawing from `TODO.md`and `Mechanics Draft.md`): NickServ support, dynamic LLM-driven procedural battle reporting, spectator item drops, in-IRC arena gambling, community node renaming, and the probe vs. explore mechanics.
 
 ### R3. Safe Testing Infrastructure
 Create a local sandbox mode or mock IRC test environment so the engine and its mechanics can be safely tested and verified without going live on a public IRC network.
@@ -177,3 +177,105 @@ In `ai_grid/core/command_router.py`, handle `!a spectator` and `!a spectator sta
 ### Test Verification
 - [ ] New comprehensive test suite `tests/test_spectator.py` passes all unit tests for model, repository, payout formula, and command routing.
 - [ ] Full regression test suite (`run_tests.py`) passes all 128+ tests with zero failures or errors.
+
+
+## Follow-up — 2026-10-06T06:23:02Z
+
+# AutomataGrid Mechanics Completion
+
+Working directory: /Users/astrutt/teamwork_projects/automata_grid
+Integrity mode: benchmark
+
+> **Quota recovery:** If you encounter a RESOURCE_EXHAUSTED error at any point, use the `schedule` tool to set a 15-minute one-shot timer and resume when it fires. Do NOT abandon partial work.
+
+## Task Summary
+Finish implementing all remaining features from `Mechanics Draft.md` in the AutomataGrid IRC MMORPG engine according to the approved draft.
+
+---
+
+## Gap Analysis & Priority Tasks
+
+### Priority 1 — Spectator System Completions (Section 0)
+The core passive accrual engine is already in place (`ai_grid/database/spectator_repo.py`, `spectator_payout_loop`). Complete the remaining spectator features:
+
+#### 1a. Anonymous Spectator Drops (`spectator drop`)
+- `handle_spectator_drop` in `ai_grid/core/handlers/spectator.py` currently calls `node.db.spectator_drop(nick, ...)` which routes to `repositories/spectator_repo.py::SpectatorRepository.spectator_drop`. That function requires a registered `Character` record.
+- Extend `handle_spectator_drop` (or `SpectatorRepository.spectator_drop`) so that:
+  1. If nick has a registered character -> deduct character credits (existing behavior).
+  2. If nick has NO character but IS in the new `spectators` table (`ai_grid/database/spectator_repo.py`) with sufficient credits (>= cost) -> deduct credits from the `Spectator` row and proceed with the drop.
+  3. If neither -> reply with `"Orbital link failed. You must idle in channel to accrue credits before dropping."`.
+- Do NOT modify `ai_grid/core/handlers/combat.py`, `ai_grid/database/combat_repo.py`, or `ai_grid/database/grid_repo.py`.
+
+#### 1b. Spectator Inventory for Anonymous Spectators (`spectator inventory`)
+- In `handle_spectator_inventory` (`ai_grid/core/handlers/spectator.py`):
+  - If calling nick has a character -> show character inventory (unchanged).
+  - If calling nick has NO character but has a `Spectator` row -> show `"Orbital Storage: No physical inventory (Spectator-only). Credits: {credits:.1f}c | XP: {xp}"`.
+  - Otherwise return appropriate notice.
+
+#### 1c. Spectator Rank Rename Command (`spectator rename <title>`)
+- Add routing in `ai_grid/core/command_router.py` for `spectator rename <title>` -> handler `handle_spectator_rename`.
+- Handler behavior:
+  - If nick has character with `race == "Spectator"` -> call `node.db.spectator.rename_rank(nick, net, new_title)`.
+  - If nick has no character but has a row in new `spectators` table -> deduct 5000c from `Spectator.credits` and update `Spectator.rank_title`.
+  - Reply via PRIVMSG with result.
+
+---
+
+### Priority 2 — Reputation & MCP Heat Skeleton (Section 4 of Draft)
+1. **Database Schema:** Add to `Character` model in `ai_grid/database/core.py` and `ai_grid/models.py`:
+   - `mcp_heat = Column(Float, default=0.0)` — 0–10 scale.
+   - `node_rep = Column(JSON, default=lambda: {})` — dict mapping node type -> float (-100 to +100).
+   - Ensure `init_schema()` initializes or updates cleanly without crashing existing DBs.
+2. **Rep Update Hook:** In `ai_grid/database/repositories/character_repo.py` or new `reputation_repo.py`:
+   - `async def update_rep(self, nick, network, node_type, delta)`: updates `node_rep`, clamps to [-100, 100], applies cross-type consequences:
+     - `MED` attacked -> `LEA` -5, `GOV` -3
+     - `GOV` attacked -> `MIL` -10, Heat +2
+     - `MIL` attacked -> Heat +5, `LEA` -5
+     - `CRP` attacked -> `GOV` -2
+     - `ICS` or `UTL` attacked -> `GOV` -15, `MIL` -10
+   - `async def update_heat(self, nick, network, delta)`: clamps 0-10.
+   - `async def get_rep_summary(self, nick, network)`.
+3. **Facade Delegates:** in `ai_grid/grid_db.py`: `update_rep`, `update_heat`, `get_rep_summary`.
+4. **Command Routing:** Add `!a rep` -> `handle_rep_view` displaying current rep scores and heat in compact table format.
+5. **Passive Grid Trigger:** In `ai_grid/core/handlers/grid.py`, after successful `hack`/`raid`/`exploit`, call `node.db.update_heat(nick, net, delta=+1)` and `node.db.update_rep(nick, net, node_type, delta=-5)`. (Do NOT touch combat handler).
+
+---
+
+### Priority 4 — Data / Vuln / Zero-Day Crafting Chain (Section 7 of Draft)
+1. In `ai_grid/core/command_router.py`:
+   - Route `craft` verb:
+     - `!a craft vuln` -> convert 10 DATA fragments into 1 Vulnerability.
+     - `!a craft zeroday <tier>` -> assemble vulnerabilities into ZeroDay chain:
+       - T1: 50 DATA + 5 Vulns
+       - T2: 200 DATA + 15 Vulns
+       - T3: 500 DATA + 35 Vulns
+       - T4: 1,200 DATA + 80 Vulns
+     - `!a craft` (no args) -> display crafting recipe menu.
+2. Ensure materials are properly validated and deducted, and items granted.
+
+---
+
+### Priority 8 — Node Stash System (Section 5 of Draft)
+1. **Schema:** Add `stash_inventory = Column(JSON, default=lambda: [])` to `GridNode` model in `ai_grid/database/core.py` and `ai_grid/models.py`.
+2. **Repository:** In `ai_grid/database/repositories/territory_repo.py`:
+   - `async def get_stash(self, node_name, nick, network)`: verifies ownership & physical presence at node, returns stash contents.
+   - `async def stash_store(self, node_name, nick, network, item_name)`: verifies ownership & presence, transfers item from player inventory to stash.
+   - `async def stash_take(self, node_name, nick, network, item_name)`: transfers item from stash to player inventory (checking inventory capacity).
+3. **Handler & Routing:**
+   - Create `handle_node_stash(node, nick, args, reply_target)` in `ai_grid/core/handlers/grid.py`.
+   - In `command_router.py`: route `grid stash`, `grid stash store <item>`, `grid stash take <item>`.
+   - Add facade delegate in `grid_db.py`.
+
+---
+
+## Constraints & Guardrails
+- Do NOT modify `ai_grid/core/handlers/combat.py`.
+- Do NOT modify `ai_grid/database/combat_repo.py` or `ai_grid/database/grid_repo.py`.
+- Do NOT touch `AutomataArena/`.
+- Spectator records must remain separate from character records.
+- Python 3.8 compatibility.
+- Sandbox sockets: use mock transports or in-memory SQLite (`aiosqlite`).
+- **Test execution rule (AGENTS.md):**
+  - Run targeted unit tests during development: `python -m pytest tests/test_spectator.py -v`, new targeted unit tests.
+  - Do NOT run `run_tests.py` repeatedly in review loops.
+  - Run `run_tests.py` strictly ONCE during final audit/verification before sign-off.

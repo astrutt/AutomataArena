@@ -10,13 +10,15 @@ import re
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from ai_grid.models import Base
+from ai_grid.models import Base, Character, Player, NetworkAlias, GridNode, PulseEvent, ItemTemplate, InventoryItem
 from ai_grid.database.core import Spectator
 from ai_grid.database.spectator_repo import SpectatorRepository, SpectatorRepo
+from ai_grid.database.repositories.spectator_repo import SpectatorRepository as CharacterSpectatorRepository
 from ai_grid.grid_db import ArenaDB
 from ai_grid.core.irc_client import IRCClient
 from ai_grid.core.loops import spectator_payout_loop, distribute_spectator_payout
 from ai_grid.core.command_router import CommandRouter
+from ai_grid.core.handlers.spectator import handle_spectator_drop, handle_spectator_inventory, handle_spectator_rename
 
 
 class TestSpectatorSchemaAndPersistence(unittest.IsolatedAsyncioTestCase):
@@ -884,6 +886,314 @@ class TestSpectatorAdversarialEdgeCases(unittest.IsolatedAsyncioTestCase):
                     os.remove(db_path)
                 except OSError:
                     pass
+
+
+class TestMilestone1SpectatorCompletions(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db_path = f"test_m1_spec_{int(datetime.datetime.now().timestamp() * 1000)}.db"
+        self.engine = create_async_engine(f"sqlite+aiosqlite:///{self.db_path}", echo=False)
+        self.async_session = async_sessionmaker(self.engine, expire_on_commit=False, class_=AsyncSession)
+
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        # Seed arena node for public drops
+        async with self.async_session() as session:
+            arena = GridNode(name="Arena", node_type="arena")
+            session.add(arena)
+            await session.commit()
+
+        self.char_spec_repo = CharacterSpectatorRepository(self.async_session)
+
+    async def asyncTearDown(self):
+        await self.engine.dispose()
+        if os.path.exists(self.db_path):
+            try:
+                os.remove(self.db_path)
+            except OSError:
+                pass
+
+    async def _create_registered_char(self, nick: str, network: str = "rizon", race: str = "Spectator", credits: float = 10000.0):
+        async with self.async_session() as session:
+            player = Player()
+            session.add(player)
+            await session.flush()
+            alias = NetworkAlias(player_id=player.id, network_name=network, nickname=nick)
+            session.add(alias)
+            char = Character(player_id=player.id, name=nick, race=race, char_class="Spectator", credits=credits, inventory=[])
+            session.add(char)
+            await session.commit()
+
+    async def _create_anonymous_spectator(self, nick: str, network: str = "rizon", credits: float = 10000.0, xp: int = 50):
+        async with self.async_session() as session:
+            spec = Spectator(nick=nick, network=network, credits=credits, xp=xp)
+            session.add(spec)
+            await session.commit()
+
+    # --- 1a: Anonymous Spectator Drops ---
+
+    async def test_spectator_drop_anonymous_sufficient_credits(self):
+        """1a: Anonymous idler with sufficient credits can trigger a spectator drop."""
+        await self._create_anonymous_spectator("AnonDropUser", "rizon", credits=3000.0)
+
+        success, msg = await self.char_spec_repo.spectator_drop("AnonDropUser", "rizon", item_name="Nano_Patch")
+        self.assertTrue(success, f"Drop should succeed: {msg}")
+        self.assertIn("Public Drop Initiated!", msg)
+
+        # Verify credits deducted from Spectator table (3000 - 2500 = 500)
+        async with self.async_session() as session:
+            spec = (await session.execute(select(Spectator).where(Spectator.nick == "AnonDropUser"))).scalars().first()
+            self.assertIsNotNone(spec)
+            self.assertAlmostEqual(spec.credits, 500.0)
+
+            # Verify pulse event created
+            pulse = (await session.execute(select(PulseEvent))).scalars().first()
+            self.assertIsNotNone(pulse)
+            self.assertEqual(pulse.event_type, "PACKET")
+
+    async def test_spectator_drop_anonymous_insufficient_credits(self):
+        """1a: Anonymous idler with insufficient credits fails with budget error."""
+        await self._create_anonymous_spectator("BrokeAnonDrop", "rizon", credits=1000.0)
+
+        success, msg = await self.char_spec_repo.spectator_drop("BrokeAnonDrop", "rizon", item_name="Nano_Patch")
+        self.assertFalse(success)
+        self.assertIn("Insufficient budget. Support drops cost 2500.0c.", msg)
+
+        # Verify credits untouched
+        async with self.async_session() as session:
+            spec = (await session.execute(select(Spectator).where(Spectator.nick == "BrokeAnonDrop"))).scalars().first()
+            self.assertEqual(spec.credits, 1000.0)
+
+    async def test_spectator_drop_neither_character_nor_spectator(self):
+        """1a: Nick with neither character nor spectator row returns exact orbital link failed message."""
+        success, msg = await self.char_spec_repo.spectator_drop("GhostIdler", "rizon")
+        self.assertFalse(success)
+        self.assertEqual(msg, "Orbital link failed. You must idle in channel to accrue credits before dropping.")
+
+    async def test_spectator_drop_registered_character_intact(self):
+        """1a: Registered character drop deducts character credits (existing behavior preserved)."""
+        await self._create_registered_char("RegCharUser", "rizon", race="Spectator", credits=6000.0)
+
+        success, msg = await self.char_spec_repo.spectator_drop("RegCharUser", "rizon", item_name="Battery")
+        self.assertTrue(success)
+
+        # Verify character credits deducted (6000 - 2500 = 3500)
+        async with self.async_session() as session:
+            char = (await session.execute(select(Character).where(Character.name == "RegCharUser"))).scalars().first()
+            self.assertAlmostEqual(char.credits, 3500.0)
+
+    # --- 1b: Spectator Inventory for Anonymous Spectators ---
+
+    async def test_spectator_inventory_anonymous_human_mode_exact_format(self):
+        """1b: Anonymous spectator in human mode receives exact orbital storage string."""
+        node = MagicMock()
+        node.net_name = "rizon"
+        node.send = AsyncMock()
+        node.config = {"channel": "#automatagrid"}
+
+        spec = Spectator(nick="AnonViewer", network="rizon", credits=125.5, xp=40)
+        node.db = MagicMock()
+        node.db.get_player = AsyncMock(return_value=None)
+        node.db.get_spectator = AsyncMock(return_value=spec)
+        node.db.get_prefs = AsyncMock(return_value={"output_mode": "human", "msg_type": "privmsg"})
+
+        await handle_spectator_inventory(node, "AnonViewer", "#automatagrid")
+
+        node.send.assert_called_once()
+        raw_sent = node.send.call_args[0][0]
+        self.assertIn("Orbital Storage: No physical inventory (Spectator-only). Credits: 125.5c | XP: 40", raw_sent)
+
+    async def test_spectator_inventory_anonymous_machine_mode_exact_format(self):
+        """1b: Anonymous spectator in machine mode receives exact ORBITAL_INV tag."""
+        node = MagicMock()
+        node.net_name = "rizon"
+        node.send = AsyncMock()
+        node.config = {"channel": "#automatagrid"}
+
+        spec = Spectator(nick="BotViewer", network="rizon", credits=350.0, xp=75)
+        node.db = MagicMock()
+        node.db.get_player = AsyncMock(return_value=None)
+        node.db.get_spectator = AsyncMock(return_value=spec)
+        node.db.get_prefs = AsyncMock(return_value={"output_mode": "machine", "msg_type": "privmsg"})
+
+        await handle_spectator_inventory(node, "BotViewer", "#automatagrid")
+
+        node.send.assert_called_once()
+        raw_sent = node.send.call_args[0][0]
+        self.assertIn("ORBITAL_INV:SPECTATOR_ONLY CREDITS:350.0 XP:75", raw_sent)
+
+    async def test_spectator_inventory_unregistered_failure_message(self):
+        """1b: User with neither character nor spectator row gets failure notice."""
+        node = MagicMock()
+        node.net_name = "rizon"
+        node.send = AsyncMock()
+        node.config = {"channel": "#automatagrid"}
+
+        node.db = MagicMock()
+        node.db.get_player = AsyncMock(return_value=None)
+        node.db.get_spectator = AsyncMock(return_value=None)
+        node.db.get_prefs = AsyncMock(return_value={})
+
+        await handle_spectator_inventory(node, "GhostUser", "#automatagrid")
+
+        node.send.assert_called_once()
+        raw_sent = node.send.call_args[0][0]
+        self.assertIn("Orbital link failed. You must idle in channel to accrue credits before accessing orbital storage.", raw_sent)
+
+    async def test_spectator_inventory_registered_character_intact(self):
+        """1b: Registered character sees physical inventory (existing behavior preserved)."""
+        node = MagicMock()
+        node.net_name = "rizon"
+        node.send = AsyncMock()
+        node.config = {"channel": "#automatagrid"}
+
+        node.db = MagicMock()
+        node.db.get_player = AsyncMock(return_value={"name": "RegUser", "inventory": '["Nano_Patch", "Battery"]'})
+        node.db.get_prefs = AsyncMock(return_value={"output_mode": "human"})
+
+        await handle_spectator_inventory(node, "RegUser", "#automatagrid")
+
+        node.send.assert_called_once()
+        raw_sent = node.send.call_args[0][0]
+        self.assertIn("Orbital Storage: Nano_Patch, Battery", raw_sent)
+
+    # --- 1c: Spectator Rank Rename Command ---
+
+    async def test_spectator_rename_anonymous_sufficient_credits(self):
+        """1c: Anonymous spectator with >= 5000c deducts 5000c and updates rank_title."""
+        await self._create_anonymous_spectator("RichAnon", "rizon", credits=6500.0)
+
+        success, msg = await self.char_spec_repo.rename_rank("RichAnon", "rizon", "Arch-Observer")
+        self.assertTrue(success)
+        self.assertEqual(msg, "Rank Title updated to: Arch-Observer. (-5000.0c)")
+
+        async with self.async_session() as session:
+            spec = (await session.execute(select(Spectator).where(Spectator.nick == "RichAnon"))).scalars().first()
+            self.assertAlmostEqual(spec.credits, 1500.0)
+            self.assertEqual(spec.rank_title, "Arch-Observer")
+            self.assertEqual(spec.to_dict()["rank_title"], "Arch-Observer")
+
+    async def test_spectator_rename_anonymous_insufficient_credits(self):
+        """1c: Anonymous spectator with < 5000c fails with insufficient credits error."""
+        await self._create_anonymous_spectator("PoorAnonRename", "rizon", credits=2500.0)
+
+        success, msg = await self.char_spec_repo.rename_rank("PoorAnonRename", "rizon", "Supreme-Watcher")
+        self.assertFalse(success)
+        self.assertEqual(msg, "Insufficient credits. Renaming Rank costs 5000.0c.")
+
+        async with self.async_session() as session:
+            spec = (await session.execute(select(Spectator).where(Spectator.nick == "PoorAnonRename"))).scalars().first()
+            self.assertEqual(spec.credits, 2500.0)
+            self.assertIsNone(spec.rank_title)
+
+    async def test_spectator_rename_neither_character_nor_spectator(self):
+        """1c: Nick with neither character nor spectator row returns exact orbital link failed message."""
+        success, msg = await self.char_spec_repo.rename_rank("GhostRenameUser", "rizon", "Shadow")
+        self.assertFalse(success)
+        self.assertEqual(msg, "Orbital link failed. You must idle in channel to accrue credits before customizing rank.")
+
+    async def test_spectator_rename_registered_spectator_success(self):
+        """1c: Registered character of race Spectator can customize rank title for 5000c."""
+        await self._create_registered_char("CharSpectator", "rizon", race="Spectator", credits=7500.0)
+
+        success, msg = await self.char_spec_repo.rename_rank("CharSpectator", "rizon", "Grand Sovereign")
+        self.assertTrue(success)
+        self.assertEqual(msg, "Rank Title updated to: Grand Sovereign. (-5000.0c)")
+
+        async with self.async_session() as session:
+            char = (await session.execute(select(Character).where(Character.name == "CharSpectator"))).scalars().first()
+            self.assertAlmostEqual(char.credits, 2500.0)
+            self.assertEqual(char.rank_title, "Grand Sovereign")
+
+    async def test_spectator_rename_registered_non_spectator_fails(self):
+        """1c: Registered character of non-Spectator race cannot customize rank title."""
+        await self._create_registered_char("HackerChar", "rizon", race="Cyborg", credits=10000.0)
+
+        success, msg = await self.char_spec_repo.rename_rank("HackerChar", "rizon", "Overlord")
+        self.assertFalse(success)
+        self.assertEqual(msg, "Only Spectators can customize Rank Titles.")
+
+    async def test_handle_spectator_rename_handler_missing_title(self):
+        """1c: handle_spectator_rename without title replies with syntax usage."""
+        node = MagicMock()
+        node.net_name = "rizon"
+        node.send = AsyncMock()
+        node.db = MagicMock()
+        node.db.get_prefs = AsyncMock(return_value={})
+
+        await handle_spectator_rename(node, "Alice", [], "#automatagrid")
+
+        node.send.assert_called_once()
+        raw = node.send.call_args[0][0]
+        self.assertIn("Syntax: spectator rename <title> (Cost: 5000c)", raw)
+
+    async def test_handle_spectator_rename_handler_execution(self):
+        """1c: handle_spectator_rename invokes db.spectator.rename_rank and formats reply."""
+        node = MagicMock()
+        node.net_name = "rizon"
+        node.send = AsyncMock()
+        node.db = MagicMock()
+        node.db.get_prefs = AsyncMock(return_value={})
+        node.db.spectator = MagicMock()
+        node.db.spectator.rename_rank = AsyncMock(return_value=(True, "Rank Title updated to: Cosmic Chief. (-5000.0c)"))
+
+        await handle_spectator_rename(node, "Alice", ["Cosmic", "Chief"], "#automatagrid")
+
+        node.db.spectator.rename_rank.assert_called_once_with("Alice", "rizon", "Cosmic Chief")
+        node.send.assert_called_once()
+        raw = node.send.call_args[0][0]
+        self.assertIn("Cosmic Chief", raw)
+
+    async def test_command_routing_spectator_rename(self):
+        """1c: Command router dispatches 'spectator rename <title>' and '!a spectator rename <title>'."""
+        node = MagicMock()
+        node.net_name = "rizon"
+        node.prefix = "!a"
+        node.config = {"nickname": "ArenaMaster", "channel": "#automatagrid"}
+        node.send = AsyncMock()
+        node.channel_users = {}
+        node.active_engine = None
+        node.db = MagicMock()
+        node.db.get_prefs = AsyncMock(return_value={})
+        node.db.spectator = MagicMock()
+        node.db.spectator.rename_rank = AsyncMock(return_value=(True, "Rank Title updated to: Apex Watcher. (-5000.0c)"))
+
+        node.action_timestamps = {}
+        node.flood_config = {
+            'max_tokens': 4.0,
+            'refill_rate': 0.5,
+            'violation_threshold': 5,
+            'lockout_duration': 30,
+            'messages': {}
+        }
+
+        router = CommandRouter(node)
+
+        # Dispatch 1: !a spectator rename Apex Watcher (exercises verb == "spectator")
+        await router.dispatch("Tester1", "PRIVMSG", "#automatagrid", "!a spectator rename Apex Watcher", is_admin=False)
+        await asyncio.sleep(0.05)
+        node.db.spectator.rename_rank.assert_called_with("Tester1", "rizon", "Apex Watcher")
+
+        # Dispatch 2: ! a spectator rename Apex Watcher with prefix ! (exercises verb == "a" and args[0] == "spectator")
+        node.prefix = "!"
+        node.db.spectator.rename_rank.reset_mock()
+        await router.dispatch("Tester2", "PRIVMSG", "#automatagrid", "! a spectator rename Apex Watcher", is_admin=False)
+        await asyncio.sleep(0.05)
+        node.db.spectator.rename_rank.assert_called_with("Tester2", "rizon", "Apex Watcher")
+
+    async def test_spectator_model_rank_title_persistence(self):
+        """1c: Spectator model persists and serializes rank_title."""
+        async with self.async_session() as session:
+            spec = Spectator(nick="SchemaTester", network="rizon", rank_title="High Judge")
+            session.add(spec)
+            await session.commit()
+
+        async with self.async_session() as session:
+            loaded = (await session.execute(select(Spectator).where(Spectator.nick == "SchemaTester"))).scalars().first()
+            self.assertIsNotNone(loaded)
+            self.assertEqual(loaded.rank_title, "High Judge")
+            d = loaded.to_dict()
+            self.assertEqual(d["rank_title"], "High Judge")
 
 
 if __name__ == "__main__":

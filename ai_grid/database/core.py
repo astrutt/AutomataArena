@@ -169,6 +169,7 @@ class Spectator(Base):
     last_seen = Column(AwareDateTime, default=lambda: datetime.datetime.now(timezone.utc), nullable=False)
     joined_at = Column(AwareDateTime, default=lambda: datetime.datetime.now(timezone.utc), nullable=False)
     created_at = Column(AwareDateTime, default=lambda: datetime.datetime.now(timezone.utc), nullable=False)
+    rank_title = Column(String, nullable=True)
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -192,5 +193,7 @@ class Spectator(Base):
             'last_seen': self.last_seen,
             'joined_at': self.joined_at,
             'created_at': self.created_at,
+            'rank_title': self.rank_title,
         }
+
 

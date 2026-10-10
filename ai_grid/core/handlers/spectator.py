@@ -50,10 +50,10 @@ async def handle_spectator_stats(node, nickname: str, args: list, reply_target: 
 async def handle_spectator_help(node, nickname: str, reply_target: str):
     private_target, _, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
     if machine_mode:
-        await node.send(f"{reply_method} {private_target} :{tag_msg('SUB=SPECTATOR CMD=stats,view,drop,inventory', action='HELP', is_machine=True)}")
+        await node.send(f"{reply_method} {private_target} :{tag_msg('SUB=SPECTATOR CMD=stats,view,drop,inventory,rename', action='HELP', is_machine=True)}")
     else:
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('=== [SPECTATOR COMMANDS] ===', C_CYAN, True), action='OSINT', is_machine=False)}")
-        for line in ["spectator view", "spectator stats", "spectator drop <nick>", "spectator inventory"]:
+        for line in ["spectator view", "spectator stats", "spectator drop <nick>", "spectator inventory", "spectator rename <title>"]:
             await node.send(f"{reply_method} {private_target} :{tag_msg(line, action='OSINT', is_machine=False)}")
 
 DROP_ITEM_ALIASES = {
@@ -143,12 +143,69 @@ async def handle_spectator_drop(node, nickname: str, args: list, reply_target: s
 
 async def handle_spectator_inventory(node, nickname: str, reply_target: str):
     char = await node.db.get_player(nickname, node.net_name)
-    if not char: return
     private_target, _, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
-    
-    import json
-    inv = json.loads(char['inventory'])
-    msg = f"ORBITAL_INV:{','.join(inv) if inv else 'EMPTY'}"
-    if not machine_mode:
-        msg = f"Orbital Storage: {', '.join(inv) if inv else 'Empty'}"
-    await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='OSINT', result='INFO', nick=nickname, is_machine=machine_mode)}")
+
+    if char:
+        import json
+        inv_raw = char.get('inventory', []) if isinstance(char, dict) else getattr(char, 'inventory', [])
+        if isinstance(inv_raw, str):
+            try:
+                inv = json.loads(inv_raw)
+            except Exception:
+                inv = []
+        elif isinstance(inv_raw, list):
+            inv = inv_raw
+        else:
+            inv = []
+        msg = f"ORBITAL_INV:{','.join(inv) if inv else 'EMPTY'}"
+        if not machine_mode:
+            msg = f"Orbital Storage: {', '.join(inv) if inv else 'Empty'}"
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='OSINT', result='INFO', nick=nickname, is_machine=machine_mode)}")
+        return
+
+    spec = await node.db.get_spectator(nickname, node.net_name)
+    if spec:
+        credits = getattr(spec, 'credits', 0.0) if hasattr(spec, 'credits') else (spec.get('credits', 0.0) if isinstance(spec, dict) else 0.0)
+        credits = credits or 0.0
+        xp = getattr(spec, 'xp', 0) if hasattr(spec, 'xp') else (spec.get('xp', 0) if isinstance(spec, dict) else 0)
+        xp = xp or 0
+        if machine_mode:
+            msg = f"ORBITAL_INV:SPECTATOR_ONLY CREDITS:{credits:.1f} XP:{xp}"
+        else:
+            msg = f"Orbital Storage: No physical inventory (Spectator-only). Credits: {credits:.1f}c | XP: {xp}"
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='OSINT', result='INFO', nick=nickname, is_machine=machine_mode)}")
+    else:
+        msg = "Orbital link failed. You must idle in channel to accrue credits before accessing orbital storage."
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='ERR', result='FAIL', nick=nickname, is_machine=machine_mode)}")
+
+
+async def handle_spectator_rename(node, nickname: str, args: list, reply_target: str):
+    private_target, _, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
+    if not args or not " ".join(args).strip():
+        err = "Syntax: spectator rename <title> (Cost: 5000c)"
+        if not machine_mode:
+            err = format_text(err, C_YELLOW)
+        await node.send(f"{reply_method} {private_target} :{tag_msg(err, action='ERR', result='FAIL', nick=nickname, is_machine=machine_mode)}")
+        return
+
+    new_title = " ".join(args).strip()
+    if hasattr(node.db, 'spectator') and hasattr(node.db.spectator, 'rename_rank'):
+        success, msg = await node.db.spectator.rename_rank(nickname, node.net_name, new_title)
+    elif hasattr(node.db, 'rename_spectator_rank'):
+        success, msg = await node.db.rename_spectator_rank(nickname, node.net_name, new_title)
+    else:
+        success, msg = False, "Database error: Spectator repository unavailable."
+
+    color = C_GREEN if success else C_RED
+    res_code = "RENAME" if success else "FAIL"
+    if machine_mode:
+        body = msg
+    else:
+        body = format_text(msg, color, bold=success)
+    await node.send(f"{reply_method} {private_target} :{tag_msg(body, action='SPECTATOR', result=res_code, nick=nickname, is_machine=machine_mode)}")
+
+
+import sys
+_handlers_module = sys.modules.get("ai_grid.core.handlers")
+if _handlers_module:
+    _handlers_module.handle_spectator_rename = handle_spectator_rename
