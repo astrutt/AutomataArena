@@ -132,9 +132,15 @@ class CommandRouter:
                 asyncio.create_task(handlers.handle_powergen(self.node, source_nick, reply_target))
             elif verb == "train":
                 asyncio.create_task(handlers.handle_training(self.node, source_nick, reply_target))
+            elif verb == "rep":
+                asyncio.create_task(handlers.handle_rep_view(self.node, source_nick, reply_target))
+            elif verb == "craft":
+                asyncio.create_task(handlers.handle_craft(self.node, source_nick, args, reply_target))
+            elif verb == "stash":
+                asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, "stash", args))
 
             # 4. Grid Interaction (Claim, Upgrade, etc.)
-            elif verb in ["claim", "upgrade", "repair", "recharge", "raid", "breach", "hack", "probe", "siphon", "install", "bolster", "link", "net", "rename"]:
+            elif verb in ["claim", "upgrade", "repair", "recharge", "raid", "breach", "hack", "probe", "siphon", "install", "bolster", "link", "net", "rename", "stash"]:
                 if verb in ["raid", "breach"]:
                     asyncio.create_task(handlers.handle_grid_loot(self.node, source_nick, reply_target, args))
                 elif verb == "siphon" and args and args[0].lower() == "grid":

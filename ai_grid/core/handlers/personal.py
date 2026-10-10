@@ -142,6 +142,26 @@ async def handle_stats(node, nickname: str, args: list, reply_target: str):
         res_tag = 'SUCCESS' if success else 'FAIL'
         await node.send(f"{reply_method} {private_target} :{tag_msg(f'Stat {stat.upper()} update: {res_tag}', action='SIGACT', result=res_tag, nick=nickname, is_machine=machine_mode)}")
 
+async def handle_rep_view(node, nickname: str, reply_target: str):
+    private_target, _, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
+    summary = await node.db.get_rep_summary(nickname, node.net_name)
+
+    if machine_mode:
+        region_text = " ".join(f"{k}:{v:.1f}" for k, v in summary.get('regions', {}).items()) or "NONE:0.0"
+        msg = f"HEAT:{summary.get('heat', 0.0):.1f} STATUS:{summary.get('status', 'Passive')} {region_text}"
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='REP', result='INFO', nick=nickname, is_machine=True)}")
+        return
+
+    await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ REPUTATION ]', C_CYAN, True), action='REP', result='INFO', nick=nickname)}")
+    heat_line = f"Heat: {summary.get('heat', 0.0):.1f} | Status: {summary.get('status', 'Passive')}"
+    await node.send(f"{reply_method} {private_target} :{tag_msg(heat_line, action='REP', is_machine=False)}")
+    if summary.get('regions'):
+        for region, score in summary['regions'].items():
+            await node.send(f"{reply_method} {private_target} :{tag_msg(f'{region}: {score:.1f}', action='REP', is_machine=False)}")
+    else:
+        await node.send(f"{reply_method} {private_target} :{tag_msg('No reputation activity recorded yet.', action='REP', is_machine=False)}")
+
+
 async def handle_news_view(node, nickname: str, reply_target: str):
     private_target, _, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
     news_text = await node.llm.generate_news(node.net_name)

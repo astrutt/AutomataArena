@@ -9,6 +9,101 @@ class EconomyRepository:
     def __init__(self, async_session):
         self.async_session = async_session
 
+    async def get_craft_menu(self):
+        return (
+            "CRAFT_MENU: vuln=10 DATA -> 1 Vulnerability | "
+            "zeroday T1=50 DATA + 5 Vulns | T2=200 DATA + 15 Vulns | "
+            "T3=500 DATA + 35 Vulns | T4=1200 DATA + 80 Vulns"
+        )
+
+    async def craft_item(self, name: str, network: str, recipe: str = None, tier: int = None):
+        recipe_key = (recipe or "").strip().lower()
+        if not recipe_key or recipe_key in {"menu", "help", "list"}:
+            menu = await self.get_craft_menu()
+            return {"success": True, "item": "MENU", "menu": menu}
+
+        tier_map = {
+            1: {"name": "ZeroDay_Chain", "data": 50, "vulns": 5},
+            2: {"name": "ZeroDay_Chain", "data": 200, "vulns": 15},
+            3: {"name": "ZeroDay_Chain", "data": 500, "vulns": 35},
+            4: {"name": "ZeroDay_Chain", "data": 1200, "vulns": 80},
+        }
+
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.inventory).selectinload(InventoryItem.template))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char:
+                return {"success": False, "error": "Character not found."}
+
+            if recipe_key in {"vuln", "vulnerability"}:
+                data_needed = 10.0
+                if char.data_units < data_needed:
+                    return {"success": False, "error": f"Insufficient DATA. Required: {data_needed} | Available: {char.data_units:.1f}"}
+                char.data_units -= data_needed
+                item_name = "Vulnerability"
+                item_template = (await session.execute(select(ItemTemplate).where(ItemTemplate.name == item_name))).scalars().first()
+                if not item_template:
+                    item_template = ItemTemplate(name=item_name, item_type="hack", base_value=500, effects_json='{"alg_boost": 5}')
+                    session.add(item_template)
+                    await session.flush()
+                existing = next((i for i in char.inventory if i.template and i.template.name == item_name), None)
+                if existing:
+                    existing.quantity += 1
+                else:
+                    session.add(InventoryItem(character_id=char.id, template_id=item_template.id, quantity=1))
+                await session.commit()
+                return {"success": True, "item": item_name, "crafted": 1, "data_spent": data_needed}
+
+            if recipe_key in {"zeroday", "zero-day", "0day", "chain", "zeroday_chain"}:
+                try:
+                    tier_num = int(tier) if tier is not None else 1
+                except (TypeError, ValueError):
+                    return {"success": False, "error": "Specify tier 1, 2, 3, or 4."}
+                recipe_data = tier_map.get(tier_num)
+                if not recipe_data:
+                    return {"success": False, "error": "Zero-Day tier must be 1, 2, 3, or 4."}
+
+                vuln_count = sum(i.quantity for i in char.inventory if i.template and i.template.name == "Vulnerability")
+                if vuln_count < recipe_data["vulns"]:
+                    return {"success": False, "error": f"Insufficient Vulnerabilities. Required: {recipe_data['vulns']} | Available: {vuln_count}"}
+
+                if char.data_units < recipe_data["data"]:
+                    return {"success": False, "error": f"Insufficient DATA. Required: {recipe_data['data']} | Available: {char.data_units:.1f}"}
+
+                char.data_units -= float(recipe_data["data"])
+                remaining_vulns = recipe_data["vulns"]
+                for item in list(char.inventory):
+                    if not item.template or item.template.name != "Vulnerability":
+                        continue
+                    if remaining_vulns <= 0:
+                        break
+                    used = min(item.quantity, remaining_vulns)
+                    item.quantity -= used
+                    remaining_vulns -= used
+                    if item.quantity <= 0:
+                        await session.delete(item)
+
+                item_name = "ZeroDay_Chain"
+                item_template = (await session.execute(select(ItemTemplate).where(ItemTemplate.name == item_name))).scalars().first()
+                if not item_template:
+                    item_template = ItemTemplate(name=item_name, item_type="hack", base_value=2500, is_darknet=True, effects_json='{"alg_boost": 15}')
+                    session.add(item_template)
+                    await session.flush()
+                existing = next((i for i in char.inventory if i.template and i.template.name == item_name), None)
+                if existing:
+                    existing.quantity += 1
+                else:
+                    session.add(InventoryItem(character_id=char.id, template_id=item_template.id, quantity=1))
+
+                await session.commit()
+                return {"success": True, "item": item_name, "tier": tier_num, "data_spent": recipe_data["data"], "vulns_spent": recipe_data["vulns"]}
+
+            return {"success": False, "error": f"Unknown recipe '{recipe}'. Use !a craft for the recipe menu."}
+
     async def list_shop_items(self, is_darknet: bool = False):
         async with self.async_session() as session:
             stmt = select(ItemTemplate).where(ItemTemplate.is_darknet == is_darknet).order_by(ItemTemplate.base_value.asc())

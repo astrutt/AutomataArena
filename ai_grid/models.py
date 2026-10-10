@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Float
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Float, JSON
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.types import TypeDecorator
 from datetime import datetime, timezone
@@ -49,6 +49,7 @@ class GridNode(Base):
     is_darknet = Column(Boolean, default=False)
     net_affinity = Column(String, nullable=True) # Mapping to Network (e.g. Rizon)
     local_network = Column(String, nullable=True) # Named subnet for power pooling
+    stash_inventory = Column(JSON, default=lambda: [])  # Simple item-name list stored at the node
     
     # Hardware & Infrastructure
     addons_json = Column(String, default="{}") # JSON storage for AMP, FIREWALL, IDS, NET
@@ -152,6 +153,10 @@ class Character(Base):
     pending_stat_points = Column(Integer, default=0)
     last_surrender = Column(AwareDateTime, nullable=True) # v1.8.0: PvP Ban tracking
     last_seen_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Priority 2: Reputation & MCP Heat
+    mcp_heat = Column(Float, default=0.0)
+    node_rep = Column(JSON, default=lambda: {})
     
     # v1.8.0: Spectator Specifics
     rank_title = Column(String, nullable=True)

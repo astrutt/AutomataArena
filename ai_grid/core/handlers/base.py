@@ -27,6 +27,7 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "mainframe": {"desc": "Check Gibson compilation/assembly status.", "syntax": "mainframe"},
         "compile": {"desc": "Synthesize 100 Data into 1 Vulnerability.", "syntax": "compile <amt>"},
         "assemble": {"desc": "Fuse 4 Vulnerabilities into 1 Zero-Day Chain.", "syntax": "assemble"},
+        "craft": {"desc": "Craft DATA into vulnerabilities or tiered Zero-Day chains.", "syntax": "craft [vuln|zeroday <tier>]"},
         "use": {"desc": "Execute an inventory payload.", "syntax": "use <item>"},
         "claim": {"desc": "Establish command over an Unclaimed node.", "syntax": "claim", "cost": "50u Power"},
         "upgrade": {"desc": "Fortify node security and storage capacity.", "syntax": "upgrade", "cost": "100u Power + Credits"},

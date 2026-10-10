@@ -43,6 +43,7 @@ from ai_grid.database.core import Spectator
 from ai_grid.database.repositories.incursion_repo import IncursionRepository
 from ai_grid.database.repositories.expansion_repo import ExpansionRepository
 from ai_grid.database.repositories.betting_repo import BettingRepository
+from ai_grid.database.repositories.reputation_repo import ReputationRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):
@@ -62,6 +63,7 @@ class ArenaDB:
         self.minigame = MiniGameRepository(self.async_session)
         self.spectator = SpectatorRepository(self.async_session)
         self.spectator_repo = SpectatorCoreRepository(self.async_session)
+        self.reputation = ReputationRepository(self.async_session)
         self.betting = BettingRepository(self.async_session)
         
         # Grid domains
@@ -90,6 +92,9 @@ class ArenaDB:
             async def grid_repair(self, *a, **k): return await self.db.territory.grid_repair(*a, **k)
             async def grid_recharge(self, *a, **k): return await self.db.territory.grid_recharge(*a, **k)
             async def install_node_addon(self, *a, **k): return await self.db.territory.install_node_addon(*a, **k)
+            async def get_stash(self, *a, **k): return await self.db.territory.get_stash(*a, **k)
+            async def stash_store(self, *a, **k): return await self.db.territory.stash_store(*a, **k)
+            async def stash_take(self, *a, **k): return await self.db.territory.stash_take(*a, **k)
             async def bolster_node(self, *a, **k): return await self.db.territory.bolster_node(*a, **k)
             async def link_network(self, *a, **k): return await self.db.territory.link_network(*a, **k)
             async def rename_node(self, *a, **k): return await self.db.territory.rename_node(*a, **k)
@@ -136,6 +141,11 @@ class ArenaDB:
     async def set_spawn_node(self, *a, **k): return await self.navigation.set_spawn_node(*a, **k)
     async def get_location(self, *a, **k): return await self.navigation.get_location(*a, **k)
     async def move_player(self, *a, **k): return await self.navigation.move_player(*a, **k)
+    async def update_rep(self, *a, **k): return await self.reputation.update_rep(*a, **k)
+    async def update_heat(self, *a, **k): return await self.reputation.update_heat(*a, **k)
+    async def get_rep_summary(self, *a, **k): return await self.reputation.get_rep_summary(*a, **k)
+    async def craft_item(self, *a, **k): return await self.economy.craft_item(*a, **k)
+    async def get_craft_menu(self, *a, **k): return await self.economy.get_craft_menu(*a, **k)
     async def claim_node(self, *a, **k): return await self.territory.claim_node(*a, **k)
     async def upgrade_node(self, *a, **k): return await self.territory.upgrade_node(*a, **k)
     async def grid_repair(self, *a, **k): return await self.territory.grid_repair(*a, **k)
@@ -144,6 +154,9 @@ class ArenaDB:
     async def hack_node(self, *a, **k): return await self.infiltration.hack_node(*a, **k)
     async def raid_node(self, *a, **k): return await self.infiltration.raid_node(*a, **k)
     async def install_node_addon(self, *a, **k): return await self.territory.install_node_addon(*a, **k)
+    async def get_stash(self, *a, **k): return await self.territory.get_stash(*a, **k)
+    async def stash_store(self, *a, **k): return await self.territory.stash_store(*a, **k)
+    async def stash_take(self, *a, **k): return await self.territory.stash_take(*a, **k)
     async def bolster_node(self, *a, **k): return await self.territory.bolster_node(*a, **k)
     async def link_network(self, *a, **k): return await self.territory.link_network(*a, **k)
     async def explore_node(self, *a, **k): return await self.discovery.explore_node(*a, **k)
@@ -298,8 +311,33 @@ class ArenaDB:
                         logger.info(f"Adding missing column: {table_name}.{col_name}")
                         # SQLite-specific ALTER TABLE logic
                         col_type = col.type.compile(dialect=conn.dialect)
-                        # Handle defaults if possible
-                        default_val = f" DEFAULT {col.default.arg}" if col.default else ""
+                        default_val = ""
+                        if col.default is not None:
+                            try:
+                                default_arg = col.default.arg
+                            except AttributeError:
+                                default_arg = col.default
+
+                            if callable(default_arg):
+                                try:
+                                    sample = default_arg()
+                                    if isinstance(sample, dict):
+                                        default_val = " DEFAULT '{}'"
+                                    elif isinstance(sample, list):
+                                        default_val = " DEFAULT '[]'"
+                                    elif isinstance(sample, (int, float)):
+                                        default_val = f" DEFAULT {sample}"
+                                    elif isinstance(sample, str):
+                                        default_val = f" DEFAULT '{sample}'"
+                                except Exception:
+                                    default_val = ""
+                            elif isinstance(default_arg, (int, float)):
+                                default_val = f" DEFAULT {default_arg}"
+                            elif isinstance(default_arg, str):
+                                default_val = f" DEFAULT '{default_arg}'"
+                            elif isinstance(default_arg, dict):
+                                default_val = " DEFAULT '{}'"
+
                         conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}{default_val}"))
 
         async with self.engine.begin() as conn:

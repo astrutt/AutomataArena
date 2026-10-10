@@ -2,6 +2,7 @@
 import random
 import logging
 import json
+from typing import Optional
 from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
 from ..map_utils import generate_ascii_map
 from .base import is_machine_mode, check_rate_limit, get_action_routing
@@ -194,6 +195,16 @@ async def handle_node_probe(node, nick: str, reply_target: str, args: list = Non
             dc_msg = f"Security DC {res['hack_dc']} detected. Alg Bonus +{res.get('bonus_granted', 0)} granted."
             await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(dc_msg, C_CYAN), action='SIGINT', is_machine=False)}")
 
+async def _apply_reputation_hooks(node, nick: str, node_type: Optional[str] = None, rep_delta: float = -5.0, heat_delta: float = 1.0):
+    try:
+        loc = await node.db.get_location(nick, node.net_name)
+        resolved_type = (node_type or (loc or {}).get('type') or 'SAFEZONE').upper()
+        await node.db.update_heat(nick, node.net_name, heat_delta)
+        await node.db.update_rep(nick, node.net_name, resolved_type, rep_delta)
+    except Exception:
+        logger.exception("Rep/heat hook failed for %s", nick)
+
+
 async def handle_grid_command(node, nickname: str, reply_target: str, action: str, args: list = None):
     args = args or []
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nickname, reply_target)
@@ -271,11 +282,38 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
         success, msg = await node.db.community_rename_node(
             nickname, node.net_name, new_name, target_node=target_node
         )
+    elif action == "stash":
+        if not args:
+            res = await node.db.get_stash(nickname, node.net_name)
+            success = res.get('success', False)
+            msg = res.get('msg', 'Your node stash is empty.')
+        else:
+            mode = args[0].lower()
+            item_name = " ".join(args[1:]).strip() if len(args) > 1 else ""
+            if mode == "list":
+                res = await node.db.get_stash(nickname, node.net_name)
+                success = res.get('success', False)
+                msg = res.get('msg', 'Your node stash is empty.')
+            elif mode == "store":
+                if not item_name:
+                    await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: grid stash store <item_name>', action='INFO', result='ERR')}")
+                    return
+                success, msg = await node.db.stash_store(nickname, node.net_name, item_name)
+            elif mode == "take":
+                if not item_name:
+                    await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: grid stash take <item_name>', action='INFO', result='ERR')}")
+                    return
+                success, msg = await node.db.stash_take(nickname, node.net_name, item_name)
+            else:
+                await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: grid stash [list|store|take] <item>', action='INFO', result='ERR')}")
+                return
     else: return
 
     if success:
         await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='SUCCESS', nick=nickname, is_machine=machine_mode)}")
         await node.add_xp(nickname, 10, reply_target)
+        if action == "hack":
+            await _apply_reputation_hooks(node, nickname, None, rep_delta=-5.0, heat_delta=1.0)
         if not machine_mode:
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nickname} executed a territorial {action}.', C_CYAN), action='SIGACT', nick=nickname)}")
     else:
@@ -298,6 +336,7 @@ async def handle_node_exploit(node, nick: str, reply_target: str, args: list):
     
     await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='EXPLOIT' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
     if success:
+        await _apply_reputation_hooks(node, nick, None, rep_delta=-5.0, heat_delta=1.0)
         await node.add_xp(nick, 25, reply_target)
 
 async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None):
@@ -377,6 +416,7 @@ async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None
     await node.send(f"{reply_method} {private_target} :{tag_msg(result['msg'], action='RAID', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
     
     if success:
+        await _apply_reputation_hooks(node, nick, None, rep_delta=-5.0, heat_delta=1.0)
         await node.add_xp(nick, 15, reply_target)
         if result.get('sigact'):
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(result['sigact'], action='SIGACT', nick=nick)}")

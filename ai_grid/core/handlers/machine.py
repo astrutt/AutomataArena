@@ -82,6 +82,42 @@ async def handle_gibson_assemble(node, nick: str, reply_target: str):
         usage = f"Power Consumed: {result['node_used']:.1f} (Node) | {result['char_used']:.1f} (Char)"
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(usage, C_YELLOW), action='SIGACT')}")
 
+async def handle_craft(node, nick: str, args: list, reply_target: str):
+    private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
+
+    if not args:
+        menu = await node.db.get_craft_menu()
+        msg = menu if machine_mode else menu
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='CRAFT', result='INFO', nick=nick, is_machine=machine_mode)}")
+        return
+
+    recipe = args[0].lower()
+    tier = None
+    if recipe in {"zeroday", "zero-day", "0day", "chain", "zeroday_chain"}:
+        if len(args) > 1:
+            try:
+                tier = int(args[1])
+            except ValueError:
+                tier = None
+        if tier is None:
+            await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: !a craft zeroday <tier> (1-4)', action='CRAFT', result='ERR', nick=nick, is_machine=machine_mode)}")
+            return
+    elif recipe in {"vuln", "vulnerability"}:
+        recipe = "vuln"
+    else:
+        await node.send(f"{reply_method} {private_target} :{tag_msg(f'Unknown recipe: {recipe}', action='CRAFT', result='ERR', nick=nick, is_machine=machine_mode)}")
+        return
+
+    result = await node.db.craft_item(nick, node.net_name, recipe, tier)
+    msg = result.get('error') or result.get('menu') or f"CRAFT:{result.get('item')} TIER:{result.get('tier', 'N/A')}"
+    status = 'SUCCESS' if result.get('success') else 'FAIL'
+    await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='CRAFT', result=status, nick=nick, is_machine=machine_mode)}")
+
+    if result.get('success') and not machine_mode:
+        item = result.get('item', 'item')
+        await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nick} crafted {item}.', C_CYAN), action='CRAFT', nick=nick)}")
+
+
 async def handle_item_use(node, nick: str, args: list, reply_target: str):
     if not args: return
     item_name = " ".join(args)

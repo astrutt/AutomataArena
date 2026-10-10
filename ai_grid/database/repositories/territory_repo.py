@@ -3,7 +3,7 @@ import json
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
-from ai_grid.models import Character, Player, NetworkAlias, GridNode, InventoryItem
+from ai_grid.models import Character, Player, NetworkAlias, GridNode, InventoryItem, ItemTemplate
 from ai_grid.database.core import logger, CONFIG, increment_daily_task
 from ai_grid.database.base_repo import BaseRepository
 from ai_grid.core.validation import validate_node_name
@@ -208,6 +208,158 @@ class TerritoryRepository(BaseRepository):
             await session.commit()
             
             return True, f"Grid recharged. (+100.0 uP) Current Store: {node.power_stored:.1f} uP."
+
+    async def get_stash(self, name: str, network: str, node_name: str = None) -> dict:
+        """Returns the current stash contents for the active or specified node."""
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(selectinload(Character.current_node), selectinload(Character.inventory).selectinload(InventoryItem.template))
+            char = (await session.execute(stmt)).scalars().first()
+            if not char:
+                return {"success": False, "items": [], "msg": "System offline."}
+
+            if node_name:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == node_name.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node:
+                    return {"success": False, "items": [], "msg": f"Coordinate '{node_name}' not found."}
+            else:
+                node = char.current_node
+
+            if not node:
+                return {"success": False, "items": [], "msg": "Target node unavailable."}
+
+            success, err_msg = await self.verify_presence(char, node, "stash")
+            if not success:
+                return {"success": False, "items": [], "msg": err_msg}
+
+            stash = list(node.stash_inventory or [])
+            if not stash:
+                return {"success": True, "items": [], "msg": f"The {node.name} stash is empty."}
+            return {"success": True, "items": stash, "msg": f"{node.name} stash: {', '.join(stash)}"}
+
+    async def stash_store(self, name: str, network: str, node_name: str = None, item_name: str = None) -> tuple[bool, str]:
+        """Stores one matching inventory item in the node's stash."""
+        if item_name is None and node_name is not None:
+            item_name = node_name
+            node_name = None
+
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.current_node),
+                selectinload(Character.inventory).selectinload(InventoryItem.template)
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char:
+                return False, "System offline."
+
+            if node_name:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == node_name.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node:
+                    return False, f"Coordinate '{node_name}' not found."
+            else:
+                node = char.current_node
+
+            if not node:
+                return False, "Target node unavailable."
+
+            success, err_msg = await self.verify_presence(char, node, "stash")
+            if not success:
+                return False, err_msg
+            if node.owner_character_id != char.id:
+                return False, "Permission denied. You do not command this node."
+
+            if not item_name:
+                return False, "Specify which item to store."
+
+            match = next((i for i in char.inventory if i.template and i.template.name and i.template.name.lower() == item_name.lower()), None)
+            if not match:
+                return False, f"Item '{item_name}' is not in your inventory."
+
+            stash = list(node.stash_inventory or [])
+            stash_name = match.template.name
+            if stash_name in stash:
+                return False, f"{stash_name} is already stored in the node stash."
+
+            if match.quantity > 1:
+                match.quantity -= 1
+            else:
+                await session.delete(match)
+            stash.append(stash_name)
+            node.stash_inventory = stash
+
+            await session.commit()
+            return True, f"Stored {stash_name} in {node.name}."
+
+    async def stash_take(self, name: str, network: str, node_name: str = None, item_name: str = None) -> tuple[bool, str]:
+        """Retrieves one item from the node stash back into the player's inventory."""
+        if item_name is None and node_name is not None:
+            item_name = node_name
+            node_name = None
+
+        async with self.async_session() as session:
+            stmt = select(Character).join(Player).join(NetworkAlias).where(
+                Character.name == name,
+                NetworkAlias.nickname == name,
+                NetworkAlias.network_name == network
+            ).options(
+                selectinload(Character.current_node),
+                selectinload(Character.inventory).selectinload(InventoryItem.template)
+            )
+            char = (await session.execute(stmt)).scalars().first()
+            if not char:
+                return False, "System offline."
+
+            if node_name:
+                node_stmt = select(GridNode).where(func.lower(GridNode.name) == node_name.lower())
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node:
+                    return False, f"Coordinate '{node_name}' not found."
+            else:
+                node = char.current_node
+
+            if not node:
+                return False, "Target node unavailable."
+
+            success, err_msg = await self.verify_presence(char, node, "stash")
+            if not success:
+                return False, err_msg
+            if node.owner_character_id != char.id:
+                return False, "Permission denied. You do not command this node."
+
+            if not item_name:
+                return False, "Specify which item to take."
+
+            stash = list(node.stash_inventory or [])
+            if item_name.lower() not in {s.lower() for s in stash}:
+                return False, f"Item '{item_name}' is not in the node stash."
+
+            if len(char.inventory) >= 4:
+                return False, "Inventory capacity reached. Free a slot before taking from the stash."
+
+            existing = next((i for i in char.inventory if i.template and i.template.name and i.template.name.lower() == item_name.lower()), None)
+            item_template = (await session.execute(select(ItemTemplate).where(func.lower(ItemTemplate.name) == item_name.lower()))).scalars().first()
+            if not item_template:
+                item_template = ItemTemplate(name=item_name, item_type="general", base_value=0)
+                session.add(item_template)
+                await session.flush()
+
+            if existing:
+                existing.quantity += 1
+            else:
+                session.add(InventoryItem(character_id=char.id, template_id=item_template.id, quantity=1))
+
+            node.stash_inventory = [s for s in stash if s.lower() != item_name.lower()]
+            await session.commit()
+            return True, f"Taken {item_name} from {node.name}."
 
     async def install_node_addon(self, name: str, network: str, item_name: str, node_name: str = None) -> dict:
         """Consumes an addon item from inventory and installs it on the target node."""
