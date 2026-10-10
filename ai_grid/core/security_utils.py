@@ -6,16 +6,19 @@ def is_action_hostile(action: str, availability_mode: str) -> bool:
     Determines if an action is considered 'hostile' based on the target node's status.
     A hostile action triggers IDS/Firewall alerts.
     """
-    action = action.lower()
-    
-    # In a CLOSED node, any information gathering or breach attempt is hostile.
-    if availability_mode == 'CLOSED':
-        return action in ['probe', 'hack', 'siphon', 'raid']
-    
+    if not availability_mode:
+        return False
+    act = (action or "").lower()
+    mode = str(availability_mode).upper()
+
+    # In a CLOSED or STEALTH node, any information gathering or breach attempt is hostile.
+    if mode in ['CLOSED', 'STEALTH']:
+        return act in ['probe', 'hack', 'siphon', 'raid', 'exploit']
+
     # In an OPEN node, only direct breach or theft attempts are hostile.
-    if availability_mode == 'OPEN':
-        return action in ['hack', 'raid']
-    
+    if mode == 'OPEN':
+        return act in ['hack', 'raid', 'exploit']
+
     return False
 
 def get_security_dc_multiplier(node_addons: dict) -> float:

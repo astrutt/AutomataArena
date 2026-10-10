@@ -40,9 +40,9 @@ from ai_grid.database.repositories.combat_repo import CombatRepository
 from ai_grid.database.repositories.pulse_repo import PulseRepository
 from ai_grid.database.repositories.spectator_repo import SpectatorRepository
 from ai_grid.database.spectator_repo import SpectatorRepository as SpectatorCoreRepository
-from ai_grid.database.core import Spectator
 from ai_grid.database.repositories.incursion_repo import IncursionRepository
 from ai_grid.database.repositories.expansion_repo import ExpansionRepository
+from ai_grid.database.repositories.remote_net_repo import RemoteNetRepository, get_net_device_state
 from ai_grid.database.repositories.betting_repo import BettingRepository
 from ai_grid.database.repositories.reputation_repo import ReputationRepository
 
@@ -77,6 +77,7 @@ class ArenaDB:
         self.pulse = PulseRepository(self.async_session)
         self.incursion = IncursionRepository(self.async_session)
         self.expansion = ExpansionRepository(self.async_session)
+        self.remote_net = RemoteNetRepository(self.async_session)
 
         # Legacy Facade Compatibility (grid object proxy)
         class GridFacade:
@@ -110,6 +111,14 @@ class ArenaDB:
             async def raid_node(self, *a, **k): return await self.db.infiltration.raid_node(*a, **k)
             async def tick_grid_power(self, *a, **k): return await self.db.maintenance.tick_grid_power(*a, **k)
             async def get_grid_telemetry(self, *a, **k): return await self.db.maintenance.get_grid_telemetry(*a, **k)
+            async def remote_explore(self, *a, **k): return await self.db.remote_net.remote_explore(*a, **k)
+            async def remote_probe(self, *a, **k): return await self.db.remote_net.remote_probe(*a, **k)
+            async def remote_hack(self, *a, **k): return await self.db.remote_net.remote_hack(*a, **k)
+            async def remote_siphon(self, *a, **k): return await self.db.remote_net.remote_siphon(*a, **k)
+            async def remote_exploit(self, *a, **k): return await self.db.remote_net.remote_exploit(*a, **k)
+            async def remote_raid(self, *a, **k): return await self.db.remote_net.remote_raid(*a, **k)
+            async def set_net_device_state(self, *a, **k): return await self.db.remote_net.set_net_device_state(*a, **k)
+            async def is_node_pvp_pve_accessible(self, *a, **k): return await self.db.remote_net.is_node_pvp_pve_accessible(*a, **k)
 
         self.grid = GridFacade(self)
 
@@ -182,6 +191,14 @@ class ArenaDB:
     async def explore_node(self, *a, **k): return await self.discovery.explore_node(*a, **k)
     async def exploit_node(self, *a, **k): return await self.infiltration.exploit_node(*a, **k)
     async def probe_node(self, *a, **k): return await self.discovery.probe_node(*a, **k)
+    async def remote_explore(self, *a, **k): return await self.remote_net.remote_explore(*a, **k)
+    async def remote_probe(self, *a, **k): return await self.remote_net.remote_probe(*a, **k)
+    async def remote_hack(self, *a, **k): return await self.remote_net.remote_hack(*a, **k)
+    async def remote_siphon(self, *a, **k): return await self.remote_net.remote_siphon(*a, **k)
+    async def remote_exploit(self, *a, **k): return await self.remote_net.remote_exploit(*a, **k)
+    async def remote_raid(self, *a, **k): return await self.remote_net.remote_raid(*a, **k)
+    async def set_net_device_state(self, *a, **k): return await self.remote_net.set_net_device_state(*a, **k)
+    async def is_node_pvp_pve_accessible(self, *a, **k): return await self.remote_net.is_node_pvp_pve_accessible(*a, **k)
 
     async def close(self):
         await self.engine.dispose()

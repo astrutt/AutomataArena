@@ -29,10 +29,11 @@ async def handle_grid_hardware(node, nick: str, reply_target: str, action: str =
             
             gn = char_node.current_node
             addons = json.loads(gn.addons_json or "{}")
+            installed_modules = [k for k in addons.keys() if not k.endswith("_STATE")]
             
             if machine_mode:
-                addon_list = ",".join(addons.keys()) if addons else "NONE"
-                msg = f"NODE:{gn.name} SLOTS:{len(addons)}/{gn.max_slots} MODULES:[{addon_list}] IDS:{gn.ids_alerts} FW:{gn.firewall_hits}"
+                addon_list = ",".join(installed_modules) if installed_modules else "NONE"
+                msg = f"NODE:{gn.name} SLOTS:{len(installed_modules)}/{gn.max_slots} MODULES:[{addon_list}] IDS:{gn.ids_alerts} FW:{gn.firewall_hits}"
                 await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='GEOINT', result='INFO', nick=nick, is_machine=True)}")
                 return
 

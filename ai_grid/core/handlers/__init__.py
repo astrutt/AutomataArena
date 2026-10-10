@@ -75,6 +75,9 @@ from .incursion import (
 from .skills import (
     handle_skill
 )
+from .remote_net import (
+    handle_remote_net_command
+)
 
 __all__ = [
     'handle_help', 'is_machine_mode', 'check_rate_limit',
@@ -85,5 +88,5 @@ __all__ = [
     'handle_mob_encounter', 'resolve_mob', 'handle_pvp_command', 'handle_ready', 'handle_dice_roll', 'handle_cipher_start', 'handle_guess', 'handle_leaderboard', 'handle_bet',
     'handle_admin_command', 'handle_spectator_view', 'handle_spectator_stats', 'handle_spectator_help', 'handle_spectator_inventory', 'handle_spectator_drop',
     'handle_economy_osint', 'handle_gridpower_osint', 'handle_gridstability_osint', 'handle_networks_osint', 'handle_about_osint', 'handle_info_nick',
-    'handle_grid_hardware', 'handle_incursion_defend', 'handle_skill'
+    'handle_grid_hardware', 'handle_incursion_defend', 'handle_skill', 'handle_remote_net_command'
 ]

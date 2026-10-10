@@ -84,6 +84,22 @@ class CommandRouter:
                     asyncio.create_task(handlers.handle_grid_map(self.node, source_nick, reply_target, args[1:]))
                 elif args and args[0].lower() == "claimed":
                     asyncio.create_task(handlers.handle_grid_claimed(self.node, source_nick, args, reply_target))
+                elif args and args[0].lower() == "net":
+                    # Aliased via x grid net <network> ...
+                    net_subargs = args[1:]
+                    if not net_subargs:
+                        await self.node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {prefix} grid net <network> <explore|probe|hack|siphon|exploit|raid|msg> OR {prefix} grid net <affinity>")
+                    elif net_subargs[0].lower() in ["state", "mode", "open", "closed", "stealth"]:
+                        asyncio.create_task(handlers.handle_remote_net_command(self.node, source_nick, reply_target, net_subargs[0], net_subargs[1:]))
+                    elif len(net_subargs) == 1:
+                        asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, "net", net_subargs))
+                    else:
+                        asyncio.create_task(handlers.handle_remote_net_command(self.node, source_nick, reply_target, net_subargs[0], net_subargs[1:]))
+                elif args and args[0].lower() in ["mode", "state"]:
+                    if len(args) > 1:
+                        asyncio.create_task(handlers.handle_remote_net_command(self.node, source_nick, reply_target, "state", args[1:]))
+                    else:
+                        await self.node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {prefix} grid state <OPEN|CLOSED|STEALTH>")
                 elif args and args[0].lower() in ["probe", "install", "bolster", "link", "siphon", "hardware", "hw", "hack", "exploit", "rename"]:
                     # !a grid <action> <args>
                     if args[0].lower() in ["hardware", "hw"]:
@@ -141,8 +157,18 @@ class CommandRouter:
             elif verb == "stash":
                 asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, "stash", args))
 
+            elif verb == "net":
+                if not args:
+                    await self.node.send(f"PRIVMSG {reply_target} :[ERR] Syntax: {prefix} net <network> <explore|probe|hack|siphon|exploit|raid|msg> OR {prefix} net state <OPEN|CLOSED|STEALTH>")
+                elif args[0].lower() in ["state", "mode", "open", "closed", "stealth"]:
+                    asyncio.create_task(handlers.handle_remote_net_command(self.node, source_nick, reply_target, args[0], args[1:]))
+                elif len(args) == 1:
+                    asyncio.create_task(handlers.handle_grid_command(self.node, source_nick, reply_target, "net", args))
+                else:
+                    asyncio.create_task(handlers.handle_remote_net_command(self.node, source_nick, reply_target, args[0], args[1:]))
+
             # 4. Grid Interaction (Claim, Upgrade, etc.)
-            elif verb in ["claim", "upgrade", "repair", "recharge", "raid", "breach", "hack", "probe", "siphon", "install", "bolster", "link", "net", "rename", "stash"]:
+            elif verb in ["claim", "upgrade", "repair", "recharge", "raid", "breach", "hack", "probe", "siphon", "install", "bolster", "link", "rename", "stash"]:
                 if verb in ["raid", "breach"]:
                     asyncio.create_task(handlers.handle_grid_loot(self.node, source_nick, reply_target, args))
                 elif verb == "siphon" and args and args[0].lower() == "grid":

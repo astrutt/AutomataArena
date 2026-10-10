@@ -2,7 +2,7 @@
 import json
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from ai_grid.models import Character, Player, NetworkAlias, GridNode, InventoryItem, ItemTemplate
 from ai_grid.database.core import logger, CONFIG, increment_daily_task
 from ai_grid.database.base_repo import BaseRepository
@@ -103,8 +103,12 @@ class TerritoryRepository(BaseRepository):
             await session.commit()
             return True, f"Upgraded {node.name} to Level {node.upgrade_level} for {cost}c! [Integrity Scaling: {dur_mults[idx]}x]"
 
-    async def set_grid_mode(self, name: str, network: str, mode: str) -> tuple[bool, str]:
-        """Toggle grid availability (OPEN/CLOSED)."""
+    async def set_grid_mode(self, name: str, network: str, mode: str, node_name: str = None) -> tuple[bool, str]:
+        """Toggle grid availability (OPEN/CLOSED/STEALTH)."""
+        mode = mode.upper()
+        if mode not in ["OPEN", "CLOSED", "STEALTH"]:
+            return False, f"Invalid mode '{mode}'. Allowed: OPEN, CLOSED, STEALTH."
+
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
                 Character.name == name,
@@ -112,14 +116,34 @@ class TerritoryRepository(BaseRepository):
                 NetworkAlias.network_name == network
             ).options(selectinload(Character.current_node))
             char = (await session.execute(stmt)).scalars().first()
-            if not char or not char.current_node: return False, "System offline."
-            
-            node = char.current_node
+            if not char: return False, "System offline."
+
+            if node_name:
+                clean_name = node_name.strip("[]").strip()
+                node_stmt = select(GridNode).where(
+                    (func.lower(GridNode.name) == node_name.lower()) | (func.lower(GridNode.name) == clean_name.lower())
+                )
+                node = (await session.execute(node_stmt)).scalars().first()
+                if not node: return False, f"Coordinate '{node_name}' not found."
+            else:
+                node = char.current_node
+
+            if not node: return False, "Target node unavailable."
             if node.owner_character_id != char.id: return False, "You do not command this node."
-            
-            node.availability_mode = mode.upper()
+
+            addons = json.loads(node.addons_json or "{}") if isinstance(node.addons_json, str) else (node.addons_json or {})
+            if mode == "STEALTH" and not addons.get("NET"):
+                return False, "Integrity Error: STEALTH state requires an active NET device."
+
+            node.availability_mode = mode
+            if "NET" in addons:
+                addons["NET_STATE"] = mode
+                if isinstance(addons["NET"], dict):
+                    addons["NET"]["state"] = mode
+                node.addons_json = json.dumps(addons)
+
             await session.commit()
-            return True, f"Grid protocol updated: Sector {node.name} is now {mode.upper()}."
+            return True, f"Grid protocol updated: Sector {node.name} is now {mode}."
 
     async def grid_repair(self, name: str, network: str, node_name: str = None) -> tuple[bool, str]:
         """Repair node using credits (Legacy) or power (New Manual)."""
@@ -405,7 +429,8 @@ class TerritoryRepository(BaseRepository):
             
             # Enforce Multi-Slot Limit (Task 020)
             max_slots = node.max_slots or CONFIG.get('mechanics', {}).get('max_hardware_slots', 4)
-            if len(addons) >= max_slots:
+            hardware_modules = [k for k in addons.keys() if k in ["AMP", "IDS", "FIREWALL", "NET", "HPOT"] or not k.endswith("_STATE")]
+            if len(hardware_modules) >= max_slots:
                 return {"success": False, "msg": f"Hardware Capacity reached ({max_slots}/{max_slots} slots occupied). Upgrade node or remove hardware."}
 
             addons[addon_type] = True
@@ -454,6 +479,10 @@ class TerritoryRepository(BaseRepository):
                 session.add(inv_item)
             
             del addons[addon_type]
+            if addon_type == "NET":
+                addons.pop("NET_STATE", None)
+                if node.availability_mode == "STEALTH":
+                    node.availability_mode = "CLOSED"
             node.addons_json = json.dumps(addons)
             await session.commit()
             return {"success": True, "msg": f"Decommission Successful: {addon_type} module returned to local inventory."}
