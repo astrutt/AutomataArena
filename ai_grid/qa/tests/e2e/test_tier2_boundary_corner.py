@@ -20,7 +20,7 @@ from ai_grid.grid_db import ArenaDB
 from ai_grid.models import Character, GridNode, Player, DiscoveryRecord, BreachRecord
 import ai_grid.core.handlers.base as base_handler
 
-from tests.e2e.fixtures import MockIRCServer, MockLLMServer, TestEnvironment
+from ai_grid.qa.tests.e2e.fixtures import MockIRCServer, MockLLMServer, TestEnvironment
 
 
 class TestTier2BoundaryCorner(unittest.IsolatedAsyncioTestCase):

@@ -3,7 +3,7 @@ tests/test_sandbox_harness.py — Automated Verification for Programmatic Sandbo
 """
 
 import unittest
-from tests.sandbox_harness import SandboxHarness
+from ai_grid.qa.tests.sandbox_harness import SandboxHarness
 
 
 class TestSandboxHarness(unittest.IsolatedAsyncioTestCase):

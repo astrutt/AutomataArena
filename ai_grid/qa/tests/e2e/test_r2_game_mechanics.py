@@ -31,7 +31,7 @@ from ai_grid.core.handlers.grid import handle_grid_command, handle_node_probe
 from ai_grid.core.handlers.admin import handle_admin_command
 from ai_grid.core.map_utils import generate_ascii_map
 
-from tests.e2e.fixtures import MockLLMServer, TestEnvironment
+from ai_grid.qa.tests.e2e.fixtures import MockLLMServer, TestEnvironment
 
 
 class TestNickServAuthenticationAndGating(unittest.IsolatedAsyncioTestCase):

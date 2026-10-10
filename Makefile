@@ -69,7 +69,7 @@ test-mechanics:
 	$(PYTHON) $(TEST_RUNNER) --mechanics $(TEST_ARGS)
 
 lint:
-	$(PYTHON) -m compileall -q ai_grid ai_player tests
+	$(PYTHON) -m compileall -q ai_grid ai_player
 
 clean:
 	@echo "Cleaning temporary test artifacts, databases, and caches..."

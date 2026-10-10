@@ -29,7 +29,7 @@ from ai_grid.core.handlers.combat import handle_bet
 from ai_grid.core.handlers.spectator import handle_spectator_drop, parse_drop_args
 from ai_grid.core.handlers.grid import handle_grid_command, handle_node_probe
 from ai_grid.core.handlers.admin import handle_admin_command
-from tests.e2e.fixtures.test_env import TestEnvironment
+from ai_grid.qa.tests.e2e.fixtures.test_env import TestEnvironment
 
 
 class TestM3NickServAdversarial(unittest.IsolatedAsyncioTestCase):

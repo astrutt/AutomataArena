@@ -18,7 +18,7 @@ from ai_grid.grid_db import ArenaDB
 from ai_grid.models import Character, GridNode as DBGridNode, Player, InventoryItem
 from ai_grid.manager import GridNode as EngineGridNode
 from ai_grid.grid_llm import ArenaLLM
-from tests.e2e.fixtures import MockIRCServer, MockLLMServer, TestEnvironment
+from ai_grid.qa.tests.e2e.fixtures import MockIRCServer, MockLLMServer, TestEnvironment
 
 
 class SandboxHarness:

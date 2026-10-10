@@ -21,8 +21,8 @@ from ai_grid.models import Character, GridNode, Player, InventoryItem, ItemTempl
 from ai_grid.grid_combat import CombatEngine, Entity
 from ai_grid.core.command_router import CommandRouter
 import ai_grid.core.handlers as handlers
-from tests.e2e.fixtures import MockIRCServer, MockLLMServer, TestEnvironment
-from tests.sandbox_harness import SandboxHarness
+from ai_grid.qa.tests.e2e.fixtures import MockIRCServer, MockLLMServer, TestEnvironment
+from ai_grid.qa.tests.sandbox_harness import SandboxHarness
 
 
 class AsyncMockWriter:

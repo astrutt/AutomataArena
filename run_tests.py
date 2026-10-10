@@ -22,11 +22,11 @@ if PROJECT_ROOT not in sys.path:
 
 
 TIER_MODULES = {
-    "tier1": "tests.e2e.test_tier1_feature_coverage",
-    "tier2": "tests.e2e.test_tier2_boundary_corner",
-    "harness": "tests.test_sandbox_harness",
-    "security": "tests.e2e.test_r1_security_hardening",
-    "mechanics": "tests.e2e.test_r2_game_mechanics",
+    "tier1": "ai_grid.qa.tests.e2e.test_tier1_feature_coverage",
+    "tier2": "ai_grid.qa.tests.e2e.test_tier2_boundary_corner",
+    "harness": "ai_grid.qa.tests.test_sandbox_harness",
+    "security": "ai_grid.qa.tests.e2e.test_r1_security_hardening",
+    "mechanics": "ai_grid.qa.tests.e2e.test_r2_game_mechanics",
 }
 
 
@@ -36,13 +36,13 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python run_tests.py                     # Run all discovered tests in tests/
+  python run_tests.py                     # Run all discovered tests in ai_grid/qa/tests/
   python run_tests.py --tier1             # Run Tier 1 feature coverage suite
   python run_tests.py --tier2             # Run Tier 2 boundary cases suite
   python run_tests.py --harness           # Run sandbox harness tests
   python run_tests.py -v -b               # Verbose output with stdout/stderr buffering
   python run_tests.py -k explore          # Run only tests matching substring 'explore'
-  python run_tests.py tests/e2e/test_tier1_feature_coverage.py
+  python run_tests.py ai_grid/qa/tests/e2e/test_tier1_feature_coverage.py
         """,
     )
 
@@ -68,8 +68,8 @@ Examples:
 
     discovery_group = parser.add_argument_group("Discovery Options")
     discovery_group.add_argument(
-        "-s", "--start-dir", default="tests",
-        help="Directory to start test discovery (default: tests)"
+        "-s", "--start-dir", default="ai_grid/qa/tests",
+        help="Directory to start test discovery (default: ai_grid/qa/tests)"
     )
     discovery_group.add_argument(
         "-p", "--pattern", default="test_*.py",

@@ -16,8 +16,8 @@ import time
 import unittest
 from typing import List
 
-from tests.e2e.fixtures.mock_irc import MockIRCServer
-from tests.sandbox_harness import SandboxHarness
+from ai_grid.qa.tests.e2e.fixtures.mock_irc import MockIRCServer
+from ai_grid.qa.tests.sandbox_harness import SandboxHarness
 
 
 class TestMockIRCServerAdversarial(unittest.IsolatedAsyncioTestCase):

@@ -27,7 +27,7 @@ from ai_grid.grid_combat import CombatEngine, Entity
 from ai_grid.core.command_router import CommandRouter
 import ai_grid.core.handlers as handlers
 from ai_grid.database.repositories.combat_repo import CombatRepository
-from tests.e2e.fixtures.test_env import TestEnvironment
+from ai_grid.qa.tests.e2e.fixtures.test_env import TestEnvironment
 
 
 class MockLLM:
