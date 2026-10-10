@@ -19,7 +19,8 @@ class DiscoveryRepository(BaseRepository):
                 NetworkAlias.network_name == network
             ).options(
                 selectinload(Character.current_node).selectinload(GridNode.exits).selectinload(NodeConnection.target_node),
-                selectinload(Character.current_node).selectinload(GridNode.characters_present)
+                selectinload(Character.current_node).selectinload(GridNode.characters_present),
+                selectinload(Character.skills)
             )
             char = (await session.execute(stmt)).scalars().first()
             if not char or not char.current_node: return {"error": "System offline."}
@@ -51,13 +52,17 @@ class DiscoveryRepository(BaseRepository):
                 occupants = [c.name for c in node.characters_present if c.name != name]
 
                 
+                recon_skill = next((s for s in char.skills if s.skill_name == 'recon'), None) if char.skills else None
+                recon_lvl = recon_skill.level if recon_skill else 0
+                recon_yield_mult = 1.0 + (0.10 * recon_lvl)
+
                 # 1. Tiered Opening Logic
                 is_simple = node.owner_character_id is None and node.upgrade_level == 1 and node.power_stored < 100
                 if node.availability_mode == 'CLOSED' and is_simple:
                     node.availability_mode = 'OPEN'
                     msg = f"Vulnerability found in local architecture! System protocols breached. The node is now OPEN."
-                    char.credits += 5.0
-                    char.data_units += 1.0
+                    char.credits += round(5.0 * recon_yield_mult, 2)
+                    char.data_units += round(1.0 * recon_yield_mult, 2)
                     await session.commit()
                     return {"status": "success", "discovery": "sector_open", "occupants": occupants, "msg": msg}
 
@@ -66,13 +71,13 @@ class DiscoveryRepository(BaseRepository):
                 if hidden_conns:
                     target_conn = hidden_conns[0]
                     msg = f"Vulnerability found in local architecture! Uncovering hidden route: {target_conn.direction} -> {target_conn.target_node.name}"
-                    char.credits += 10.0
-                    char.data_units += 2.0
+                    char.credits += round(10.0 * recon_yield_mult, 2)
+                    char.data_units += round(2.0 * recon_yield_mult, 2)
                     await session.commit()
                     return {"status": "success", "discovery": "hidden_exit", "target_node": target_conn.target_node.name, "direction": target_conn.direction, "occupants": occupants, "msg": msg}
                 
                 # 3. Rare data
-                char.credits += 25.0
+                char.credits += round(25.0 * recon_yield_mult, 2)
                 
                 # --- TASK 038: Procedural Raid Target Discovery ---
                 if node.node_type == "void" and not node.active_target_id:
@@ -93,9 +98,12 @@ class DiscoveryRepository(BaseRepository):
                         return {"status": "success", "discovery": "raid_target", "target": new_target.name, "occupants": occupants, "msg": f"Discovered an insecure local subnet: {new_target.name}. Resources detected."}
 
                 await session.commit()
-                return {"status": "success", "discovery": "data", "occupants": occupants, "msg": f"Found a discarded encrypted data packet. Extracted 25.0c."}
+                return {"status": "success", "discovery": "data", "occupants": occupants, "msg": f"Found a discarded encrypted data packet. Extracted {25.0 * recon_yield_mult:.1f}c."}
             else:
-                node.noise += 1.0
+                recon_skill = next((s for s in char.skills if s.skill_name == 'recon'), None) if char.skills else None
+                recon_lvl = recon_skill.level if recon_skill else 0
+                detection_mult = max(0.0, 1.0 - (0.10 * recon_lvl))
+                node.noise += 1.0 * detection_mult
                 await session.commit()
                 return {"status": "failure", "msg": "The exploration sequence yielded no actionable data."}
 
@@ -113,11 +121,17 @@ class DiscoveryRepository(BaseRepository):
             ).options(
                 selectinload(Character.current_node).selectinload(GridNode.characters_present),
                 selectinload(Character.current_node).selectinload(GridNode.exits).selectinload(NodeConnection.target_node),
-                selectinload(Character.current_node).selectinload(GridNode.active_target)
+                selectinload(Character.current_node).selectinload(GridNode.active_target),
+                selectinload(Character.skills)
             )
             char = (await session.execute(stmt)).scalars().first()
             if not char or not char.current_node: return {"success": False, "error": "System offline."}
             node = char.current_node
+
+            recon_skill = next((s for s in char.skills if s.skill_name == 'recon'), None) if char.skills else None
+            recon_lvl = recon_skill.level if recon_skill else 0
+            recon_yield_mult = 1.0 + (0.10 * recon_lvl)
+            detection_mult = max(0.0, 1.0 - (0.10 * recon_lvl))
             
             # --- TARGET SELECTION ---
             raid_target = None
@@ -136,10 +150,11 @@ class DiscoveryRepository(BaseRepository):
                 from ai_grid.core.security_utils import is_action_hostile
                 if is_action_hostile('probe', node.availability_mode):
                     if addons.get("IDS") or node.upgrade_level > 2:
-                        from ai_grid.models import Memo
-                        alert_msg = f"DEEP_PROBE_DETECTION TARGET:{node.name} {'(SUBSET:'+raid_target.name+')' if raid_target else ''} SOURCE:{char.name}"
-                        session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
-                        alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
+                        if random.random() < detection_mult:
+                            from ai_grid.models import Memo
+                            alert_msg = f"DEEP_PROBE_DETECTION TARGET:{node.name} {'(SUBSET:'+raid_target.name+')' if raid_target else ''} SOURCE:{char.name}"
+                            session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
+                            alert_data = {"recipient_id": node.owner_character_id, "message": alert_msg}
             
             # Change target node if direction specified
             if direction and not raid_target:
@@ -183,8 +198,8 @@ class DiscoveryRepository(BaseRepository):
             
             roll = random.randint(1, 20) + char.alg
             if roll < difficulty:
-                char.current_node.noise += 2.0
-                if random.random() < 0.35:
+                char.current_node.noise += 2.0 * detection_mult
+                if random.random() < (0.35 * detection_mult):
                     return {"success": False, "msg": f"PROBE FAILED: MCP sensors traced your burst transmission."}
                 await session.commit()
                 return {"success": False, "msg": f"PROBE FAILED: Signals reflect too noisy."}
@@ -254,8 +269,8 @@ class DiscoveryRepository(BaseRepository):
             bridge = f"Bridge to {node.net_affinity}" if node.net_affinity else "No affinity detected."
             hack_dc = (raid_target.difficulty if raid_target else 10 + (node.upgrade_level * 3))
             char.alg_bonus = 5
-            char.credits += 15.0
-            char.data_units += 5.0
+            char.credits += round(15.0 * recon_yield_mult, 2)
+            char.data_units += round(5.0 * recon_yield_mult, 2)
             await session.commit()
             
             return {

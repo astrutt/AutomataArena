@@ -17,7 +17,8 @@ class InfiltrationRepository(BaseRepository):
                 NetworkAlias.network_name == network
             ).options(
                 selectinload(Character.current_node).selectinload(GridNode.owner),
-                selectinload(Character.current_node).selectinload(GridNode.active_target)
+                selectinload(Character.current_node).selectinload(GridNode.active_target),
+                selectinload(Character.skills)
             )
             char = (await session.execute(stmt)).scalars().first()
             if not char or not char.current_node: return False, "System offline."
@@ -72,7 +73,11 @@ class InfiltrationRepository(BaseRepository):
         base_amount = node.power_stored * (percent / 100.0)
         if base_amount <= 0: return False, "Capacitors empty."
             
-        yield_amount = base_amount
+        siphon_skill = next((s for s in char.skills if s.skill_name == 'siphon'), None) if char.skills else None
+        siphon_lvl = siphon_skill.level if siphon_skill else 0
+        siphon_mult = 1.0 + (0.10 * siphon_lvl)
+
+        yield_amount = round(base_amount * siphon_mult, 2)
         loss_msg = ""
         if (node.node_type == "void" or node.durability < 100.0) and random.random() < 0.3:
             loss_pct = random.uniform(0.1, 0.4)
@@ -113,11 +118,13 @@ class InfiltrationRepository(BaseRepository):
         
         is_silent = existing_breach.is_silent if existing_breach else False
         
-        # Siphoning a target yields DATA UNITS instead of POWER (or both?)
-        # Mechanics: "siphon data and power from a hacked node or network"
+        siphon_skill = next((s for s in char.skills if s.skill_name == 'siphon'), None) if char.skills else None
+        siphon_lvl = siphon_skill.level if siphon_skill else 0
+        siphon_mult = 1.0 + (0.10 * siphon_lvl)
+
         percent = max(1.0, min(100.0, percent))
-        p_gain = (raid_target.credits_pool * 0.05) * (percent / 100.0) # Siphon power based on credits? No, let's use data_pool
-        d_gain = (raid_target.data_pool * 0.15) * (percent / 100.0)
+        p_gain = round((raid_target.credits_pool * 0.05) * (percent / 100.0) * siphon_mult, 2)
+        d_gain = round((raid_target.data_pool * 0.15) * (percent / 100.0) * siphon_mult, 2)
         
         if d_gain <= 0: return False, f"Subnet {raid_target.name} data stream is dry."
         
@@ -190,6 +197,17 @@ class InfiltrationRepository(BaseRepository):
             from ai_grid.core.security_utils import get_security_dc_multiplier
             base_dc = 10 + (node.upgrade_level * 5) + int(node.power_stored / 1000) + int(10 - node.durability / 10)
             difficulty = int(base_dc * get_security_dc_multiplier(addons)) if not is_owner else base_dc
+            
+            # Fortify skill modifier: +10% owned node defense efficiency per level
+            if node.owner_character_id and not is_owner:
+                from ai_grid.models import CharacterSkill
+                fortify_stmt = select(CharacterSkill).where(
+                    CharacterSkill.character_id == node.owner_character_id,
+                    CharacterSkill.skill_name == 'fortify'
+                )
+                fortify_skill = (await session.execute(fortify_stmt)).scalars().first()
+                if fortify_skill and fortify_skill.level > 0:
+                    difficulty = int(difficulty * (1.0 + 0.10 * fortify_skill.level))
             
             roll = random.randint(1, 20) + char.alg + char.alg_bonus
             char.alg_bonus = 0

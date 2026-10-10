@@ -57,6 +57,7 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "rename": {"desc": "Community rebranding of a grid sector.", "syntax": "rename <new_name>", "cost": "5000c"},
         "powergen": {"desc": "Active stability-based power generation.", "syntax": "powergen"},
         "train": {"desc": "Recover status and stability via training.", "syntax": "train"},
+        "skill": {"desc": "Character skill progression, training, and modifiers.", "syntax": "skill <list|<name>|start|train|forget|quit>"},
         "spectator": {"desc": "View or join the IdleRPG. Ranks earn credits by idling.", "syntax": "spectator [stats]"},
         "news": {"desc": "Display the latest Grid SIGACTs/News ticker.", "syntax": "news"},
         "engage": {"desc": "Step into a pending Grid Bug encounter.", "syntax": "engage"},
@@ -75,6 +76,7 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         if args:
             verb = args[0].lower()
             if verb in registry:
+                info = registry[verb]
                 help_msg = f"CMD:{verb.upper()} DESC:{info['desc']} SYNTAX:{node.prefix} {info['syntax']}"
                 await node.send(f"{reply_method} {private_target} :{tag_msg(help_msg, action='HELP', is_machine=machine_mode)}")
             else:
@@ -108,7 +110,7 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
         "🏗️ THE GIBSON": ["mainframe", "compile", "assemble", "use"],
         "⚡ THE PULSE": ["collect", "patch", "defend"],
         "📡 ANALYTICS": ["economy", "gridpower", "gridstability", "networks", "about"],
-        "⚔️ TACTICAL": ["claim", "upgrade", "hack/raid", "repair", "siphon", "install", "bolster", "link/net", "powergen", "train"],
+        "⚔️ TACTICAL": ["claim", "upgrade", "hack/raid", "repair", "siphon", "install", "bolster", "link/net", "powergen", "train", "skill"],
         "🎮 GAMES": ["cipher/guess", "dice", "top", "attack/rob", "queue/ready", "engage"]
     }
 
@@ -121,7 +123,7 @@ async def handle_help(node, nick: str, args: list, reply_target: str):
 
 async def is_machine_mode(node, nick: str) -> bool:
     prefs = await node.db.get_prefs(nick, node.net_name)
-    return prefs.get('output_mode', 'human') == 'machine'
+    return prefs.get('output_mode', 'human') in ['machine', 'text']
 
 async def check_rate_limit(node, nick: str, reply_target: str, cooldown: int = 1, consume: bool = True, verb: str = None) -> bool:
     """
@@ -270,7 +272,7 @@ async def get_action_routing(node, nickname: str, current_target: str):
         except Exception:
             prefs = {}
 
-    machine_mode = isinstance(prefs, dict) and prefs.get('output_mode', 'human') == 'machine'
+    machine_mode = isinstance(prefs, dict) and prefs.get('output_mode', 'human') in ['machine', 'text']
     reply_method = prefs.get('msg_type', 'privmsg').upper() if isinstance(prefs, dict) else 'PRIVMSG'
     cfg = getattr(node, 'config', {})
     channel = cfg.get('channel', '#arena') if isinstance(cfg, dict) else '#arena'

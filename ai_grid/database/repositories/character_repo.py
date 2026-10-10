@@ -53,7 +53,8 @@ class CharacterRepository(BaseRepository):
                 func.lower(NetworkAlias.nickname) == name_lower,
                 NetworkAlias.network_name == network
             ).options(
-                selectinload(Character.inventory).selectinload(InventoryItem.template)
+                selectinload(Character.inventory).selectinload(InventoryItem.template),
+                selectinload(Character.skills)
             )
             
             result = await session.execute(stmt)
@@ -70,6 +71,7 @@ class CharacterRepository(BaseRepository):
 
             if char:
                 inv = [item.template.name for item in char.inventory] if char.inventory else []
+                skills_dict = {s.skill_name: s.level for s in char.skills} if char.skills else {}
                 return {
                     'name': char.name,
                     'race': char.race,
@@ -97,7 +99,8 @@ class CharacterRepository(BaseRepository):
                     'data_units': char.data_units,
                     'pending_stat_points': char.pending_stat_points,
                     'territory_count': territory_count,
-                    'mesh_power': mesh_power
+                    'mesh_power': mesh_power,
+                    'skills': skills_dict
                 }
             return None
 

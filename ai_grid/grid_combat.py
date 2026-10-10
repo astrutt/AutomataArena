@@ -86,6 +86,8 @@ class Entity:
         self.alignment = kwargs.get('alignment', db_record.get('alignment', 0))
         self.zone = kwargs.get('zone', "The_Arena")
         self.status = kwargs.get('status', "Normal")
+        raw_skills = kwargs.get('skills', db_record.get('skills', {}))
+        self.skills = raw_skills if isinstance(raw_skills, dict) else {}
         self.command_queued = None
         self.last_attacker_name = None
         logger.debug(f"Entity '{self.name}' initialized. HP: {self.hp}/{self.max_hp}, UP: {self.up}, NPC: {self.is_npc}")
@@ -341,12 +343,21 @@ class CombatEngine:
             return f"{attacker.name}'s {mode} maneuver was {format_text('EVADED', C_YELLOW)} by {target.name}!"
 
         # --- v1.8.0 DAMAGE FORMULAS ---
+        attacker_skills = getattr(attacker, 'skills', {}) or {}
+        target_skills = getattr(target, 'skills', {}) or {}
+
         if mode == "kinetic":
             raw_dmg = (attacker.cpu * 5) + attacker.ram
+            attack_lvl = attacker_skills.get("attack", 0)
+            if attack_lvl > 0:
+                raw_dmg = int(raw_dmg * (1.0 + 0.10 * attack_lvl))
             protection = target.sec
             verb = "strikes"
         elif mode == "cyber":
             raw_dmg = (attacker.bnd * 5) + attacker.sec
+            hack_lvl = attacker_skills.get("hack", 0)
+            if hack_lvl > 0:
+                raw_dmg = int(raw_dmg * (1.0 + 0.10 * hack_lvl))
             protection = target.bnd
             verb = "injects code into"
         elif mode == "exploit":
@@ -358,6 +369,11 @@ class CombatEngine:
 
         final_dmg = max(1, raw_dmg - protection)
         if target.status == "Defending": final_dmg = int(final_dmg * 0.5)
+
+        # Defend skill modifier (+10% damage reduction per level)
+        defend_lvl = target_skills.get("defend", 0)
+        if defend_lvl > 0:
+            final_dmg = max(1, int(final_dmg * (1.0 - 0.10 * defend_lvl)))
 
         # Crit check via ALG
         is_crit = random.randint(1, 100) <= attacker.alg

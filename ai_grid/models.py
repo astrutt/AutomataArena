@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Float, JSON
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Float, JSON, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.types import TypeDecorator
 from datetime import datetime, timezone
@@ -167,11 +167,34 @@ class Character(Base):
     # Task 064: Nodal Compromise Window
     last_breach_node_id = Column(Integer, ForeignKey('grid_nodes.id'), nullable=True)
     last_breach_target_id = Column(Integer, ForeignKey('raid_targets.id'), nullable=True)
+    last_skill_train_at = Column(AwareDateTime, nullable=True) # 1-hour skill training cooldown
     
     # Relationships
     player = relationship("Player", back_populates="characters")
     current_node = relationship("GridNode", foreign_keys=[node_id], back_populates="characters_present")
     inventory = relationship("InventoryItem", back_populates="owner", cascade="all, delete-orphan")
+    skills = relationship("CharacterSkill", back_populates="character", cascade="all, delete-orphan")
+
+# ==========================================
+# 2B. CHARACTER SKILL PROGRESSION
+# ==========================================
+class CharacterSkill(Base):
+    __tablename__ = 'character_skills'
+    __table_args__ = (
+        UniqueConstraint('character_id', 'skill_name', name='uq_character_skill'),
+    )
+
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey('characters.id'), nullable=False, index=True)
+    skill_name = Column(String, nullable=False) # powergen, attack, defend, hack, recon, siphon, stealth, fortify
+    level = Column(Integer, default=1, nullable=False) # 1 to 4
+    training_sessions = Column(Integer, default=0, nullable=False) # 0 to 24
+    is_active = Column(Boolean, default=False, nullable=False) # Actively being trained
+    last_trained_at = Column(AwareDateTime, nullable=True)
+    created_at = Column(AwareDateTime, default=lambda: datetime.now(timezone.utc))
+
+    character = relationship("Character", back_populates="skills")
+
 
 # ==========================================
 # 3. DISCOVERY, MAPPING & EVENTS

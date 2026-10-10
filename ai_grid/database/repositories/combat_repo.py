@@ -188,7 +188,8 @@ class CombatRepository:
                 NetworkAlias.network_name == network
             ).options(
                 selectinload(Character.current_node),
-                selectinload(Character.inventory)
+                selectinload(Character.inventory),
+                selectinload(Character.skills)
             )
             result = (await session.execute(stmt)).scalars().all()
             
@@ -214,7 +215,14 @@ class CombatRepository:
                 return True, f"{attacker.name} swung wildly at {target.name}, but they evaded!", None
                 
             raw_dmg = (attacker.cpu * 5) + attacker.ram
+            attacker_skills = {s.skill_name: s.level for s in attacker.skills} if attacker.skills else {}
+            target_skills = {s.skill_name: s.level for s in target.skills} if target.skills else {}
+            if attacker_skills.get("attack", 0) > 0:
+                raw_dmg = int(raw_dmg * (1.0 + 0.10 * attacker_skills["attack"]))
+
             final_dmg = max(1, raw_dmg - target.sec)
+            if target_skills.get("defend", 0) > 0:
+                final_dmg = max(1, int(final_dmg * (1.0 - 0.10 * target_skills["defend"])))
             if random.randint(1, 100) <= attacker.alg: final_dmg *= 2 
             
             target.current_hp -= final_dmg

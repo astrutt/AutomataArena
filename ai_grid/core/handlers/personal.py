@@ -77,7 +77,8 @@ async def handle_tasks_view(node, nickname: str, reply_target: str):
 
 async def handle_options(node, nickname: str, args: list, reply_target: str):
     VALID = {
-        "output": ("output_mode", {"human": "human", "machine": "machine"}),
+        "output": ("output_mode", {"human": "human", "machine": "machine", "text": "text", "narrative": "narrative"}),
+        "mode": ("output_mode", {"human": "human", "machine": "machine", "text": "text", "narrative": "narrative"}),
         "msgtype": ("msg_type", {"privmsg": "privmsg", "notice": "notice"}),
         "memo": ("memo_target", {"irc": "irc", "grid": "grid"}),
         "briefings": ("briefings_enabled", {"on": True, "off": False}),

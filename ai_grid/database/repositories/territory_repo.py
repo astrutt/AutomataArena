@@ -490,7 +490,15 @@ class TerritoryRepository(BaseRepository):
             if node.durability >= 100.0: return {"success": False, "msg": "Architecture maxed."}
                 
             char.power -= amount
-            node.durability = min(100.0, node.durability + (amount * 0.5))
+            from ai_grid.models import CharacterSkill
+            fortify_stmt = select(CharacterSkill).where(
+                CharacterSkill.character_id == char.id,
+                CharacterSkill.skill_name == 'fortify'
+            )
+            fortify_skill = (await session.execute(fortify_stmt)).scalars().first()
+            fortify_lvl = fortify_skill.level if fortify_skill else 0
+            durability_gain = (amount * 0.5) * (1.0 + 0.10 * fortify_lvl)
+            node.durability = min(100.0, node.durability + durability_gain)
             await session.commit()
             return {"success": True, "msg": f"Reinforcement complete. Durability: {node.durability:.1f}%."}
 

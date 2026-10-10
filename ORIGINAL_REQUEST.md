@@ -279,3 +279,56 @@ The core passive accrual engine is already in place (`ai_grid/database/spectator
   - Run targeted unit tests during development: `python -m pytest tests/test_spectator.py -v`, new targeted unit tests.
   - Do NOT run `run_tests.py` repeatedly in review loops.
   - Run `run_tests.py` strictly ONCE during final audit/verification before sign-off.
+
+
+## Follow-up — 2026-10-10T04:39:39Z
+
+This is a single self-contained fix; keep it small and focused. Implement the Character Skill System Expansion from `Mechanics Draft.md` Section 3 into AutomataGrid, providing full database models, repository methods, IRC command routing, and gameplay modifier hooks.
+
+Working directory: /Users/astrutt/teamwork_projects/automata_grid
+Integrity mode: benchmark
+
+## Requirements
+
+### R1. Skill Data Model & Repository
+Model character skills with support for up to 4 concurrent skills per character, 4 levels per skill, and 24 training sessions per level (rate-limited to 1 session/hour). Store and persist the 8 defined skills:
+- Initial skills: `powergen` (+10% power gen/lvl), `attack` (+10% kinetic damage/lvl), `defend` (+10% damage reduction/lvl), `hack` (+10% cyber damage/lvl).
+- Expansion skills: `recon` (+10% explore/probe yield, -10% detection chance/lvl), `siphon` (+10% exfil speed and quantity/lvl), `stealth` (-10% MCP heat generation per action/lvl), `fortify` (+10% owned node defense efficiency/lvl).
+Provide repository methods for querying active/available skills, starting a skill, progressing training sessions, forgetting a skill, and quitting current training.
+
+### R2. Command Handlers & CLI Routing
+Expose player skill commands matching the `Mechanics Draft.md` specifications:
+- `skill <name>`: Display description, level, and current training progress for a specific skill.
+- `skill list`: List all available and learned skills with levels and bonuses.
+- `skill start <name>`: Begin learning an available skill (up to the 4-slot limit).
+- `skill train`: Perform a training session (enforcing 1 session/hr limit and 24 sessions/lvl milestone).
+- `skill forget <name>`: Remove a skill and free its slot.
+- `skill quit`: Pause/quit training session without forgetting the learned skill.
+
+### R3. Modifier Integration & Async Test Suite
+Hook skill level modifiers into relevant game calculation routines (power generation rate, combat kinetic/cyber damage & reduction, discovery yields, and MCP heat gains). Implement dedicated async unit tests in `tests/test_skills.py` using in-memory SQLite (`aiosqlite`) to verify all skill lifecycle operations, constraints (slot limits, training cooldowns, level caps), and modifier calculations without socket binds.
+
+## Verification Resources
+
+- Specification: [Mechanics Draft.md](file:///Users/astrutt/teamwork_projects/automata_grid/Mechanics%20Draft.md) (Section 3: Skills)
+- Reference test harness and async repositories:
+  - `ai_grid/database/repositories/progression_repo.py`
+  - `tests/test_crafting.py`
+  - `tests/test_node_stash.py`
+- Python environment: `./.venv/bin/python`
+
+## Acceptance Criteria
+
+### Skill Model & Repository
+- [ ] Characters can learn a maximum of 4 skills simultaneously.
+- [ ] Each skill scales from Level 1 to 4, advancing after 24 completed training sessions.
+- [ ] Training sessions enforce the 1-hour cooldown constraint between sessions.
+- [ ] All 8 skills (`powergen`, `attack`, `defend`, `hack`, `recon`, `siphon`, `stealth`, `fortify`) are recognized with their respective attributes and effects.
+
+### Command Handlers
+- [ ] `skill list`, `skill <name>`, `skill start`, `skill train`, `skill forget`, and `skill quit` commands execute and return formatted responses for human, text, and narrative modes.
+- [ ] Attempting to train while on cooldown or start a 5th skill returns clear error messages.
+
+### Modifiers & Testing
+- [ ] Unit tests in `tests/test_skills.py` pass cleanly via `./.venv/bin/python -m unittest tests/test_skills.py`.
+- [ ] Existing targeted unit tests continue to pass with zero regressions.

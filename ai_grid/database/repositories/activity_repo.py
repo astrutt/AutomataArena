@@ -45,7 +45,7 @@ class ActivityRepository(BaseRepository):
             return reward_msg
 
     async def active_powergen(self, name: str, network: str) -> tuple:
-        """Manual power harvesting. Enhanced if performed on claimed node."""
+        """Manual power harvesting. Enhanced if performed on claimed node or with powergen skill."""
         async with self.async_session() as session:
             char = await self.get_character_by_nick(name, network, session)
             if not char: return False, "System offline."
@@ -53,7 +53,19 @@ class ActivityRepository(BaseRepository):
             node = char.current_node
             is_owner = node and node.owner_character_id == char.id
             
-            p_gain = 15.0 if is_owner else 10.0
+            base_gain = 15.0 if is_owner else 10.0
+
+            # Hook powergen skill modifier (+10% power gen / lvl)
+            from ai_grid.models import CharacterSkill
+            skill_stmt = select(CharacterSkill).where(
+                CharacterSkill.character_id == char.id,
+                CharacterSkill.skill_name == 'powergen'
+            )
+            power_skill = (await session.execute(skill_stmt)).scalars().first()
+            powergen_lvl = power_skill.level if power_skill else 0
+            multiplier = 1.0 + (0.10 * powergen_lvl)
+
+            p_gain = round(base_gain * multiplier, 2)
             char.power += p_gain
             
             if is_owner:
@@ -62,7 +74,8 @@ class ActivityRepository(BaseRepository):
                 
             await session.commit()
             owner_msg = " [OWNERSHIP BONUS: +5 uP | Node Capacitors +10 uP]" if is_owner else ""
-            return True, f"Manual power generation complete (+{p_gain} uP).{owner_msg}"
+            skill_msg = f" [SKILL BONUS: +{int(powergen_lvl * 10)}%]" if powergen_lvl > 0 else ""
+            return True, f"Manual power generation complete (+{p_gain} uP).{owner_msg}{skill_msg}"
 
     async def active_training(self, name: str, network: str) -> tuple:
         async with self.async_session() as session:

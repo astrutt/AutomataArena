@@ -5,6 +5,8 @@ from sqlalchemy.future import select
 from ai_grid.database.base_repo import BaseRepository
 from ai_grid.models import Character, NetworkAlias, Player
 
+from sqlalchemy.orm import selectinload
+
 logger = logging.getLogger("reputation_repo")
 
 REPUTATION_RULES = {
@@ -53,7 +55,7 @@ class ReputationRepository(BaseRepository):
             func.lower(Character.name) == nick_lower,
             func.lower(NetworkAlias.nickname) == nick_lower,
             NetworkAlias.network_name == network,
-        )
+        ).options(selectinload(Character.skills))
         return (await session.execute(stmt)).scalars().first()
 
     async def update_rep(self, nick: str, network: str, node_type: str, delta: float):
@@ -93,8 +95,15 @@ class ReputationRepository(BaseRepository):
             if not char:
                 return 0.0
 
+            effective_delta = float(delta)
+            if effective_delta > 0:
+                stealth_skill = next((s for s in char.skills if s.skill_name == 'stealth'), None) if char.skills else None
+                stealth_lvl = stealth_skill.level if stealth_skill else 0
+                if stealth_lvl > 0:
+                    effective_delta = effective_delta * max(0.0, 1.0 - (0.10 * stealth_lvl))
+
             current = float(char.mcp_heat or 0.0)
-            updated_heat = round(clamp(current + float(delta), 0.0, 10.0), 2)
+            updated_heat = round(clamp(current + effective_delta, 0.0, 10.0), 2)
             char.mcp_heat = updated_heat
             await session.commit()
             return updated_heat

@@ -19,9 +19,10 @@ from ai_grid.models import (
     PulseEvent, IncursionEvent, IncursionDefender, RaidTarget,
     DiscoveryRecord, BreachRecord, ItemTemplate, InventoryItem, 
     MainframeTask, AuctionListing, Leaderboard, CipherSession, GlobalMarket, Memo,
-    ArenaBet
+    ArenaBet, CharacterSkill
 )
 from ai_grid.database.core import DB_FILE, logger, CONFIG, GRID_EXPANSION, GRID_CONNECTIONS, BRIDGE_MAPPING, LOOT_TEMPLATES
+from ai_grid.database.repositories.skill_repo import SkillRepository
 from ai_grid.database.repositories.navigation_repo import NavigationRepository
 from ai_grid.database.repositories.territory_repo import TerritoryRepository
 from ai_grid.database.repositories.discovery_repo import DiscoveryRepository
@@ -65,6 +66,7 @@ class ArenaDB:
         self.spectator_repo = SpectatorCoreRepository(self.async_session)
         self.reputation = ReputationRepository(self.async_session)
         self.betting = BettingRepository(self.async_session)
+        self.skill = SkillRepository(self.async_session)
         
         # Grid domains
         self.navigation = NavigationRepository(self.async_session)
@@ -133,10 +135,28 @@ class ArenaDB:
             async def get_nickname_by_id(self, *a, **k): return await self.db.identity.get_nickname_by_id(*a, **k)
             async def active_powergen(self, *a, **k): return await self.db.activity.active_powergen(*a, **k)
             async def active_training(self, *a, **k): return await self.db.activity.active_training(*a, **k)
+            async def get_available_skills(self, *a, **k): return await self.db.skill.get_available_skills(*a, **k)
+            async def get_character_skills(self, *a, **k): return await self.db.skill.get_character_skills(*a, **k)
+            async def get_skill_info(self, *a, **k): return await self.db.skill.get_skill_info(*a, **k)
+            async def start_skill(self, *a, **k): return await self.db.skill.start_skill(*a, **k)
+            async def train_skill(self, *a, **k): return await self.db.skill.train_skill(*a, **k)
+            async def forget_skill(self, *a, **k): return await self.db.skill.forget_skill(*a, **k)
+            async def quit_training(self, *a, **k): return await self.db.skill.quit_training(*a, **k)
+            async def get_skill_level(self, *a, **k): return await self.db.skill.get_skill_level(*a, **k)
+            async def get_skill_modifiers_by_nick(self, *a, **k): return await self.db.skill.get_skill_modifiers_by_nick(*a, **k)
 
         self.player = PlayerFacade(self)
 
     # Primary Facade Methods (Direct delegation for ArenaDB level calls)
+    async def get_available_skills(self, *a, **k): return await self.skill.get_available_skills(*a, **k)
+    async def get_character_skills(self, *a, **k): return await self.skill.get_character_skills(*a, **k)
+    async def get_skill_info(self, *a, **k): return await self.skill.get_skill_info(*a, **k)
+    async def get_skill_level(self, *a, **k): return await self.skill.get_skill_level(*a, **k)
+    async def start_skill(self, *a, **k): return await self.skill.start_skill(*a, **k)
+    async def train_skill(self, *a, **k): return await self.skill.train_skill(*a, **k)
+    async def forget_skill(self, *a, **k): return await self.skill.forget_skill(*a, **k)
+    async def quit_training(self, *a, **k): return await self.skill.quit_training(*a, **k)
+    async def get_skill_modifiers_by_nick(self, *a, **k): return await self.skill.get_skill_modifiers_by_nick(*a, **k)
     async def get_spawn_node_name(self, *a, **k): return await self.navigation.get_spawn_node_name(*a, **k)
     async def set_spawn_node(self, *a, **k): return await self.navigation.set_spawn_node(*a, **k)
     async def get_location(self, *a, **k): return await self.navigation.get_location(*a, **k)
