@@ -329,7 +329,7 @@ Carriable items include: grid node devices, batteries, stabilizers, health packs
 
 Players have two reputation tracks that determine how the world responds to them. Playing as a Grid Ally and playing as a Grid Ghost are both valid, viable paths.
 
-**Implementation status:** Per-node-type reputation and 0–10 MCP Heat are implemented as a foundation. The automated decay and threshold-triggered world responses below are design goals, not live behavior.
+**Implementation status:** Fully implemented. Per-node-type reputation (-100 to +100), 0–10 MCP Heat, institutional cross-type penalties, automated passive decay (1.0 pt/hr rep, -0.5/hr heat), and threshold-triggered world responses (merchant discounts/lockouts, probe DC bonuses, IDS alertness, and defender mob spawns) are live behavior in the engine.
 
 ### Node-Type Reputation
 
@@ -593,8 +593,8 @@ Listed in order of payoff vs. complexity:
 | Priority | Feature | Status |
 |----------|---------|--------|
 | 1 | Spectator system | Implemented |
-| 2 | Rep + Heat foundation | Implemented; automated responses remain planned |
-| 3 | 50×50 grid with diverse region types | Partial; map exists, region distribution remains planned |
+| 2 | Rep + Heat system & world responses | Implemented |
+| 3 | 50×50 grid with diverse region types | Implemented |
 | 4 | Data / vulnerability / zero-day crafting chain | Implemented |
 | 5 | NET device + remote network operations | Implemented; live IRC smoke test deferred |
 | 6 | Timed combat status effects | Planned |
@@ -602,6 +602,7 @@ Listed in order of payoff vs. complexity:
 | 8 | Node stash system | Implemented |
 | 9 | Bounty board | Planned |
 | 10 | Remote node ownership claiming | Planned (post-launch / later) |
+| 11 | MCP Grid Messenger bot | Planned |
 
 ---
 

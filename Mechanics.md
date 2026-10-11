@@ -125,7 +125,20 @@ Combat currently uses temporary `Evading` and `Defending` stances. Timed effects
 
 - **Player Inventory**: Players have data and 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains.
 - **Skills**: Eight skills are implemented: `powergen`, `attack`, `defend`, `hack`, `recon`, `siphon`, `stealth`, and `fortify`. A character can learn up to four skills; each has four levels and requires 24 training sessions per level, with a one-hour training cooldown. Use `!a skill list` to inspect skills and progress.
-- **Reputation and Heat**: The game tracks node-type reputation and MCP Heat from 0 to 10. Heat has status labels from Passive through Critical. Passive decay and threshold-triggered world responses are not implemented.
+- **Reputation and Heat**: 
+  - **Node-Type Reputation**: Ranges from -100 (Hostile) to +100 (Trusted) per region type.
+    - **Trusted (75 to 100)**: Grants a +15% merchant buy discount / sell bonus on NPC trade nodes and a -2 DC bonus on `probe` scans.
+    - **Neutral / Unknown (-24 to 74)**: Standard baseline interactions.
+    - **Flagged (-25 to -74)**: Lower IDS alarm thresholds and a 25% chance of triggering defender security mobs on node entry.
+    - **Hostile (-75 to -100)**: Complete merchant trade lockout on matching nodes, a 75% chance of defender mob encounters on entry, and eligibility for bounty flags when hostile with 2+ region types or when MCP Heat > 6.0 (`Bounty`).
+  - **Cross-Type Institutional Consequences**:
+    - `[MED]` attacked/hacked: `[LEA]` rep -5.0, `[GOV]` rep -3.0
+    - `[GOV]` attacked/hacked: Dynamically penalizes whichever institutional peer (`[LEA]` or `[MIL]`) currently has the higher reputation score by -10.0 (ties default to `[MIL]`), plus MCP Heat +2.0
+    - `[MIL]` attacked/hacked: `[LEA]` rep -5.0 and `[MIL]` rep -5.0, plus MCP Heat +5.0
+    - `[CRP]` attacked/hacked: `[GOV]` rep -2.0 and `[LEA]` rep -2.0 (corporate lobbying)
+    - `[ICS]` or `[UTL]` attacked/hacked: `[GOV]` rep -15.0, `[MIL]` rep -10.0 (critical infrastructure)
+    - Character `stealth` skill dampens all incoming heat increases (-10% per level).
+  - **Automated Passive Decay**: Over periods of player inactivity, reputation scores passively drift back toward 0.0 at 1.0 pt/hr, and MCP Heat cools down toward 0.0 at 0.5/hr. Use `!a rep` to view live heat and regional reputation scores.
 
 ---
 
@@ -139,7 +152,7 @@ Gridnodes are the geography of the game world, and represent the various locatio
     - **`!a gridpower`** to check power distribution (OSINT).
 - **Grid Node Security**: Grid nodes have security levels 1-4.
     - **`!a grid info`** to see grid node info and level.
-- **Grid Node Type**: Current types include Safezone, Arena, Void, and Merchant. The procedural world contains 2,500 coordinates (50×50); most generated cells currently use the Void type rather than a varied regional distribution.
+- **Grid Node Type**: Includes 14 realistic regional types (`CIV`, `SMB`, `CRP`, `EDU`, `GOV`, `MED`, `MIL`, `ORG`, `LEA`, `DTC`, `POS`, `ICS`, `UTL`, `ARN`, `WAR`, and `VOD`) mapped to operational behaviors (`safezone`, `arena`, `merchant`, `void`). The 50×50 procedural map contains 2,500 coordinates clustered realistically (infrastructure zones pairing `ICS`+`UTL`, corporate sectors clustering `CRP`+`DTC`+`POS`, civic hubs clustering `CIV`+`SMB`+`EDU`, and defense zones clustering `GOV`+`LEA`+`MIL`) with ~700 active nodes (~28%) surrounded by ~1,800 unrouted void nodes (~72%). Connecting or registering a new IRC network dynamically spawns a dedicated Level 1 `OPEN` home node with `net_affinity` and an active `NET` device installed. Admin commands include `admin map stats`, `admin map status`, `admin map info <loc>`, and `admin map expand`.
 - **Grid Node Owner**: Can be claimed by players, NPCs or the MCP. 
 - **Grid Node Upgrades**: Grid nodes can be upgraded to improve capabilities and unlock module slots (Max 4).
 - **Grid Hardware (Modules)**:
@@ -214,9 +227,8 @@ Incursions are high-priority network threats that manifest semi-randomly across 
 
 ## Current Scope and Gaps
 
-- **Implemented:** Spectator progression; reputation/heat tracking; crafting and zero-day chains; eight trainable skills; node stash; NET remote operations; and incursion rewards.
-- **Partial:** The 50×50 topology is generated, but varied regional placement is not. Reputation and heat are tracked, but passive decay and threshold-driven world responses are not implemented.
-- **Not implemented:** Timed combat status effects and a bounty board with posting, claiming, and payout flows. `Bounty` is a heat status label only.
+- **Implemented:** Spectator progression; full 50×50 procedural grid generation with 14 diverse region types, realistic clustering, dynamic IRC home node spawning, and expanded admin map controls; reputation and MCP heat system with automated passive decay, cross-type institutional consequences, and threshold-triggered world responses (merchant discounts/lockouts, IDS alert triggers, defender mob spawns); crafting and zero-day chains; eight trainable skills; node stash; NET remote operations; and incursion rewards.
+- **Planned / Future:** Timed combat status effects (`THROTTLED`, `CORRUPTED`, `ROOTED`, `ENCRYPTED`), bounty board system with posting and hunting flows, and remote node ownership claiming across NET bridges.
 
 ---
 *Maintained by Mech — implementation status reviewed October 2026*
