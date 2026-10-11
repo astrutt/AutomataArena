@@ -29,6 +29,17 @@ async def handle_grid_movement(node, nick: str, direction: str, reply_target: st
             narrative = f"{nick} {adjective} {direction} towards {target_node}."
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(narrative, C_CYAN), action='TRAVEL', nick=nick, source=prev_node, destination=node_name)}")
         
+        # Threshold-triggered defender mob encounter on node entry
+        try:
+            loc = await node.db.get_location(nick, node.net_name)
+            reg = (loc.get('region_type') if loc else None) or (loc.get('type') if loc else None)
+            enc = await node.db.check_defender_spawn(nick, node.net_name, region_type=reg)
+            if enc.get('spawn'):
+                threat = enc.get('threat', 1)
+                await handle_mob_encounter(node, nick, node_name, threat, prev_node, reply_target)
+        except Exception:
+            logger.exception("Defender mob encounter hook failed for %s", nick)
+
         await handle_grid_view(node, nick, private_target)
     else:
         if msg == "System offline.":
@@ -205,8 +216,12 @@ async def handle_node_probe(node, nick: str, reply_target: str, args: list = Non
 
 async def _apply_reputation_hooks(node, nick: str, node_type: Optional[str] = None, rep_delta: float = -5.0, heat_delta: float = 1.0):
     try:
+        from ai_grid.database.repositories.reputation_repo import clean_region_key
         loc = await node.db.get_location(nick, node.net_name)
-        resolved_type = (node_type or (loc or {}).get('type') or 'SAFEZONE').upper()
+        candidate = clean_region_key(node_type) if node_type else ""
+        if not candidate:
+            candidate = clean_region_key((loc or {}).get('region_type')) or clean_region_key((loc or {}).get('type')) or 'SAFEZONE'
+        resolved_type = candidate or 'SAFEZONE'
         await node.db.update_heat(nick, node.net_name, heat_delta)
         await node.db.update_rep(nick, node.net_name, resolved_type, rep_delta)
     except Exception:
@@ -321,7 +336,8 @@ async def handle_grid_command(node, nickname: str, reply_target: str, action: st
         await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='SUCCESS', nick=nickname, is_machine=machine_mode)}")
         await node.add_xp(nickname, 10, reply_target)
         if action == "hack":
-            await _apply_reputation_hooks(node, nickname, None, rep_delta=-5.0, heat_delta=1.0)
+            target = args[0] if args else None
+            await _apply_reputation_hooks(node, nickname, target, rep_delta=-5.0, heat_delta=1.0)
         if not machine_mode:
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{nickname} executed a territorial {action}.', C_CYAN), action='SIGACT', nick=nickname)}")
     else:
@@ -344,7 +360,7 @@ async def handle_node_exploit(node, nick: str, reply_target: str, args: list):
     
     await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='SIGACT', result='EXPLOIT' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
     if success:
-        await _apply_reputation_hooks(node, nick, None, rep_delta=-5.0, heat_delta=1.0)
+        await _apply_reputation_hooks(node, nick, target_name, rep_delta=-5.0, heat_delta=1.0)
         await node.add_xp(nick, 25, reply_target)
 
 async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None):
@@ -421,13 +437,17 @@ async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None
     if sub_action == "hack":
         success, msg, alert = await node.db.infiltration.hack_node(nick, effective_network, target_name=target)
         await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='HACK', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
-        if success: await node.add_xp(nick, 25, reply_target)
+        if success:
+            await _apply_reputation_hooks(node, nick, target, rep_delta=-5.0, heat_delta=1.0)
+            await node.add_xp(nick, 25, reply_target)
         return
 
     if sub_action == "exploit":
         success, msg, alert = await node.db.infiltration.exploit_node(nick, effective_network, target=target)
         await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='EXPLOIT', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
-        if success: await node.add_xp(nick, 50, reply_target)
+        if success:
+            await _apply_reputation_hooks(node, nick, target, rep_delta=-5.0, heat_delta=1.0)
+            await node.add_xp(nick, 50, reply_target)
         return
         
     if sub_action == "siphon":
@@ -442,7 +462,7 @@ async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None
     await node.send(f"{reply_method} {private_target} :{tag_msg(result['msg'], action='RAID', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
     
     if success:
-        await _apply_reputation_hooks(node, nick, None, rep_delta=-5.0, heat_delta=1.0)
+        await _apply_reputation_hooks(node, nick, target, rep_delta=-5.0, heat_delta=1.0)
         await node.add_xp(nick, 15, reply_target)
         if result.get('sigact'):
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(result['sigact'], action='SIGACT', nick=nick)}")

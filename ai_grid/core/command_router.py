@@ -259,13 +259,16 @@ class CommandRouter:
                 else:
                     await self.node.send(f"PRIVMSG {reply_target} :[ERR] Invalid target nickname '{target_nick}'.")
             elif verb == "engage":
-                if source_nick in self.node.pending_encounters:
+                pending = getattr(self.node, 'pending_encounters', {}) or {}
+                if source_nick in pending:
                     asyncio.create_task(handlers.resolve_mob(self.node, source_nick, reply_target))
                 else: await self.node.send(f"PRIVMSG {reply_target} :{tag_msg(format_text('No enemy to engage.', C_RED), tags=['INFO', source_nick], nick=source_nick)}")
             elif verb == "flee":
-                enc = self.node.pending_encounters.pop(source_nick, None)
+                pending = getattr(self.node, 'pending_encounters', {}) or {}
+                enc = pending.pop(source_nick, None)
                 if enc:
-                    enc['timer'].cancel()
+                    if enc.get('timer') and not enc['timer'].done():
+                        enc['timer'].cancel()
                     prev = enc.get('prev_node')
                     if prev: await self.node.db.move_player_to_node(source_nick, self.node.net_name, prev)
                     machine = await handlers.is_machine_mode(self.node, source_nick)

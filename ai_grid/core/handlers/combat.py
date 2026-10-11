@@ -20,19 +20,30 @@ async def handle_mob_encounter(node, nick: str, node_name: str, threat: int, pre
     if not machine_mode:
         await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(format_text(f'{mob_name} detected near {nick} at {node_name}.', C_RED), action='SIGACT', nick=nick)}")
     
+    if not hasattr(node, 'pending_encounters') or node.pending_encounters is None:
+        node.pending_encounters = {}
+    if nick in node.pending_encounters:
+        old_timer = node.pending_encounters[nick].get('timer')
+        if old_timer and not old_timer.done():
+            old_timer.cancel()
+
     async def auto_engage():
         try:
             await asyncio.sleep(15)
-            if nick in node.pending_encounters:
-                asyncio.create_task(resolve_mob(node, nick, reply_target))
+            pending = getattr(node, 'pending_encounters', {}) or {}
+            if pending.get(nick, {}).get('timer') is asyncio.current_task():
+                await resolve_mob(node, nick, reply_target)
         except asyncio.CancelledError: pass
     timer = asyncio.create_task(auto_engage())
     node.pending_encounters[nick] = {'mob_name': mob_name, 'threat': threat, 'prev_node': prev_node, 'timer': timer, 'reply_target': reply_target}
 
 async def resolve_mob(node, nick: str, reply_target: str):
+    if not hasattr(node, 'pending_encounters') or node.pending_encounters is None:
+        return
     enc = node.pending_encounters.pop(nick, None)
     if not enc: return
-    enc['timer'].cancel()
+    if enc.get('timer') and not enc['timer'].done():
+        enc['timer'].cancel()
     
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     result = await node.db.resolve_mob_encounter(nick, node.net_name)

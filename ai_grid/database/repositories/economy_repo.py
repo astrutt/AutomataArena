@@ -168,8 +168,27 @@ class EconomyRepository:
             if char.current_node.availability_mode == "CLOSED" and char.current_node.owner_character_id != char.id:
                 return False, "[GRID][SITREP] STATUS=CLOSED | MSG=Grid is CLOSED. Grid exploration, or more may be required to open it."
 
-            if not char.current_node or char.current_node.node_type != "merchant":
+            if not char.current_node or char.current_node.node_type not in ("merchant", "npc_trade", "trade"):
                 return False, "Transaction Failed: No merchant in this node."
+
+            from ai_grid.database.repositories.reputation_repo import rep_status, clean_region_key, _safe_float
+            rep_map = {clean_region_key(k): _safe_float(v) for k, v in (char.node_rep or {}).items() if clean_region_key(k)}
+            raw_reg = str(char.current_node.region_type or char.current_node.node_type or "")
+            region = clean_region_key(raw_reg)
+            fallback_key = clean_region_key(char.current_node.node_type) if char.current_node.node_type else ""
+            rep_score = _safe_float(rep_map.get(region, rep_map.get(fallback_key, 0.0)))
+            if rep_score == 0.0 and region in ("VOD", "", "MERCHANT", "NPC_TRADE", "TRADE"):
+                if "MERCHANT" in rep_map:
+                    rep_score = _safe_float(rep_map["MERCHANT"])
+                elif rep_map:
+                    if any(rep_status(_safe_float(v)) == "Hostile" for v in rep_map.values()):
+                        rep_score = min(_safe_float(v) for v in rep_map.values())
+                    elif any(rep_status(_safe_float(v)) == "Trusted" for v in rep_map.values()):
+                        rep_score = max(_safe_float(v) for v in rep_map.values())
+
+            status = rep_status(rep_score)
+            if status == "Hostile":
+                return False, "Merchant Lockout: Merchants refuse to trade with hostile operatives."
                 
             stmt_item = select(ItemTemplate).where(ItemTemplate.name.ilike(item_name))
             result = await session.execute(stmt_item)
@@ -183,6 +202,8 @@ class EconomyRepository:
                 mult = market.multiplier if market else 1.0
                 
                 total_cost = int(tpl.base_value * mult)
+                if status == "Trusted":
+                    total_cost = max(1, int(total_cost * 0.85))
                 if char.credits < total_cost:
                     return False, f"Insufficient credits. {tpl.name} currently costs {total_cost}c (Market Mult: {mult:.2f}x)."
                 char.credits -= total_cost
@@ -195,7 +216,7 @@ class EconomyRepository:
                     session.add(new_item)
                 
                 await session.commit()
-                return True, f"Purchased {tpl.name} for {tpl.base_value}c. Balance: {char.credits}c."
+                return True, f"Purchased {tpl.name} for {total_cost}c. Balance: {char.credits}c."
             
             elif action == "sell":
                 existing = next((i for i in char.inventory if i.template_id == tpl.id and i.quantity > 0), None)
@@ -207,7 +228,11 @@ class EconomyRepository:
                 market = (await session.execute(stmt_market)).scalars().first()
                 mult = market.multiplier if market else 1.0
                 
-                sell_price = max(1, int(tpl.base_value * 0.5 * mult))
+                base_sell = int(tpl.base_value * 0.5 * mult)
+                if status == "Trusted":
+                    sell_price = max(1, int(base_sell * 1.15))
+                else:
+                    sell_price = max(1, base_sell)
                 char.credits += sell_price
                 existing.quantity -= 1
                 if existing.quantity <= 0:

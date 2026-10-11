@@ -160,6 +160,13 @@ async def idle_payout_loop(node):
             if decayed > 0 or pruned > 0:
                 logger.info(f"Retention Policy Enforced: {decayed} decayed, {pruned} pruned.")
 
+            try:
+                decay_res = await node.db.apply_passive_decay()
+                if decay_res.get('decayed_count', 0) > 0:
+                    logger.info("Passive Reputation/Heat Decay applied to %d characters.", decay_res['decayed_count'])
+            except Exception:
+                logger.exception("Error applying passive reputation decay")
+
             # --- TASK 052: HUMANIZED HOURLY PAYOUT ---
             entity_count = len(rewarded_entities)
             if entity_count > 0:

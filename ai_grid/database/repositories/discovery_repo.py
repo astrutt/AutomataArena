@@ -33,6 +33,13 @@ class DiscoveryRepository(BaseRepository):
 
             noise_malus = node.noise * 0.05
             success_threshold = (0.4 + (char.alg * 0.02)) - noise_malus
+
+            from ai_grid.database.repositories.reputation_repo import rep_status, clean_region_key, _safe_float
+            rep_map = {clean_region_key(k): _safe_float(v) for k, v in (char.node_rep or {}).items() if clean_region_key(k)}
+            region = clean_region_key(node.region_type)
+            rep_score = _safe_float(rep_map.get(region, 0.0))
+            if rep_status(rep_score) == "Trusted":
+                success_threshold += 0.10 # -2 DC bonus (10% higher success on d20 scale)
             
             roll = random.random()
             if roll < success_threshold:
@@ -141,7 +148,14 @@ class DiscoveryRepository(BaseRepository):
                 else:
                     return {"success": False, "error": f"Target '{target_name}' not detected in local sector."}
             
-            # --- SECURITY PRE-CHECK (IDS) ---
+            # --- SECURITY PRE-CHECK (IDS) & REPUTATION MODIFIERS ---
+            from ai_grid.database.repositories.reputation_repo import rep_status, clean_region_key, _safe_float
+            rep_map = {clean_region_key(k): _safe_float(v) for k, v in (char.node_rep or {}).items() if clean_region_key(k)}
+            target_reg = raid_target.target_type if raid_target else node.region_type
+            region = clean_region_key(target_reg)
+            rep_score = _safe_float(rep_map.get(region, 0.0))
+            r_status = rep_status(rep_score)
+
             addons = json.loads(node.addons_json or "{}")
             is_owner = node.owner_character_id == char.id
             alert_data = None
@@ -150,7 +164,10 @@ class DiscoveryRepository(BaseRepository):
                 from ai_grid.core.security_utils import is_action_hostile
                 if is_action_hostile('probe', node.availability_mode):
                     if addons.get("IDS") or node.upgrade_level > 2:
-                        if random.random() < detection_mult:
+                        alert_chance = detection_mult
+                        if r_status in ("Flagged", "Hostile"):
+                            alert_chance = min(1.0, detection_mult * (1.5 if r_status == "Hostile" else 1.25))
+                        if random.random() < alert_chance:
                             from ai_grid.models import Memo
                             alert_msg = f"DEEP_PROBE_DETECTION TARGET:{node.name} {'(SUBSET:'+raid_target.name+')' if raid_target else ''} SOURCE:{char.name}"
                             session.add(Memo(recipient_id=node.owner_character_id, message=alert_msg, source_node_id=node.id))
@@ -198,6 +215,11 @@ class DiscoveryRepository(BaseRepository):
             difficulty = (12 + (node.upgrade_level * 2)) + (char.current_node.noise * 0.5)
             if direction: difficulty += 3
             if raid_target: difficulty = raid_target.difficulty - 2 # Targets are slightly easier to probe than nodes
+            target_reg = raid_target.target_type if raid_target else node.region_type
+            target_region = clean_region_key(target_reg)
+            target_score = _safe_float(rep_map.get(target_region, 0.0))
+            if rep_status(target_score) == "Trusted":
+                difficulty = max(1, difficulty - 2) # Reduced probe difficulty (-2 DC bonus)
             
             roll = random.randint(1, 20) + char.alg
             if roll < difficulty:
