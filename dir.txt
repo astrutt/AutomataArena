@@ -1,29 +1,104 @@
-Version: 1.5.0
+AutomataGrid - Current Repository Map
 
-/AutomataArena/
-├── README.md               # Project Overview & Quickstart
-├── TODO.md                 # Project Roadmap & Active Tasks
-├── Mechanics Draft.md      # Game Design Document
-├── ai_grid/                # Grid Infrastructure & Manager
-│   ├── manager.py          # Main Multi-Network Hub Coordinator
-│   ├── grid_db.py          # Database Facade Layer
-│   ├── grid_llm.py         # LLM Interface (Qwen 2.5 API)
-│   ├── grid_combat.py      # Core PVP Combat Engine
-│   ├── grid_utils.py       # Formatting & IRC Utilities
-│   ├── config.json         # Master Network & API Configuration
-│   ├── core/               # Modular Logic Handlers
-│   │   ├── command_router.py # Central Command Dispatcher
-│   │   ├── handlers.py     # Game Logic & Command Handlers
-│   │   ├── arena.py        # Matchmaking & Multi-Network Coordination
-│   │   ├── irc_client.py   # Async IRC Protocol Implementation
-│   │   ├── security.py     # Auth, NickServ, & Auto-Reg Logic
-│   │   └── loops.py        # Background Automation Loops
-│   └── database/           # Persistence Layer (SQLAlchemy)
-│       ├── core.py         # DB Engine & Global Constants
-│       ├── player_repo.py  # Character & Account Repository
-│       ├── grid_repo.py    # Territory & Node Repository
-│       ├── combat_repo.py  # Encounter & Combat Result Persistence
-│       └── economy_repo.py # Transaction & Merchant Repository
-└── ai_fighter/             # Modular Client SDK for Bots
-    ├── bot.py              # Main Fighter Client Loop (Memory-Enabled)
-    └── config.ini          # Local Client Network Settings
+Project documentation and setup:
+├── README.md                         # Overview, setup, and gameplay
+├── Mechanics.md                      # Current mechanics (code-verified)
+├── Mechanics Draft.md                # Planned mechanics and design vision
+├── Mechanics Draft-old.md            # Archived design draft
+├── PLAYER_GUIDE.md                   # Player-facing guide
+├── Makefile                          # Common project tasks
+├── requirements.txt                  # Python dependencies
+├── run_tests.py                      # Test runner
+├── sandbox.py                        # Local sandbox utilities
+├── dir.txt                           # This repository map
+├── ai_player/                        # IRC player/bot client
+│   ├── bot.py
+│   ├── config.ini.example
+│   └── scratch/
+├── ai_grid/                          # Game server and grid backend
+│   ├── manager.py                    # Multi-network hub and IRC nodes
+│   ├── grid_db.py                    # Database facade and grid setup
+│   ├── grid_llm.py                   # LLM integration
+│   ├── grid_combat.py                # Turn-based combat engine
+│   ├── grid_utils.py                 # Formatting and shared utilities
+│   ├── models.py                     # SQLAlchemy models
+│   ├── debug_uplink.py
+│   ├── grid-notes_DB.txt
+│   ├── config.json.example
+│   ├── core/
+│   │   ├── arena.py                  # Arena queue and match lifecycle
+│   │   ├── command_router.py         # IRC command dispatch
+│   │   ├── handlers/                 # Command handlers by domain
+│   │   │   ├── admin.py
+│   │   │   ├── base.py
+│   │   │   ├── combat.py
+│   │   │   ├── economy.py
+│   │   │   ├── grid.py
+│   │   │   ├── hardware.py
+│   │   │   ├── incursion.py
+│   │   │   ├── machine.py
+│   │   │   ├── osint.py
+│   │   │   ├── personal.py
+│   │   │   ├── remote_net.py
+│   │   │   ├── skills.py
+│   │   │   └── spectator.py
+│   │   ├── irc_client.py             # Async IRC client
+│   │   ├── loops.py                  # Background game loops
+│   │   ├── map_utils.py              # Grid map rendering
+│   │   ├── security.py               # Authentication and registration
+│   │   ├── security_utils.py         # Security helpers
+│   │   └── validation.py             # Input validation
+│   ├── database/
+│   │   ├── core.py                   # Database configuration/constants
+│   │   ├── base_repo.py              # Shared repository behavior
+│   │   ├── spectator_repo.py         # Spectator persistence
+│   │   └── repositories/             # Domain repositories
+│   │       ├── activity_repo.py
+│   │       ├── betting_repo.py
+│   │       ├── character_repo.py
+│   │       ├── combat_repo.py
+│   │       ├── communication_repo.py
+│   │       ├── discovery_repo.py
+│   │       ├── economy_repo.py
+│   │       ├── expansion_repo.py
+│   │       ├── identity_repo.py
+│   │       ├── incursion_repo.py
+│   │       ├── infiltration_repo.py
+│   │       ├── mainframe_repo.py
+│   │       ├── maintenance_repo.py
+│   │       ├── minigame_repo.py
+│   │       ├── navigation_repo.py
+│   │       ├── progression_repo.py
+│   │       ├── pulse_repo.py
+│   │       ├── remote_net_repo.py
+│   │       ├── reputation_repo.py
+│   │       ├── skill_repo.py
+│   │       ├── spectator_repo.py
+│   │       └── territory_repo.py
+│   └── qa/                            # QA scripts, audits, and tests
+│       ├── TESTING_REQUIREMENTS.md
+│       ├── ai/
+│       ├── core/
+│       ├── logic/
+│       ├── network/
+│       └── tests/
+│           ├── e2e/                  # End-to-end tests and fixtures
+│           ├── sandbox_harness.py
+│           ├── stress_test_m1_challenger.py
+│           ├── stress_test_m1_o6_spectator.py
+│           ├── stress_test_m2_challenger.py
+│           ├── test_crafting.py
+│           ├── test_grid_generation.py
+│           ├── test_m1_spectator_stress.py
+│           ├── test_m2_adversarial_stress.py
+│           ├── test_m3_challenger_adversarial.py
+│           ├── test_node_stash.py
+│           ├── test_remote_net.py
+│           ├── test_reputation.py
+│           ├── test_sandbox_harness.py
+│           ├── test_skills.py
+│           ├── test_spectator.py
+│           └── ...                   # Additional targeted test modules
+└── scratch/                          # Local experiments and utilities
+
+Package `__init__.py` files are omitted from the tree for brevity. Local runtime configs, generated databases/logs, caches, virtual environments, and temporary test artifacts are also omitted; example configs are listed.
