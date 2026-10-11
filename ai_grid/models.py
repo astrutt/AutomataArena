@@ -63,10 +63,12 @@ class GridNode(Base):
     y = Column(Integer, index=True)
     is_unlocked = Column(Boolean, default=False)
     cluster_id = Column(Integer, nullable=True)
+    region_type = Column(String, default="VOD", index=True) # CIV, SMB, CRP, EDU, GOV, MED, MIL, ORG, LEA, DTC, POS, ICS, UTL, ARN, WAR, VOD
+    controller = Column(String, nullable=True) # MCP, NPC, RAID, CLAIMABLE, or None
     
     # Relationships
     owner = relationship("Character", foreign_keys=[owner_character_id], post_update=True)
-    active_target = relationship("RaidTarget", foreign_keys=[active_target_id])
+    active_target = relationship("RaidTarget", foreign_keys=[active_target_id], post_update=True)
     characters_present = relationship("Character", foreign_keys="[Character.node_id]", back_populates="current_node")
     # Connections as source
     exits = relationship("NodeConnection", foreign_keys="[NodeConnection.source_node_id]", back_populates="source_node")

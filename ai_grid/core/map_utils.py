@@ -2,6 +2,7 @@
 import datetime
 import random
 from sqlalchemy.future import select
+from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from ai_grid.models import Character, GridNode, NodeConnection
 from ai_grid.grid_utils import C_CYAN, C_GREEN, C_RED, C_YELLOW, C_WHITE, C_GREY, format_text
@@ -97,9 +98,12 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
     min_x, max_x = center_x - radius, center_x + radius
     min_y, max_y = center_y - radius, center_y + radius
     
-    # Boundary Clamping (0-49)
-    min_x, max_x = max(0, min_x), min(49, max_x)
-    min_y, max_y = max(0, min_y), min(49, max_y)
+    # Boundary Clamping
+    bounds_res = (await session.execute(select(func.max(GridNode.x), func.max(GridNode.y)))).first()
+    b_max_x = bounds_res[0] if bounds_res and bounds_res[0] is not None else 49
+    b_max_y = bounds_res[1] if bounds_res and bounds_res[1] is not None else 49
+    min_x, max_x = max(0, min_x), min(b_max_x, max_x)
+    min_y, max_y = max(0, min_y), min(b_max_y, max_y)
 
     # 3. Fetch Nodes in Box
     stmt = select(GridNode).where(
@@ -207,8 +211,8 @@ async def generate_ascii_map(session, char: Character, machine_mode: bool = Fals
         'merchant': 'MKT',
         'void': 'VOD'
     }
-    raw_type = center_node.active_target.target_type.upper() if center_node.active_target else center_node.node_type.lower()
-    t_name = raw_type if center_node.active_target else LEGEND_MAP.get(raw_type, raw_type.upper())
+    raw_type = center_node.active_target.target_type.upper() if center_node.active_target else ((getattr(center_node, 'region_type', None) or center_node.node_type).upper())
+    t_name = raw_type if (center_node.active_target or getattr(center_node, 'region_type', None)) else LEGEND_MAP.get(raw_type.lower(), raw_type.upper())
     
     if intel == "NONE":
         legend = f"[GRID]🛰️[GEOINT] Grid: ({center_x}, {center_y}) | Intel: [UNK]"

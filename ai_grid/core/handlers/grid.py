@@ -126,7 +126,15 @@ async def handle_grid_map(node, nick: str, reply_target: str, args: list = None)
         # 1. Sub-command: stats
         if args and args[0].lower() == "stats":
             stats = await node.db.get_grid_stats()
-            await node.send(f"{reply_method} {private_target} :{tag_msg(stats, action='GEOINT', result='INFO', nick=nick, is_machine=machine_mode)}")
+            if isinstance(stats, dict):
+                dim_str = f"{stats.get('width', 0)}x{stats.get('height', 0)}"
+                total = stats.get('total_nodes', 0)
+                active = stats.get('active_nodes', 0)
+                void = stats.get('void_nodes', 0)
+                stats_str = f"GRID_STATS | Dim: {dim_str} | Total_Nodes: {total:,} | Active: {active:,} | Void: {void:,}"
+            else:
+                stats_str = str(stats)
+            await node.send(f"{reply_method} {private_target} :{tag_msg(stats_str, action='GEOINT', result='INFO', nick=nick, is_machine=machine_mode)}")
             return
             
         # 2. Sub-command: full
@@ -344,7 +352,6 @@ async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None
     Raid Hub: Handles the compromise loop and extractions.
     Syntax: !a raid [network] [subaction] [target]
     """
-    if not await check_rate_limit(node, nick, reply_target, cooldown=60, consume=False, verb="loot"): return
     private_target, broadcast_chan, machine_mode, reply_method = await get_action_routing(node, nick, reply_target)
     
     # --- ARGUMENT PARSING ---
@@ -373,10 +380,29 @@ async def handle_grid_loot(node, nick: str, reply_target: str, args: list = None
     
     # --- DISPATCHING ---
     effective_network = network if network else node.net_name
+
+    if network:
+        remote_action = sub_action or "raid"
+        if remote_action in ["explore", "probe", "hack", "siphon", "exploit", "raid"]:
+            from .remote_net import handle_remote_net_command
+
+            await handle_remote_net_command(
+                node,
+                nick,
+                reply_target,
+                network,
+                [remote_action, *([target] if target else []), *remaining_args],
+            )
+            return
+
+    if not await check_rate_limit(node, nick, reply_target, cooldown=60, consume=False, verb="loot"): return
     
     if sub_action == "explore":
-        # Placeholder for network exploration (Task 064)
-        await node.send(f"{reply_method} {private_target} :[ERR] Network exploration protocols pending v2.0 update.")
+        result = await node.db.explore_node(nick, effective_network)
+        success = result.get("status") == "success"
+        msg = result.get("msg", result.get("error", "Exploration complete."))
+        await node.send(f"{reply_method} {private_target} :{tag_msg(msg, action='RECON', result='SUCCESS' if success else 'FAIL', nick=nick, is_machine=machine_mode)}")
+        await node.add_xp(nick, 5 if success else 2, reply_target)
         return
 
     if sub_action == "probe":

@@ -99,6 +99,7 @@ class NavigationRepository(BaseRepository):
                 'x': node.x, 'y': node.y,
                 'description': desc,
                 'type': node.node_type,
+                'region_type': getattr(node, 'region_type', None) or 'VOD',
                 'intel_level': intel,
                 'exits': exits,
                 'credits': char.credits,
@@ -112,7 +113,7 @@ class NavigationRepository(BaseRepository):
             }
 
     async def move_player(self, name: str, network: str, direction: str):
-        """Move 1 sector in 50x50 global coordinates."""
+        """Move 1 sector in global coordinates."""
         move_cost = CONFIG.get('mechanics', {}).get('action_costs', {}).get('move', 1.0)
         async with self.async_session() as session:
             stmt = select(Character).join(Player).join(NetworkAlias).where(
@@ -141,8 +142,13 @@ class NavigationRepository(BaseRepository):
             elif d in ['southwest', 'sw']: dx = -1; dy = 1
             
             if dx != 0 or dy != 0:
+                if node.x is None or node.y is None:
+                    return None, "POSITION ERROR: Current sector coordinates are indeterminate."
                 tx, ty = node.x + dx, node.y + dy
-                if tx < 0 or tx >= 50 or ty < 0 or ty >= 50:
+                bounds_res = (await session.execute(select(func.max(GridNode.x), func.max(GridNode.y)))).first()
+                max_w = (bounds_res[0] + 1) if bounds_res and bounds_res[0] is not None else 50
+                max_h = (bounds_res[1] + 1) if bounds_res and bounds_res[1] is not None else 50
+                if tx < 0 or tx >= max_w or ty < 0 or ty >= max_h:
                     return None, f"BOUNDARY ERROR: Global grid terminus reached at ({tx}, {ty})."
                 
                 # Find Target Node

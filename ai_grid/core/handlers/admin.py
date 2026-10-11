@@ -3,7 +3,7 @@ import logging
 import time
 import shlex
 import hmac
-from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE
+from ai_grid.grid_utils import format_text, tag_msg, C_GREEN, C_CYAN, C_RED, C_YELLOW, C_WHITE, C_L_GREEN
 from .base import get_action_routing
 
 logger = logging.getLogger("manager")
@@ -110,7 +110,7 @@ async def handle_admin_command(node, admin_nick: str, verb, args=None, reply_tar
             return
 
     if verb == "help":
-        await node.send(f"PRIVMSG {reply_target} :[ADMIN] Available commands: status, version, topic, broadcast, grid, battlestart, battlestop, restart, shutdown")
+        await node.send(f"PRIVMSG {reply_target} :[ADMIN] Available commands: status, version, topic, broadcast, grid, map, battlestart, battlestop, restart, shutdown")
         return
 
     # Redacted log for INFO, full for DEBUG
@@ -124,7 +124,7 @@ async def handle_admin_command(node, admin_nick: str, verb, args=None, reply_tar
         if not args:
             # Landing Page
             await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ MAINFRAME ADMIN OVERRIDES ]', C_CYAN, True), tags=['SIGINT'], nick=admin_nick)}")
-            cmds = ["status", "version", "topic", "broadcast <msg>", "nickregister", "nickconfirm", "nickidentify", "grid <rename|chgdesc|seed|spawn>", "battlestart/stop", "restart", "stop", "shutdown"]
+            cmds = ["status", "version", "topic", "broadcast <msg>", "nickregister", "nickconfirm", "nickidentify", "grid <rename|chgdesc|seed|spawn>", "map [stats|status|expand|info]", "battlestart/stop", "restart", "stop", "shutdown"]
             cmd_str = ", ".join([f"{node.prefix} admin {c}" for c in cmds])
             await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(cmd_str, C_WHITE), tags=['SIGINT'], nick=admin_nick)}")
             return
@@ -361,27 +361,110 @@ async def handle_admin_command(node, admin_nick: str, verb, args=None, reply_tar
             else:
                 await node.send(f"{reply_method} {private_target} :{tag_msg(f'Syntax: {node.prefix} admin chantopic rotate <min>', action='INFO', result='ERR')}")
     elif verb == "map":
-        # Grid v2.0 Diagnostic Map
-        tele = await node.db.expansion.get_expansion_telemetry()
-        
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ GRID v2.0 TELEMETRY ]', C_CYAN, True), tags=['SIGINT'], nick=admin_nick)}")
-        nodes_msg = f"COORDINATES: {tele['unlocked_nodes']}/{tele['total_nodes']} active | DENSITY: {tele['global_density']} char/node"
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(nodes_msg, C_WHITE), tags=['SIGINT'], nick=admin_nick)}")
-        
-        status_color = C_GREEN if not tele['expansion_recommended'] else C_RED
-        recommend = "STABLE" if not tele['expansion_recommended'] else "EXPANSION RECOMMENDED"
-        await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'EXPANSION STATUS: {recommend}', status_color), tags=['SIGINT'], nick=admin_nick)}")
+        subverb = args[0].lower() if args else "stats"
+
+        if not args or subverb in ["stats", "stat"]:
+            stats = await node.db.expansion.get_grid_stats()
+            w, h = stats['width'], stats['height']
+            total = stats['total_nodes']
+            active = stats['active_nodes']
+            void = stats['void_nodes']
+            active_pct = (active / total * 100.0) if total > 0 else 0.0
+            void_pct = (void / total * 100.0) if total > 0 else 0.0
+
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ GRID TOPOLOGY STATS ]', C_CYAN, True, is_machine=machine_mode), tags=['SIGINT'], nick=admin_nick, is_machine=machine_mode)}")
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'DIMENSIONS: {w}x{h} ({total:,} coordinates) | ACTIVE: {active:,} ({active_pct:.1f}%) | VOID: {void:,} ({void_pct:.1f}%)', C_WHITE, is_machine=machine_mode), tags=['SIGINT'], nick=admin_nick, is_machine=machine_mode)}")
+            
+            reg_items = [f"{k}: {v}" for k, v in stats['regions'].items()]
+            chunk_size = 8
+            for i in range(0, len(reg_items), chunk_size):
+                chunk_str = " | ".join(reg_items[i:i + chunk_size])
+                await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'REGIONS: {chunk_str}', C_GREEN, is_machine=machine_mode), tags=['SIGINT'], nick=admin_nick, is_machine=machine_mode)}")
+
+        elif subverb == "status":
+            status = await node.db.expansion.get_grid_status()
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text('[ GRID OPERATIONAL STATUS ]', C_CYAN, True, is_machine=machine_mode), tags=['SIGINT'], nick=admin_nick, is_machine=machine_mode)}")
+            health_str = f"HEALTH: {status['health']:.1f}% avg durability | STABILITY: {status['stability']:.1f}% | CLAIMED: {status['claimed_nodes']} nodes"
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(health_str, C_WHITE, is_machine=machine_mode), tags=['SIGINT'], nick=admin_nick, is_machine=machine_mode)}")
+            power_str = f"POWER: {status['power_stored']:.0f} uP stored | LOAD: {status['power_load']:.1f} uP/cycle | GEN: {status['power_generated']:.1f} uP/cycle"
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(power_str, C_YELLOW, is_machine=machine_mode), tags=['SIGINT'], nick=admin_nick, is_machine=machine_mode)}")
+            homes_list = ", ".join(status['home_nodes']) if status['home_nodes'] else "None"
+            homes_str = f"NETWORKS: {len(status['home_nodes'])} active home nodes ({homes_list})"
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(homes_str, C_GREEN, is_machine=machine_mode), tags=['SIGINT'], nick=admin_nick, is_machine=machine_mode)}")
+
+        elif subverb == "expand":
+            delta_w = 10
+            delta_h = 10
+            if len(args) >= 3:
+                try:
+                    delta_w = int(args[1])
+                    delta_h = int(args[2])
+                except ValueError:
+                    pass
+            elif len(args) >= 2:
+                try:
+                    delta_w = int(args[1])
+                    delta_h = int(args[1])
+                except ValueError:
+                    pass
+            success, msg, _ = await node.db.expansion.expand_grid(delta_w, delta_h)
+            tag = "SIGACT" if success else "OSINT"
+            color = C_GREEN if success else C_RED
+            await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(f'[GRID EXPANSION] {msg}', color, True, is_machine=machine_mode), tags=[tag], nick=admin_nick, is_machine=machine_mode)}")
+            if success:
+                announcement = format_text(f"GRID EXPANSION: {msg}", C_L_GREEN, True)
+                await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(announcement, tags=['SIGACT'], nick=admin_nick)}")
+
+        elif subverb in ["help", "?"]:
+            await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: admin map [stats|status|expand [<w> <h>]|info <node_name>|<x> <y>]', action='INFO', result='INFO', is_machine=machine_mode)}")
+            return
+
+        else:
+            # admin map info <loc> OR admin map <x> <y> OR admin map <node_name>
+            info_args = args[1:] if subverb == "info" else args
+            if not info_args:
+                await node.send(f"{reply_method} {private_target} :{tag_msg('Syntax: admin map info <node_name> or admin map info <x> <y>', action='INFO', result='ERR', is_machine=machine_mode)}")
+                return
+
+            node_info = None
+            raw_target_str = " ".join(info_args).strip()
+            cleaned_coords = raw_target_str.replace(',', ' ').replace('(', ' ').replace(')', ' ').replace('[', ' ').replace(']', ' ').replace('<', ' ').replace('>', ' ').split()
+            if len(cleaned_coords) == 2:
+                try:
+                    node_info = await node.db.expansion.get_node_info(int(cleaned_coords[0]), int(cleaned_coords[1]))
+                except ValueError:
+                    node_info = await node.db.expansion.get_node_info(raw_target_str)
+            else:
+                node_info = await node.db.expansion.get_node_info(raw_target_str)
+
+            if not node_info:
+                searched_target = " ".join(info_args)
+                await node.send(f"{reply_method} {private_target} :{tag_msg(f'Node or coordinates not found: {searched_target}', action='INFO', result='ERR', is_machine=machine_mode)}")
+            else:
+                hw_keys = [k for k, v in node_info['addons'].items() if v]
+                hw_str = ", ".join(hw_keys) if hw_keys else "None"
+                ctrl_str = f" | Ctrl: {node_info['controller']}" if node_info.get('controller') else ""
+                tele_msg = (
+                    f"[NODE TELEMETRY] {node_info['name']} ({node_info['x']}, {node_info['y']}) | "
+                    f"Region: {node_info['region_type']} | Sec: Lvl {node_info['upgrade_level']} | "
+                    f"Dur: {node_info['durability']:.1f}% | Power: {node_info['power_stored']:.1f}uP | "
+                    f"Owner: {node_info['owner']} | HW: [{hw_str}]{ctrl_str} | State: {node_info['availability_mode']}"
+                )
+                await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(tele_msg, C_CYAN, is_machine=machine_mode), tags=['SIGINT'], nick=admin_nick, is_machine=machine_mode)}")
 
     elif verb == "expand":
-        # Manual Cluster Unlock
-        cluster_id = int(args[0]) if args else None
-        success, feedback = await node.db.expansion.manual_expand_sector(cluster_id)
+        # Supports both dynamic expand and cluster unlock
+        if args and args[0].isdigit():
+            cluster_id = int(args[0])
+            success, feedback = await node.db.expansion.manual_expand_sector(cluster_id)
+        else:
+            success, feedback, _ = await node.db.expansion.expand_grid(10, 10)
         
         tag = "SIGACT" if success else "OSINT"
         await node.send(f"{reply_method} {private_target} :{tag_msg(format_text(feedback, C_YELLOW if success else C_RED), tags=[tag], nick=admin_nick)}")
         
         if success:
-            announcement = format_text(f"GRID EXPANSION: New coordinate clusters have been synced to the global mesh.", C_L_GREEN, True)
+            announcement = format_text(f"GRID EXPANSION: {feedback}", C_L_GREEN, True)
             await node.send(f"PRIVMSG {broadcast_chan} :{tag_msg(announcement, tags=['SIGACT'], nick=admin_nick)}")
 
     elif verb == "restart":

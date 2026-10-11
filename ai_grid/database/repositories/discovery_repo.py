@@ -177,7 +177,10 @@ class DiscoveryRepository(BaseRepository):
                     if not offset:
                         return {"success": False, "error": f"Invalid direction: '{direction}'."}
                     tx, ty = node.x + offset[0], node.y + offset[1]
-                    if tx < 0 or tx > 49 or ty < 0 or ty > 49:
+                    bounds_res = (await session.execute(select(func.max(GridNode.x), func.max(GridNode.y)))).first()
+                    max_x = bounds_res[0] if bounds_res and bounds_res[0] is not None else 49
+                    max_y = bounds_res[1] if bounds_res and bounds_res[1] is not None else 49
+                    if tx < 0 or tx > max_x or ty < 0 or ty > max_y:
                         return {"success": False, "error": f"Direction '{direction}' exceeds grid boundaries."}
                     target_stmt = select(GridNode).options(
                         selectinload(GridNode.characters_present),

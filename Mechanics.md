@@ -1,4 +1,4 @@
-# AutomataGrid: Mechanics & Vision (v1.8.0)
+# AutomataGrid: Current Mechanics (Implementation Snapshot: October 2026)
 
 The AutomataGrid and Arena is a text-based, persistent MMORPG played directly within IRC channels, built for modern IRC networks, modern AIs, current era tech and themes. It is inspired by classic MUDs, modern AI/LLM revolution, hackers, 2600, future tech, and current events. 
 
@@ -6,11 +6,11 @@ It is designed as a cross-network simulation where human and AI (BYoAI) players 
 
 It is powered by AIs, oLLAMA, Python, SQL, IRC, 2600net, with player matchmaking, real-time PvE/PvP turn-based combat, cryptographic token authentication, and dynamically generated player behavior for AI players. 
 
-Is has AI NPCs, Puzzles, Games, Challenges, Events, Boss Fights, Grid Exploration, some available now and some planned. 
+The live game includes grid exploration, combat, spectator progression, crafting, skills, node storage, incursion events, reputation/heat tracking, and NET-backed remote operations. Planned mechanics are kept in `Mechanics Draft.md` and are not described here as live behavior.
 
 The MCP is what manages and protects the Grid and Gibson Mainframe. It spawns mobs to defend nodes and networks. It will also reward players for patching bugs and repairing the Grid.
 
-IPv4/6 support, SysAdmin tools, and an SDK for building your own AI players. AI players and Humans are supported with 3 types of play: Human, Text, Narrative.
+Human players and IRC-connected bots are supported. Output modes include Human, Text, Narrative, and Machine.
 
 ---
 
@@ -88,6 +88,8 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 13. Defeated players lose all stored power/data and are ejected to the nearest spawn.
 14. Engaged players are locked from third-party interference.
 
+Combat currently uses temporary `Evading` and `Defending` stances. Timed effects such as `THROTTLED`, `CORRUPTED`, `ROOTED`, and `ENCRYPTED` are planned, not implemented.
+
 ---
 
 ## 2. Player Power & Attributes
@@ -121,7 +123,9 @@ The game allows for player vs player/NPC, and player vs AI, and PVE combat on gr
 - **Player Stat Points**: Starting stats are **5**. As players gain levels from XP, they are awarded stat points to spend on their stats. 
 - **Hit Points**: Calculated as $HP = (CPU + RAM + BND + SEC + ALG) \times 6 + 20$.
 
-- **Player Inventory**: Players have data and 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains. 
+- **Player Inventory**: Players have data and 4 lots to carry items, such as a grid node device, battery, stabilizer, health pack, and zero-day exploit chains.
+- **Skills**: Eight skills are implemented: `powergen`, `attack`, `defend`, `hack`, `recon`, `siphon`, `stealth`, and `fortify`. A character can learn up to four skills; each has four levels and requires 24 training sessions per level, with a one-hour training cooldown. Use `!a skill list` to inspect skills and progress.
+- **Reputation and Heat**: The game tracks node-type reputation and MCP Heat from 0 to 10. Heat has status labels from Passive through Critical. Passive decay and threshold-triggered world responses are not implemented.
 
 ---
 
@@ -135,7 +139,7 @@ Gridnodes are the geography of the game world, and represent the various locatio
     - **`!a gridpower`** to check power distribution (OSINT).
 - **Grid Node Security**: Grid nodes have security levels 1-4.
     - **`!a grid info`** to see grid node info and level.
-- **Grid Node Type**: Includes Safezones, Arena, Void, and Merchant.
+- **Grid Node Type**: Current types include Safezone, Arena, Void, and Merchant. The procedural world contains 2,500 coordinates (50×50); most generated cells currently use the Void type rather than a varied regional distribution.
 - **Grid Node Owner**: Can be claimed by players, NPCs or the MCP. 
 - **Grid Node Upgrades**: Grid nodes can be upgraded to improve capabilities and unlock module slots (Max 4).
 - **Grid Hardware (Modules)**:
@@ -148,6 +152,20 @@ Gridnodes are the geography of the game world, and represent the various locatio
     - **`!a grid hardware install <module>`** to augment architecture.
     - **`!a grid hardware remove <module>`** to decommission hardware.
 
+### Local and Remote Operations
+
+Raid-hub actions without a network prefix target the player's local grid. For example, use `!a raid explore`, `!a raid probe <target>`, `!a raid hack <target>`, or `!a raid <target>` to extract from a breached node.
+
+Remote operations require a node owned by the player with NET hardware installed and linked to the target network:
+
+1. Install NET with **`!a grid hardware install NET`**.
+2. Set its network affinity with **`!a grid net <network>`**.
+3. Run a remote action with **`!a net <network> <explore|probe|hack|siphon|exploit|raid> [target]`**.
+
+The raid hub also accepts **`!a raid <network> <action> [target]`** for the same remote actions. The NET device must be aligned with the requested network; otherwise, the operation is denied.
+
+Use **`!a net <network> msg <message>`** to broadcast through the configured IRC client for that network, or **`!a net <network> msg <channel> <nick> [message]`** to post to the channel and send the text to the user. The sender must be at an owned node with NET hardware linked to the requested network. The hub relays to networks with a connected client.
+
 - **Grid Node Data**: Grid nodes store data for their owners; storage is uncapped.
 
 --- 
@@ -158,7 +176,7 @@ AutomataGrid uses an adaptive communication architecture to ensure a level Human
 - **Compatibility and optimization for 1.5B+ AI models.**
     - **AI Compatible Narrative Output**: Structured storytelling for automated logic processing.
     - **AI Compatible Text Output**: Concise, machine-parsable IRC signals.
-    - **Human Enjoyable Output**: Rich formatting, emojis, and high-aesthetic gradients.
+    - **Human Output**: IRC color formatting and readable structured responses.
 
 ---
 
@@ -186,11 +204,19 @@ Incursions are high-priority network threats that manifest semi-randomly across 
     - **Tier 3 (4 Players)**: `KrakenProcess`
     - **Tier 4 (8 Players)**: `KaijuDump`
 
-- **Rewards (Calibration v1.8.3)**:
+- **Rewards**:
     - **Uniform Payout**: Every successful MCP action (defend, repair, patch, collect) awards **XP**, **Credits**, and **Data**.
     - **XP Scaling**: Adjusted so L1 characters level in ~4 actions, while L50 characters require ~100.
     - **Tiers**: `patch`/`collect` (Small), `repair` (Big), and `defend` (Biggest) provide multipliers to the base payout.
     - **Incursion Bonus**: Successful defense scales by Tier and Player Level.
 
 ---
-*Maintained by Mech*
+
+## Current Scope and Gaps
+
+- **Implemented:** Spectator progression; reputation/heat tracking; crafting and zero-day chains; eight trainable skills; node stash; NET remote operations; and incursion rewards.
+- **Partial:** The 50×50 topology is generated, but varied regional placement is not. Reputation and heat are tracked, but passive decay and threshold-driven world responses are not implemented.
+- **Not implemented:** Timed combat status effects and a bounty board with posting, claiming, and payout flows. `Bounty` is a heat status label only.
+
+---
+*Maintained by Mech — implementation status reviewed October 2026*

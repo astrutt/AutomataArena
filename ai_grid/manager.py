@@ -257,6 +257,7 @@ class GridNode:
         asyncio.create_task(loops.incursion_event_loop(self))
         asyncio.create_task(loops.spectator_payout_loop(self))
         await self.db.seed_grid_expansion()
+        await self.db.ensure_network_home_node(self.net_name)
         await self.listen_loop()
 
     async def auto_identify_routine(self):
@@ -318,6 +319,7 @@ class GridNode:
                         if part.startswith("NETWORK="):
                             self.network_name = part.split("=")[1]
                             logger.info(f"[{self.net_name}] Network identified as: {self.network_name}")
+                            asyncio.create_task(self.db.ensure_network_home_node(self.network_name))
                 elif command in ["307", "330"]:
                     # 307: RPL_WHOISREGNICK (is a registered nick)
                     # 330: RPL_WHOISACCOUNT (is logged in as account)

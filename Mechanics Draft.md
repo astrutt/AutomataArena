@@ -1,10 +1,12 @@
-# AutomataGrid: Mechanics & Vision (v1.9.0)
+# AutomataGrid: Planned Mechanics & Vision (Draft)
+
+This document records design targets, including features that are not live. See [Mechanics.md](Mechanics.md) for current behavior; the roadmap at the end tracks which plans have shipped.
 
 The AutomataGrid and Arena is a text-based, persistent MMORPG played directly within IRC channels, built for modern IRC networks, modern AIs, current era tech and themes. It is inspired by classic MUDs, modern AI/LLM revolution, hackers, 2600, future tech, and current events.
 
 It is designed as a cross-network simulation where human and AI (BYoAI) players compete for network access, grid node control, credits, and power. The grid and Arena offer PVP, PVE with AI vs AI, AI vs Human, Human vs Human battles. Spectators idle and chat in the IRC channel where the game is played and gain credits, power and rank.
 
-It has AI NPCs, Puzzles, Games, Challenges, Events, Boss Fights, Grid Exploration, some features available now and some planned.
+The vision includes AI NPCs, puzzles, games, challenges, events, boss fights, and expanded grid exploration. Availability varies; proposed systems are labeled as planned below.
 
 The MCP is what manages and protects the Grid and Gibson Mainframe. It spawns mobs to defend nodes and networks. It will also reward players for patching bugs, repairing, and defending the Grid.
 
@@ -96,8 +98,9 @@ options mode human
 
 ### 3. The Grid
 
-The Grid is a procedurally generated 50×50 map (2,500 nodes) with 14 region types, each with unique opportunities, targets, friends, enemies, and merchants.
+**Design target:** The Grid is a procedurally generated 50×50 map (2,500 nodes) with a varied set of regions, each with unique opportunities, targets, friends, enemies, and merchants. The current generator creates the 50×50 topology, but does not yet distribute the proposed region types across the map.
 
+**Planned population targets (not current map counts):**
 ```
 Grid: 50x50 (2,500 nodes)
 Active nodes: ~700 (28%)
@@ -108,7 +111,7 @@ Active nodes: ~700 (28%)
 Empty nodes: ~1,800 (72%)
 ```
 
-**Region Types:**
+**Planned Region and Target Types:**
 
 | Code | Name | Notes |
 |------|------|-------|
@@ -129,7 +132,7 @@ Empty nodes: ~1,800 (72%)
 | **WAR** | War Zones — conflict networks, bosses, events | |
 | **VOD** | Voids — unknown effects, random low-level NPC/mob spawn | |
 
-As population grows, admins receive a notification to expand the grid:
+**Planned:** Population-based expansion and admin controls for expanding the map:
 
 | Command | Description |
 |---------|-------------|
@@ -165,31 +168,22 @@ The game follows a progressive data-gathering model where technical prowess dete
 **Raid Commands:**
 
 ```
-Local node targets:
-  raid <target>                 — show target info
-  raid probe <target>           — probe for info
-  raid hack <target>            — attempt hack
-  raid siphon <target>          — siphon the target
-  raid exploit <target>         — exploit (requires zero-day chain)
+Local operations:
+      !a raid explore
+      !a raid probe <target>
+      !a raid hack <target>
+      !a raid siphon <target>
+      !a raid exploit <target>
+      !a raid <target>                       — raid a local target
 
-Network targets:
-  raid <network>                — show available networks
-  raid <network> explore        — explore the network
-  raid <network> probe          — probe the network
-  raid <network> hack           — hack the network
-  raid <network> siphon         — siphon the network
-  raid <network> exploit        — exploit the network
-
-Network + specific target:
-  raid <network> <target>             — show target info
-  raid <network> explore <target>     — explore target
-  raid <network> probe <target>       — probe target
-  raid <network> hack <target>        — hack target
-  raid <network> siphon <target>      — siphon target
-  raid <network> exploit <target>     — exploit target
+Remote operations require an owned node with NET hardware linked to the target network:
+      !a grid hardware install NET
+      !a grid net <network>
+      !a net <network> <explore|probe|hack|siphon|exploit|raid> [target]
+      !a raid <network> <action> [target]    — raid-hub alias for remote operations
 ```
 
-**Possible raid targets:** `[CIV][SMB][EDU][MED][GOV][MIL][CRP][ORG][LEA][DTC][UTL][ICS][POS][WAR]` — discovered randomly based on node level or region. Easy targets may not require a full hack chain but yield lower rewards.
+**Planned target catalogue:** `[CIV][SMB][EDU][MED][GOV][MIL][CRP][ORG][LEA][DTC][UTL][ICS][POS][WAR]`. The full catalogue is not currently generated across the map.
 
 ---
 
@@ -226,7 +220,7 @@ Queue is available from: ARN nodes, player-claimed nodes, and friendly nodes.
 - **Criticals**: `ALG%` chance to deal 200% damage
 - **Attack vs Hack**: Kinetic (`attack`) targets CPU/RAM. Cyber (`hack`) targets BND/SEC. Using the right type against a stat-heavy opponent matters.
 
-**Status Effects** (unlocked as player level and skill increase — not available at L1):
+**Planned Status Effects** (not currently implemented):
 
 | Effect | Source | Mechanic |
 |--------|--------|----------|
@@ -235,7 +229,7 @@ Queue is available from: ARN nodes, player-claimed nodes, and friendly nodes.
 | **ROOTED** | High-level `attack` | Target cannot `flee` or `move` for 1 turn |
 | **ENCRYPTED** | Defensive item / skill | Immune to cyber damage; vulnerable to kinetic |
 
-Status effects are intentionally absent at low levels to keep early play simple for humans and small LLMs. They emerge naturally through leveling and skill progression.
+These effects are design proposals. Current combat supports temporary action stances such as evading and defending, but does not apply these level- or skill-unlocked effects.
 
 **Combat Resolution:**
 - Combat ends when one player flees (60% chance), is defeated, or surrenders
@@ -310,7 +304,7 @@ Time to fully train 1 skill: 24 sessions × 4 levels = 96 hrs (≈ 90 days at ca
 | **`stealth`** | -10% MCP heat generation per action |
 | **`fortify`** | +10% owned node defense efficiency |
 
-> Note: `recon`, `siphon`, `stealth`, and `fortify` are planned for post-launch. Early access ships with the first four.
+All eight listed skills (`powergen`, `attack`, `defend`, `hack`, `recon`, `siphon`, `stealth`, and `fortify`) are implemented. Their definitions and modifiers are covered by the skill test suite.
 
 **Skill Commands:**
 
@@ -335,9 +329,11 @@ Carriable items include: grid node devices, batteries, stabilizers, health packs
 
 Players have two reputation tracks that determine how the world responds to them. Playing as a Grid Ally and playing as a Grid Ghost are both valid, viable paths.
 
+**Implementation status:** Per-node-type reputation and 0–10 MCP Heat are implemented as a foundation. The automated decay and threshold-triggered world responses below are design goals, not live behavior.
+
 ### Node-Type Reputation
 
-One rep score per region type, ranging from **-100 (Hostile)** to **+100 (Trusted)**. Attacking a node type reduces that type's rep. Rep decays slowly back toward 0 when inactive.
+One rep score per region type, ranging from **-100 (Hostile)** to **+100 (Trusted)**. Attacking a node type can reduce that type's rep. The design calls for rep to decay toward 0 when inactive; passive decay is not currently implemented.
 
 | Range | Status | Effect |
 |-------|--------|--------|
@@ -359,22 +355,20 @@ Attacking certain node types generates hostility with *other* types, reflecting 
 | `[CRP]` attacked | `[GOV]` rep -2 (corporate lobbying effect) |
 | `[ICS]` or `[UTL]` attacked | `[GOV]` rep -15, `[MIL]` rep -10 (critical infrastructure) |
 
-**Bounty Board:**
-Players at Hostile rep with 2+ node types become eligible for MCP-issued bounties. Other players can claim the bounty by defeating the target in combat. Bounties are broadcast on the arena channel.
+**Bounty Board (Planned):**
+The proposed system makes players at Hostile rep with 2+ node types eligible for MCP-issued bounties. Other players could claim bounties by defeating targets in combat. There is currently no bounty board, claim flow, or bounty payout.
 
 ### MCP Heat
 
-MCP Heat is a separate track (0–10) that measures how aggressively the MCP perceives a player. It rises from actions against MCP-controlled nodes and decays slowly over time.
+MCP Heat is a separate 0–10 track. Actions can update it and the game reports a heat status band. Automatic decay and the responses in the table below are planned, not currently triggered by heat thresholds.
 
-Players can **reduce heat** by: patching vulnerabilities on MCP nodes, responding to incursions, or paying a "lay low" penalty (credits + cooldown time).
-
-| Heat | MCP Response |
-|------|-------------|
-| 0–2 | Passive — no response |
-| 3–4 | IDS triggers faster on MCP nodes |
-| 5–6 | Mobs spawn near the player on movement |
-| 7–8 | Bounty broadcast to channel; mobs spawn on player-owned nodes |
-| 9–10 | Safezone access suspended; Tier 3+ incursion deployed to player's node |
+| Heat | Current status label |
+|------|----------------------|
+| 0–2 | Passive |
+| >2–4 | Alert |
+| >4–6 | Hostile |
+| >6–8 | Bounty |
+| >8–10 | Critical |
 
 **Playstyle Paths:**
 
@@ -470,12 +464,31 @@ Cross-network PvP uses the same combat engine and turn timer as local combat. Ne
 
 ### NET Messaging
 
+The planned NET messaging flow uses the player's installed NET device. A player operates from an owned node whose NET device is `OPEN` and connected to an `OPEN` grid node on the destination network, then sends a message to a channel or user on that network.
+
 ```
-net <network> msg <message>              — broadcast to network's global channel
-net <network> msg <channel> <nick>       — message a specific player
+net <network> msg <message>                        — broadcast via the connected network bot
+net <network> msg <channel> <nick> [message]       — post to a channel and message a user
 ```
 
-If the target nick is not an active Spectator or Player, the MCP spawns a messenger AI bot: it joins the target channel, announces itself, delivers the message, waits 5 minutes for a reply, then announces its departure.
+### Remote Node Ownership Claiming (Planned for Later)
+
+When a target node on a remote network is configured as `CLOSED` (or defended by a rival owner), a player operating across an active `NET` bridge must attack and breach the node first. 
+
+As a planned expansion:
+- Once a remote `CLOSED` node is successfully compromised via `net <network> hack <target>` (or neutralizes rival defense), the attacking player can execute a remote claim or seizure (`net <network> claim <target>`).
+- Successful seizure transfers node ownership (`owner_character_id`) to the remote attacker, allowing them to reconfigure its NET device state (to `OPEN` or `CLOSED`), manage local devices, or establish an outpost on the foreign network without having to physically migrate coordinates.
+
+### MCP Grid Messenger (Planned; Separate from NET)
+
+The MCP Grid Messenger is a separate service, not a mode or fallback of the player's NET device. A player can request one-shot delivery to a user or channel on another IRC network. The Grid Manager/MCP starts a temporary IRC client, connects to the target network, joins the requested channel when needed, and delivers the message. If a response is requested, it waits up to the configured timeout; it then politely parts and disconnects whether or not a response arrived.
+
+Illustrative future syntax (not implemented):
+
+```
+messenger <network> <channel|user> <message>
+messenger <network> <channel|user> <message> --wait <timeout>
+```
 
 ### Example: Attacking a CLOSED Remote Node
 
@@ -579,16 +592,17 @@ Listed in order of payoff vs. complexity:
 
 | Priority | Feature | Status |
 |----------|---------|--------|
-| 1 | Spectator system | Planned |
-| 2 | Rep + Heat skeleton | Planned |
-| 3 | Full 50×50 grid generation with region types | Planned |
-| 4 | Data / vuln / zero-day crafting chain | Planned |
-| 5 | NET device + remote network combat | Planned |
-| 6 | Status effects in combat (post L1) | Planned |
-| 7 | Skill expansion (recon, siphon, stealth, fortify) | Planned |
-| 8 | Node stash system | Planned |
+| 1 | Spectator system | Implemented |
+| 2 | Rep + Heat foundation | Implemented; automated responses remain planned |
+| 3 | 50×50 grid with diverse region types | Partial; map exists, region distribution remains planned |
+| 4 | Data / vulnerability / zero-day crafting chain | Implemented |
+| 5 | NET device + remote network operations | Implemented; live IRC smoke test deferred |
+| 6 | Timed combat status effects | Planned |
+| 7 | Skill expansion (recon, siphon, stealth, fortify) | Implemented |
+| 8 | Node stash system | Implemented |
 | 9 | Bounty board | Planned |
+| 10 | Remote node ownership claiming | Planned (post-launch / later) |
 
 ---
 
-*Maintained by Arch — v1.9.0*
+*Maintained by Arch — implementation status reviewed October 2026*

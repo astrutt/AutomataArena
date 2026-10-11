@@ -10,7 +10,8 @@ import sys
 # --- Path Injection (Allows running from within the package directory) ---
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import inspect, text, func
+from sqlalchemy import inspect, text, func, insert
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.future import select
 
@@ -48,8 +49,17 @@ from ai_grid.database.repositories.reputation_repo import ReputationRepository
 
 class ArenaDB:
     def __init__(self, db_path=DB_FILE):
-        self.db_path = f"sqlite+aiosqlite:///{db_path}"
-        self.engine = create_async_engine(self.db_path, echo=False)
+        if db_path == ":memory:":
+            self.db_path = "sqlite+aiosqlite://"
+            self.engine = create_async_engine(
+                "sqlite+aiosqlite://",
+                connect_args={"check_same_thread": False},
+                poolclass=StaticPool,
+                echo=False
+            )
+        else:
+            self.db_path = f"sqlite+aiosqlite:///{db_path}"
+            self.engine = create_async_engine(self.db_path, echo=False)
         self.async_session = async_sessionmaker(self.engine, expire_on_commit=False, class_=AsyncSession)
         
         # Repositories (Domain Partitions)
@@ -199,94 +209,311 @@ class ArenaDB:
     async def remote_raid(self, *a, **k): return await self.remote_net.remote_raid(*a, **k)
     async def set_net_device_state(self, *a, **k): return await self.remote_net.set_net_device_state(*a, **k)
     async def is_node_pvp_pve_accessible(self, *a, **k): return await self.remote_net.is_node_pvp_pve_accessible(*a, **k)
+    async def get_grid_stats(self, *a, **k): return await self.expansion.get_grid_stats(*a, **k)
+    async def get_grid_status(self, *a, **k): return await self.expansion.get_grid_status(*a, **k)
+    async def get_node_info(self, *a, **k): return await self.expansion.get_node_info(*a, **k)
+    async def expand_grid(self, *a, **k): return await self.expansion.expand_grid(*a, **k)
+    async def ensure_network_home_node(self, *a, **k): return await self.expansion.ensure_network_home_node(*a, **k)
 
     async def close(self):
         await self.engine.dispose()
 
     async def generate_master_grid(self, width: int = 50, height: int = 50):
         """
-        Procedurally generates a 50x50 coordinate map (2,500 nodes).
-        Distributes 700 'Active' nodes across 7 core clusters.
+        Procedurally generates a 50x50 coordinate map (2,500 nodes) with realistic
+        network topology, 14+ region types, and calibrated population targets:
+        - 700 Active nodes (~28%):
+          * 400 MCP controlled nodes
+          * 150 NPC / merchant nodes
+          * 100 Raid targets (backed by RaidTarget models)
+          * 50 Player claimable nodes
+        - 1,800 Unrouted / Void nodes (~72%)
+        Topological grouping:
+        - Critical Infrastructure: ICS + UTL paired
+        - Corporate / Financial: CRP + DTC + POS clustered
+        - Public / Civic: CIV + SMB + EDU (+ ORG, MED) clustered
+        - Defense Perimeter: GOV + LEA + MIL clustered
+        - Conflict / Arena: ARN + WAR clustered
+        - Fixed core hubs (UpLink, Arena, Vault, Rizon, 2600net, Edges) preserved.
         """
-        logger.info(f"Generating v2.0 Procedural Grid ({width}x{height})...")
+        import math
+        logger.info(f"Generating procedural grid topology ({width}x{height})...")
         async with self.async_session() as session:
             # 1. Clear existing topology
-            await session.execute(text("DELETE FROM grid_nodes"))
-            await session.execute(text("DELETE FROM node_connections"))
             await session.execute(text("DELETE FROM discovery_records"))
+            await session.execute(text("DELETE FROM node_connections"))
+            await session.execute(text("DELETE FROM raid_targets"))
+            await session.execute(text("DELETE FROM grid_nodes"))
             await session.flush()
 
-            # 2. Define Cluster Centers (x, y, name, cluster_id, node_type, net_affinity)
-            clusters = [
-                (25, 25, "Nexus", 0, "safezone", None),      # Spawn
-                (10, 40, "Rizon", 1, "void", "rizon"),      # Home
-                (40, 10, "2600net", 2, "void", "2600net"), # Home
-                (25, 30, "Arena", 3, "arena", None),
-                (10, 10, "Edge_West", 4, "void", None),
-                (40, 40, "Edge_East", 5, "void", None),
-                (25, 45, "Vault", 6, "safezone", None)
+            # 2. Fixed Core Hubs
+            # (x, y, name, node_type, region_type, net_affinity, is_spawn, is_unlocked, level, power, controller)
+            fixed_hubs = [
+                (25, 25, "UpLink", "safezone", "CIV", None, True, True, 1, 100.0, "MCP"),
+                (25, 30, "Arena", "arena", "ARN", None, False, True, 4, 1000000.0, "MCP"),
+                (25, 45, "Vault", "safezone", "CIV", None, False, False, 4, 1000000.0, "MCP"),
+                (10, 40, "Rizon", "void", "DTC", "rizon", False, True, 1, 1000.0, "MCP"),
+                (40, 10, "2600net", "void", "DTC", "2600net", False, True, 1, 1000.0, "MCP"),
+                (10, 10, "Edge_West", "void", "VOD", None, False, False, 4, 0.0, None),
+                (40, 40, "Edge_East", "void", "VOD", None, False, False, 4, 0.0, None)
             ]
-            
-            cluster_targets = {}
-            for cx, cy, cname, cid, ctype, caff in clusters:
-                # Place Center Node
-                center = GridNode(
-                    name=cname if cid > 0 else "UpLink",
-                    x=cx, y=cy, cluster_id=cid, node_type=ctype,
-                    net_affinity=caff, is_spawn_node=(cid == 0),
-                    is_unlocked=(cid in [0, 3]), # Spawn and Arena unlocked by default
-                    upgrade_level=4 if cid > 0 else 1,
-                    power_stored=1000000.0 if cid > 0 else 100.0
-                )
-                if cid == 0: center.name = "UpLink"
-                session.add(center)
-                cluster_targets[cid] = (cx, cy)
+            fixed_hub_coords = set((h[0], h[1]) for h in fixed_hubs)
 
-            await session.flush()
+            # 3. Functional Zone Anchors and Topological Grouping
+            zones = [
+                {
+                    "id": 0,
+                    "name": "Civic_Nexus",
+                    "center": (25, 25),
+                    "target_count": 196,
+                    "types": ["CIV", "SMB", "EDU", "ORG", "MED"]
+                },
+                {
+                    "id": 1,
+                    "name": "Corporate_Financial",
+                    "center": (38, 26),
+                    "target_count": 150,
+                    "types": ["CRP", "DTC", "POS"]
+                },
+                {
+                    "id": 2,
+                    "name": "Critical_Infrastructure",
+                    "center": (12, 26),
+                    "target_count": 135,
+                    "types": ["ICS", "UTL"]
+                },
+                {
+                    "id": 3,
+                    "name": "Defense_Perimeter",
+                    "center": (25, 12),
+                    "target_count": 140,
+                    "types": ["GOV", "LEA", "MIL"]
+                },
+                {
+                    "id": 4,
+                    "name": "Conflict_Arena",
+                    "center": (25, 36),
+                    "target_count": 74,
+                    "types": ["ARN", "WAR"]
+                }
+            ]
 
-            # 3. Procedural Fill (2,500 total)
-            import random
-            active_count = 0
+            # Collect non-fixed candidate coordinates
+            candidate_coords = []
             for gy in range(height):
                 for gx in range(width):
-                    # Skip if already a cluster center
-                    if any(gx == c[0] and gy == c[1] for c in clusters): continue
-                    
-                    # Determine Cluster Affinity
-                    closest_cid = -1
-                    min_dist = 999
-                    for cid, (cx, cy) in cluster_targets.items():
-                        dist = abs(gx - cx) + abs(gy - cy) # Manhattan
-                        if dist < min_dist:
-                            min_dist = dist
-                            closest_cid = cid
-                    
-                    # Active Node probability (Higher near centers)
-                    # 700 / 2500 ~= 28% base
-                    is_active = False
-                    if min_dist < 5 and active_count < 700:
-                        is_active = True
-                        active_count += 1
-                    elif random.random() < 0.10 and active_count < 700:
-                        is_active = True
-                        active_count += 1
-                    
-                    node = GridNode(
-                        name=f"Sector_{gx}_{gy}",
-                        x=gx, y=gy,
-                        is_unlocked=any(gx == c[0] and gy == c[1] for c in clusters if c[3] in [0, 3]),
-                        cluster_id=closest_cid if is_active else None,
-                        node_type="void"
-                    )
-                    
-                    # Special Case: Default Unlocked Area around Nexus (Radius 3)
-                    if abs(gx - 25) <= 3 and abs(gy - 25) <= 3:
-                        node.is_unlocked = True
+                    if (gx, gy) in fixed_hub_coords:
+                        continue
+                    min_dist = 99999.0
+                    best_zone = zones[0]
+                    for z in zones:
+                        zx, zy = z["center"]
+                        d = math.hypot(gx - zx, gy - zy)
+                        if d < min_dist:
+                            min_dist = d
+                            best_zone = z
+                    candidate_coords.append((min_dist, gx, gy, best_zone))
 
-                    session.add(node)
-            
+            # Sort candidate coordinates by proximity to their closest zone anchor
+            candidate_coords.sort(key=lambda item: item[0])
+
+            # The top 695 closest coordinates become active nodes (plus 5 active fixed hubs = 700 active nodes)
+            active_chosen = candidate_coords[:695]
+            active_coords_map = {}
+
+            for min_dist, gx, gy, z in active_chosen:
+                zid = z["id"]
+                cx, cy = z["center"]
+
+                if zid == 0:
+                    # Civic Nexus (CIV, SMB, EDU, ORG, MED)
+                    d2 = (gx - cx)**2 + (gy - cy)**2
+                    if d2 <= 9:
+                        r_type = "CIV"
+                    elif gx >= cx and gy >= cy:
+                        r_type = "SMB"
+                    elif gx < cx and gy <= cy:
+                        r_type = "EDU"
+                    elif gx < cx and gy > cy:
+                        r_type = "MED"
+                    else:
+                        r_type = "ORG"
+                elif zid == 1:
+                    # Corporate / Financial (CRP, DTC, POS)
+                    if gy <= cy:
+                        r_type = "CRP"
+                    elif gx >= cx:
+                        r_type = "DTC"
+                    else:
+                        r_type = "POS"
+                elif zid == 2:
+                    # Critical Infrastructure (ICS, UTL)
+                    r_type = "ICS" if gx <= cx else "UTL"
+                elif zid == 3:
+                    # Defense Perimeter (GOV, LEA, MIL)
+                    d2 = (gx - cx)**2 + (gy - cy)**2
+                    if d2 <= 9:
+                        r_type = "GOV"
+                    elif gy >= cy:
+                        r_type = "LEA"
+                    else:
+                        r_type = "MIL"
+                else:
+                    # Conflict / Arena (ARN, WAR)
+                    d2 = (gx - cx)**2 + (gy - cy)**2
+                    r_type = "ARN" if d2 <= 9 else "WAR"
+
+                active_coords_map[(gx, gy)] = (z, r_type)
+
+            # Population Target distribution across the 695 active coordinates:
+            # - Claimable: 50
+            # - Raid targets: 100
+            # - NPC / merchant: 150
+            # - MCP controlled: 395 (plus 5 active fixed hubs = 400 MCP controlled)
+            # Total active = 695 + 5 = 700!
+
+            claimable_candidates = [c for c, (z, rt) in active_coords_map.items() if rt in ["CIV", "CRP", "SMB"]]
+            if len(claimable_candidates) < 50:
+                claimable_candidates.extend([c for c in active_coords_map if c not in claimable_candidates])
+            claimable_set = set(claimable_candidates[:50])
+
+            raid_candidates = [c for c, (z, rt) in active_coords_map.items() if c not in claimable_set and rt in ["GOV", "MIL", "LEA", "CRP", "DTC", "ICS", "UTL", "SMB"]]
+            if len(raid_candidates) < 100:
+                raid_candidates.extend([c for c in active_coords_map if c not in claimable_set and c not in raid_candidates])
+            raid_set = set(raid_candidates[:100])
+
+            npc_candidates = [c for c, (z, rt) in active_coords_map.items() if c not in claimable_set and c not in raid_set and rt in ["SMB", "POS", "ORG", "MED", "CIV", "EDU", "CRP"]]
+            if len(npc_candidates) < 150:
+                npc_candidates.extend([c for c in active_coords_map if c not in claimable_set and c not in raid_set and c not in npc_candidates])
+            npc_set = set(npc_candidates[:150])
+
+            node_dicts = []
+            raid_dicts = []
+            node_counter = 1
+            rt_counter = 1
+
+            # 1. Add Fixed Core Hubs
+            for gx, gy, cname, ctype, caff_reg, caff_net, is_spawn, is_unl, lvl, pwr, ctrl in fixed_hubs:
+                addons = {"NET": True} if caff_net else {}
+                node_dicts.append({
+                    "id": node_counter,
+                    "name": cname,
+                    "description": f"Core Hub: {cname}.",
+                    "x": gx, "y": gy,
+                    "node_type": ctype,
+                    "region_type": caff_reg,
+                    "controller": ctrl,
+                    "net_affinity": caff_net,
+                    "is_spawn_node": is_spawn,
+                    "is_unlocked": is_unl,
+                    "upgrade_level": lvl,
+                    "power_stored": pwr,
+                    "durability": 100.0,
+                    "availability_mode": 'OPEN' if (caff_net or is_spawn or is_unl) else 'CLOSED',
+                    "addons_json": json.dumps(addons),
+                    "active_target_id": None
+                })
+                node_counter += 1
+
+            # 2. Add All Other Grid Coordinates
+            for gy in range(height):
+                for gx in range(width):
+                    coord = (gx, gy)
+                    if coord in fixed_hub_coords:
+                        continue
+
+                    current_node_id = node_counter
+                    node_counter += 1
+
+                    if coord in active_coords_map:
+                        z, r_type = active_coords_map[coord]
+                        is_near_spawn = (abs(gx - 25) <= 3 and abs(gy - 25) <= 3)
+
+                        if coord in claimable_set:
+                            controller_role = "CLAIMABLE"
+                            avail_mode = "OPEN"
+                            node_op_type = "void" if r_type not in ["CIV", "MED", "ORG"] else "safezone"
+                        elif coord in raid_set:
+                            controller_role = "RAID"
+                            avail_mode = "CLOSED"
+                            node_op_type = "void"
+                        elif coord in npc_set:
+                            controller_role = "NPC"
+                            avail_mode = "OPEN"
+                            node_op_type = "merchant"
+                        else:
+                            controller_role = "MCP"
+                            avail_mode = "CLOSED" if not is_near_spawn else "OPEN"
+                            if r_type == "ARN":
+                                node_op_type = "arena"
+                            elif r_type in ["CIV", "MED", "ORG"]:
+                                node_op_type = "safezone"
+                            elif r_type in ["SMB", "POS"]:
+                                node_op_type = "merchant"
+                            else:
+                                node_op_type = "void"
+
+                        lvl = 1 + ((gx + gy) % 3)
+                        at_id = None
+                        if controller_role == "RAID":
+                            at_id = rt_counter
+                            rt_counter += 1
+                            raid_dicts.append({
+                                "id": at_id,
+                                "node_id": current_node_id,
+                                "name": f"[{r_type}] {r_type}_{gx}_{gy}",
+                                "target_type": r_type,
+                                "difficulty": 10 + (lvl * 5),
+                                "credits_pool": 500.0 * lvl,
+                                "data_pool": 50.0 * lvl,
+                                "is_active": True,
+                                "availability_mode": "CLOSED"
+                            })
+
+                        node_dicts.append({
+                            "id": current_node_id,
+                            "name": f"{r_type}_{gx}_{gy}",
+                            "description": f"Active grid node {r_type} sector ({gx}, {gy}).",
+                            "x": gx, "y": gy,
+                            "node_type": node_op_type,
+                            "region_type": r_type,
+                            "controller": controller_role,
+                            "upgrade_level": lvl,
+                            "durability": 100.0,
+                            "power_stored": 100.0 * lvl,
+                            "availability_mode": avail_mode,
+                            "is_unlocked": is_near_spawn,
+                            "is_spawn_node": False,
+                            "net_affinity": None,
+                            "active_target_id": at_id,
+                            "addons_json": "{}"
+                        })
+                    else:
+                        is_near_spawn = (abs(gx - 25) <= 3 and abs(gy - 25) <= 3)
+                        node_dicts.append({
+                            "id": current_node_id,
+                            "name": f"Sector_{gx}_{gy}",
+                            "description": f"Unrouted wasteland sector ({gx}, {gy}).",
+                            "x": gx, "y": gy,
+                            "node_type": "void",
+                            "region_type": "VOD",
+                            "controller": None,
+                            "upgrade_level": 1,
+                            "durability": 100.0,
+                            "power_stored": 0.0,
+                            "availability_mode": "CLOSED",
+                            "is_unlocked": is_near_spawn,
+                            "is_spawn_node": False,
+                            "net_affinity": None,
+                            "active_target_id": None,
+                            "addons_json": "{}"
+                        })
+
+            await session.execute(insert(GridNode), node_dicts)
+            if raid_dicts:
+                await session.execute(insert(RaidTarget), raid_dicts)
             await session.commit()
-            logger.info(f"Grid Master generated. Active nodes: {active_count + len(clusters)}")
+            logger.info(f"Procedural grid generated: {len(node_dicts)} nodes (700 active, 1800 void).")
 
     async def init_schema(self):
         logger.info("Initializing v2.0 database schema...")
@@ -494,21 +721,7 @@ class ArenaDB:
 
             # --- SEED NETWORK HOME NODES (Task 021) ---
             for net_name in CONFIG.get('networks', {}).keys():
-                node_stmt = select(GridNode).where(GridNode.name == net_name)
-                node = (await session.execute(node_stmt)).scalars().first()
-                if not node:
-                    node = GridNode(name=net_name, description=f"Entry point for the {net_name} local mesh.", node_type="void")
-                    session.add(node)
-                    logger.info(f"Created Network Home Node: {net_name}")
-                
-                # Enforce standard entry parameters
-                node.availability_mode = 'OPEN'
-                node.upgrade_level = 1
-                node.net_affinity = net_name
-                node.addons_json = json.dumps({"NET": True})
-                logger.debug(f"Configured {net_name} entry: OPEN, Level 1, NET Hardware.")
-
-            await session.commit()
+                await self.ensure_network_home_node(net_name)
 
             # Node Fixes (Merchant assignment & Cleanup)
             type_map = {
@@ -566,7 +779,6 @@ class ArenaDB:
     async def rename_node(self, old, new): return await self.grid.rename_node(old, new)
     async def get_prefs_by_id(self, char_id): return await self.character.get_prefs_by_id(char_id)
     async def get_nickname_by_id(self, char_id): return await self.identity.get_nickname_by_id(char_id)
-    async def get_grid_stats(self): return await self.navigation.get_grid_stats()
 
     async def list_shop_items(self): return await self.economy.list_shop_items()
     async def award_credits_bulk(self, payouts, network): return await self.economy.award_credits_bulk(payouts, network)
